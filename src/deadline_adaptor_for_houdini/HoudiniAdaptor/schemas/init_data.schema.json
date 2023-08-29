@@ -1,0 +1,11 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+        "scene_file": { "type": "string" },
+        "render_node": { "type": "string" },
+        "version": { "type": "string" },
+        "ignore_input_nodes": { "type": "boolean" }
+    },
+    "required": [ "scene_file", "render_node", "version"]
+}
