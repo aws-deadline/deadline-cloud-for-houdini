@@ -1,0 +1,10 @@
+/dist
+*.egg-info/
+__pycache__/
+.coverage
+.tox
+.venv
+/htmlcov
+.vscode
+*_version.py
+/wheels/

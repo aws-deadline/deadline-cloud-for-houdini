@@ -1,0 +1,111 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "deadline_cloud_for_houdini"
+dynamic = ["version"]
+readme = "README.md"
+license = ""
+requires-python = ">=3.7"
+
+dependencies = [
+    "openjobio == 0.6.*",
+]
+
+[project.scripts]
+HoudiniAdaptor = "deadline_adaptor_for_houdini.HoudiniAdaptor:main"
+
+[tool.hatch.build]
+artifacts = [
+  "*_version.py",
+]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+version_scheme = "post-release"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "_version.py"
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_version_hook.py"
+
+[[tool.hatch.build.hooks.custom.copy_map]]
+sources = [
+  "_version.py",
+]
+destinations = [
+  "src/deadline_adaptor_for_houdini"
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/*",
+    "hatch_version_hook.py",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+  "src/deadline_adaptor_for_houdini"
+]
+
+[tool.mypy]
+python_version = 3.9
+check_untyped_defs = true
+show_error_codes = true
+pretty = true
+files = [ "src/**/*.py" ]
+
+[tool.ruff]
+ignore = [
+  "E501",
+]
+line-length = 100
+
+[tool.ruff.isort]
+known-first-party = [
+  "deadline_adaptor_for_houdini"
+]
+
+[tool.black]
+line-length = 100
+
+
+[tool.pytest.ini_options]
+xfail_strict = true
+addopts = [
+    "--durations=5",
+    "--color=yes",
+    "--cov=src/deadline_adaptor_for_houdini",
+    "--cov-report=html:build/coverage",
+    "--cov-report=xml:build/coverage/coverage.xml",
+    "--cov-report=term-missing",
+    "--numprocesses=auto"
+]
+testpaths = [ "test" ]
+looponfailroots = [
+    "src",
+    "test",
+]
+# looponfailroots is deprecated, this removes the deprecation from the test output
+filterwarnings = [
+    "ignore::DeprecationWarning"
+]
+
+[tool.coverage.run]
+branch = true
+parallel = false
+source_pkgs = [ "deadline_adaptor_for_houdini"]
+omit = [ "**/__main__.py", "**/_version.py" ]
+
+[tool.coverage.paths]
+source =  [
+    "src/"
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 92
