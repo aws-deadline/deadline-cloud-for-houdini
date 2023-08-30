@@ -5,4 +5,4 @@ pytest-xdist ~= 3.3
 twine ~= 4.0
 mypy ~= 1.5
 black ~= 23.7
-ruff ~= 0.0.284
+ruff ~= 0.0.286
