@@ -1,0 +1,85 @@
+specificationVersion: '2022-09-01'
+parameters:
+- name: AdaptorWheels
+  type: PATH
+  objectType: DIRECTORY
+  dataFlow: IN
+  description: A directory that contains wheels for openjobio, deadline, and the overridden adaptor.
+- name: OverrideAdaptorName
+  type: STRING
+  description: The name of the adaptor to override, for example HoudiniAdaptor.
+  default: HoudiniAdaptor
+environment:
+  name: OverrideAdaptor
+  description: >
+    Replaces the default Adaptor in the environment's PATH with one from the
+    packages in the AdaptorWheels attached directory.
+  script:
+    actions:
+      onEnter:
+        command: '{{Env.File.Enter}}'
+    embeddedFiles:
+    - name: Enter
+      filename: override-adaptor-enter.sh
+      type: TEXT
+      runnable: true
+      data: |
+        #!/bin/env bash
+
+        set -euo pipefail
+
+        echo "The adaptor wheels that are attached to the job:"
+        ls {{Param.AdaptorWheels}}/
+        echo ""
+
+        # Create a venv and activate it in this environment
+        echo "Creating Python venv for the {{Param.OverrideAdaptorName}} command"
+        /usr/local/bin/python3 -m venv '{{Session.WorkingDirectory}}/venv'
+        {{Env.File.InitialVars}}
+        . '{{Session.WorkingDirectory}}/venv/bin/activate'
+        {{Env.File.CaptureVars}}
+        echo ""
+
+        echo "Installing adaptor into the venv"
+        pip install {{Param.AdaptorWheels}}/openjobio*.whl
+        pip install {{Param.AdaptorWheels}}/deadline*.whl
+        echo ""
+
+        if [ ! -f '{{Session.WorkingDirectory}}/venv/bin/{{Param.OverrideAdaptorName}}' ]; then
+          echo "The Override Adaptor {{Param.OverrideAdaptorName}} was not installed as expected."
+          exit 1
+        fi
+    - name: InitialVars
+      filename: initial-vars
+      type: TEXT
+      runnable: true
+      data: |
+        #!/usr/bin/env python3
+        import os, json
+        envfile = "{{Session.WorkingDirectory}}/.envInitial"
+        with open(envfile, "w", encoding="utf8") as f:
+            json.dump(dict(os.environ), f)
+    - name: CaptureVars
+      filename: capture-vars
+      type: TEXT
+      runnable: true
+      data: |
+        #!/usr/bin/env python3
+        import os, json, sys
+        envfile = "{{Session.WorkingDirectory}}/.envInitial"
+        if os.path.isfile(envfile):
+            with open(envfile, "r", encoding="utf8") as f:
+                before = json.load(f)
+        else:
+            print("No initial environment found, must run Env.File.CaptureVars script first")
+            sys.exit(1)
+        after = dict(os.environ)
+
+        put = {k: v for k, v in after.items() if v != before.get(k)}
+        delete = {k for k in before if k not in after}
+
+        for k, v in put.items():
+            print(f"updating {k}={v}")
+            print(f"openjobio_env: {k}={v}")
+        for k in delete:
+            print(f"openjobio_unset_env: {k}")

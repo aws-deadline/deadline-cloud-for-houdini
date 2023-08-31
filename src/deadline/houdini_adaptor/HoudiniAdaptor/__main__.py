@@ -3,7 +3,7 @@
 import logging as _logging
 import sys as _sys
 
-from openjobio_adaptor_runtime import EntryPoint as _EntryPoint
+from openjobio.adaptor_runtime import EntryPoint as _EntryPoint
 
 from .adaptor import HoudiniAdaptor
 

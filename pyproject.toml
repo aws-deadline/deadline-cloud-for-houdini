@@ -3,18 +3,19 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "deadline_cloud_for_houdini"
+name = "deadline-cloud-for-houdini"
 dynamic = ["version"]
 readme = "README.md"
 license = ""
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 
 dependencies = [
-    "openjobio == 0.6.*",
+    "deadline == 0.19.*",
+    "openjobio == 0.8.*",
 ]
 
 [project.scripts]
-HoudiniAdaptor = "deadline_adaptor_for_houdini.HoudiniAdaptor:main"
+HoudiniAdaptor = "deadline.houdini_adaptor.HoudiniAdaptor:main"
 
 [tool.hatch.build]
 artifacts = [
@@ -38,7 +39,8 @@ sources = [
   "_version.py",
 ]
 destinations = [
-  "src/deadline_adaptor_for_houdini"
+  "src/deadline/houdini_adaptor",
+  "src/deadline/houdini_submitter",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -49,15 +51,21 @@ include = [
 
 [tool.hatch.build.targets.wheel]
 packages = [
-  "src/deadline_adaptor_for_houdini"
+  "src/deadline"
 ]
 
 [tool.mypy]
-python_version = 3.9
 check_untyped_defs = true
 show_error_codes = true
 pretty = true
-files = [ "src/**/*.py" ]
+# Tell mypy that there's a namspace package src/deadline
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["hou.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 ignore = [
@@ -67,7 +75,8 @@ line-length = 100
 
 [tool.ruff.isort]
 known-first-party = [
-  "deadline_adaptor_for_houdini"
+  "deadline",
+  "openjobio"
 ]
 
 [tool.black]
@@ -79,7 +88,8 @@ xfail_strict = true
 addopts = [
     "--durations=5",
     "--color=yes",
-    "--cov=src/deadline_adaptor_for_houdini",
+    "--cov=src/deadline/houdini_adaptor",
+    "--cov=src/deadline/houdini_submitter",
     "--cov-report=html:build/coverage",
     "--cov-report=xml:build/coverage/coverage.xml",
     "--cov-report=term-missing",
@@ -96,9 +106,9 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
+source_pkgs = [ "deadline/houdini_adaptor", "deadline/houdini_submitter" ]
 branch = true
-parallel = false
-source_pkgs = [ "deadline_adaptor_for_houdini"]
+parallel = true
 omit = [ "**/__main__.py", "**/_version.py" ]
 
 [tool.coverage.paths]
@@ -108,4 +118,4 @@ source =  [
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 92
+fail_under = 67

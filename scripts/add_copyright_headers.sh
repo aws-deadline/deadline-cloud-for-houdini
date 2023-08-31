@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+set -euxo pipefail
 
 if [ $# -eq 0 ]; then
     echo "Usage: add-copyright-headers <file.java> ..." >&2
@@ -7,7 +10,7 @@ fi
 
 for file in "$@"; do
     if ! head -1 | grep 'Copyright ' "$file" >/dev/null; then
-        case $file in
+        case "$file" in
             *.java)
                 CONTENT=$(cat "$file")
                 cat > "$file" <<EOF

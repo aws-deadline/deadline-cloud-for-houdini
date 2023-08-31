@@ -1,4 +1,5 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
 import sys
 import types
 from unittest.mock import MagicMock, Mock
@@ -16,3 +17,6 @@ setattr(this_module, "node", MagicMock(name=module_name + ".node"))
 setattr(this_module, "hipFile", Mock(name=module_name + ".hipFile"))
 setattr(this_module, "LoadWarning", Mock(name=module_name + ".LoadWarning"))
 setattr(this_module, "Node", Mock(name=module_name + ".Node"))
+setattr(this_module, "Parm", Mock(name=module_name + ".Parm"))
+setattr(this_module, "hscript", Mock(name=module_name + ".hscript"))
+setattr(this_module, "fileReferences", Mock(name=module_name + ".fileReferences"))

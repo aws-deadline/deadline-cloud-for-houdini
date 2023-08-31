@@ -1,0 +1,14 @@
+Operator:     deadline_cloud
+Label:        Deadline Cloud
+Path:         oplib:/Driver/deadline_cloud?Driver/deadline_cloud
+Icon:         opdef:/Driver/deadline_cloud?IconImage
+Table:        Driver
+License:      
+Extra:        
+User:         
+Inputs:       1 to 1000
+Subnet:       false
+Python:       false
+Empty:        false
+Modified:     Mon Aug 28 14:58:29 2023
+

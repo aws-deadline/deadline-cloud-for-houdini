@@ -2,9 +2,11 @@
 *.egg-info/
 __pycache__/
 .coverage
+.DS_Store
 .tox
 .venv
 /htmlcov
 .vscode
 *_version.py
 /wheels/
+/dependency_bundle/

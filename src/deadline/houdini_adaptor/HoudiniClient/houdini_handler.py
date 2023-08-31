@@ -1,4 +1,4 @@
-# Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
 from __future__ import annotations
 
@@ -104,16 +104,20 @@ class HoudiniHandler:
 
     def set_render_node(self, data: dict) -> None:
         """
-        Sets .
+        Sets the render node to render
 
         Args:
             data (dict):
         """
-        self.node = hou.node(data.get("render_node", ""))
+        node = hou.node(data.get("render_node", ""))
+        if node is None:
+            raise TypeError("Render node is 'None', no render node has been loaded")
+        print("node: %s" % node)
+        self.node = node
 
     def set_frame(self, data: dict) -> None:
         """
-        Sets
+        Sets the frame to render
 
         Args:
             data (dict):

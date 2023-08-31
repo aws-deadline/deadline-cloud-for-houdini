@@ -6,9 +6,18 @@ import os
 from types import FrameType
 from typing import Optional
 
-from openjobio_adaptor_runtime_client import HTTPClientInterface
-
-from deadline_adaptor_for_houdini.HoudiniClient.houdini_handler import HoudiniHandler
+# The Houdini Adaptor adds the `openjobio` namespace directory to PYTHONPATH,
+# so that importing just the adaptor_runtime_client should work.
+try:
+    from adaptor_runtime_client import (  # type: ignore[import]
+        HTTPClientInterface,
+    )
+    from houdini_adaptor.HoudiniClient.houdini_handler import HoudiniHandler  # type: ignore[import]
+except ImportError:
+    from openjobio.adaptor_runtime_client import (
+        HTTPClientInterface,
+    )
+    from deadline.houdini_adaptor.HoudiniClient.houdini_handler import HoudiniHandler
 
 try:
     import hou  # type: ignore
