@@ -1,3 +1,5 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
 import logging
 import os
 import shutil
@@ -47,8 +49,8 @@ class CustomBuildHook(BuildHookInterface):
     ]
     destinations = [
       "src/openjobio",
-      "src/openjobio_adaptor_runtime",
-      "src/openjobio_adaptor_runtime_client",
+      "src/openjobio.adaptor_runtime",
+      "src/openjobio.adaptor_runtime_client",
     ]
     [[tool.hatch.build.hooks.custom.copy_map]]
     sources = [
@@ -57,8 +59,8 @@ class CustomBuildHook(BuildHookInterface):
     ]
     destinations = [
       "test/openjobio",
-      "test/openjobio_adaptor_runtime",
-      "test/openjobio_adaptor_runtime_client",
+      "test/openjobio.adaptor_runtime",
+      "test/openjobio.adaptor_runtime_client",
     ]
     ```
     """

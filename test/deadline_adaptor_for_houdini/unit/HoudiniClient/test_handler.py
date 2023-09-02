@@ -1,20 +1,24 @@
-# Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
 from __future__ import annotations
 
 from unittest import TestCase
-from unittest.mock import Mock, patch  # noqa:F401
+from unittest.mock import Mock, patch
 
 import pytest
 from .mock_hou import hou_module as hou
 
-from deadline_adaptor_for_houdini.HoudiniClient.houdini_handler import HoudiniHandler
+from deadline.houdini_adaptor.HoudiniClient.houdini_handler import HoudiniHandler
 
 
 @pytest.fixture(autouse=True)
 def reset_hou_mocks():
     for each in [d for d in dir(hou) if not d.startswith("__")]:
-        getattr(hou, each).reset_mock()
+        attr = getattr(hou, each)
+        if hasattr(attr, "reset_mock"):
+            attr.reset_mock()
+        else:
+            del attr
 
 
 class TestHoudiniHandler:
@@ -89,7 +93,7 @@ class TestHoudiniHandler:
         handler = HoudiniHandler()
         data = {"scene_file": "/not/a/real/scene.hip"}
         with patch(
-            "deadline_adaptor_for_houdini.HoudiniClient.houdini_handler.os.path.isfile"
+            "deadline.houdini_adaptor.HoudiniClient.houdini_handler.os.path.isfile"
         ) as mock_isfile:
             mock_isfile.return_value = True
             # test file loads
@@ -100,7 +104,7 @@ class TestHoudiniHandler:
         handler = HoudiniHandler()
         data = {"scene_file": "/not/a/real/scene.hip"}
         with patch(
-            "deadline_adaptor_for_houdini.HoudiniClient.houdini_handler.os.path.isfile"
+            "deadline.houdini_adaptor.HoudiniClient.houdini_handler.os.path.isfile"
         ) as mock_isfile:
             mock_isfile.return_value = True
             hou.LoadWarning = Exception  # type: ignore
@@ -110,7 +114,6 @@ class TestHoudiniHandler:
             out, _ = capfd.readouterr()
             assert out[-5:] == "test\n"
 
-    """
     # test case for code coverage this tests
     # code that will be removed to the common node library
     def test_set_node_settings(self, capfd):
@@ -153,7 +156,6 @@ class TestHoudiniHandler:
             not hou.logging.setRenderLogVerbosity.called
         ), "hou.logging.setRenderLogVerbosity was called and should not have been"
         assert not hou.node.parm.called, "hou.node.parm was called and should not have been"
-    """
 
     def test_do_not_set_node_settings(self, capfd):
         handler = HoudiniHandler()

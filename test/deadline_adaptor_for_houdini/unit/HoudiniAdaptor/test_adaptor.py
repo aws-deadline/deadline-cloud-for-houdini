@@ -1,4 +1,4 @@
-# Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from unittest.mock import Mock, PropertyMock, call, patch
 
 import pytest
 
-import deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor as adaptor_module
-from deadline_adaptor_for_houdini.HoudiniAdaptor import HoudiniAdaptor
-from deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor import (
+import deadline.houdini_adaptor.HoudiniAdaptor.adaptor as adaptor_module
+from deadline.houdini_adaptor.HoudiniAdaptor import HoudiniAdaptor
+from deadline.houdini_adaptor.HoudiniAdaptor.adaptor import (
     _FIRST_HOUDINI_ACTIONS,
     HoudiniNotRunningError,
 )
@@ -54,11 +54,9 @@ def mock_config() -> Generator[Mock, None, None]:
 
 
 class TestHoudiniAdaptor_on_start:
-    @patch(
-        "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0
-    )
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.LoggingSubprocess")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0)
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
     def test_no_error(
         self,
         mock_server: Mock,
@@ -72,11 +70,9 @@ class TestHoudiniAdaptor_on_start:
         adaptor.on_start()
 
     @patch("time.sleep")
-    @patch(
-        "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0
-    )
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.LoggingSubprocess")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0)
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
     def test_waits_for_server_socket(
         self,
         mock_server: Mock,
@@ -100,7 +96,7 @@ class TestHoudiniAdaptor_on_start:
         assert mock_sleep.call_count == 3
 
     @patch("threading.Thread")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
     def test_server_init_fail(self, mock_server: Mock, mock_thread: Mock, init_data: dict) -> None:
         """Tests that an error is raised if no socket becomes available"""
         # GIVEN
@@ -142,15 +138,13 @@ class TestHoudiniAdaptor_on_start:
         assert str(exc_info.value) == error_msg
         mock_isfile.assert_called_with(
             os.path.join(
-                test_dir, "deadline_adaptor_for_houdini", "HoudiniClient", "houdini_client.py"
+                test_dir, "deadline", "houdini_adaptor", "HoudiniClient", "houdini_client.py"
             )
         )
 
-    @patch(
-        "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=1
-    )
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.LoggingSubprocess")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=1)
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
     def test_houdini_init_timeout(
         self,
         mock_server: Mock,
@@ -181,11 +175,9 @@ class TestHoudiniAdaptor_on_start:
         assert str(exc_info.value) == error_msg
 
     @patch.object(HoudiniAdaptor, "_houdini_is_running", False)
-    @patch(
-        "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=1
-    )
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.LoggingSubprocess")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=1)
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
     def test_houdini_init_fail(
         self,
         mock_server: Mock,
@@ -211,8 +203,8 @@ class TestHoudiniAdaptor_on_start:
         assert str(exc_info.value) == error_msg
 
     @patch.object(HoudiniAdaptor, "_action_queue")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.LoggingSubprocess")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
     def test_populate_action_queue(
         self,
         mock_server: Mock,
@@ -231,10 +223,8 @@ class TestHoudiniAdaptor_on_start:
 
         # THEN
         calls = mock_actions_queue.enqueue_action.call_args_list
-        for _call, action in zip(calls[: len(_FIRST_HOUDINI_ACTIONS)], _FIRST_HOUDINI_ACTIONS):
-            assert (
-                _call.args[0].name == action.name
-            ), f"Action: {action.name} missing from first actions"
+        for _call, name in zip(calls[: len(_FIRST_HOUDINI_ACTIONS)], _FIRST_HOUDINI_ACTIONS):
+            assert _call.args[0].name == name, f"Action: {name} missing from first actions"
         for _call, action in zip(
             calls[
                 len(_FIRST_HOUDINI_ACTIONS) : len(_FIRST_HOUDINI_ACTIONS)
@@ -242,13 +232,11 @@ class TestHoudiniAdaptor_on_start:
             ],
             _FIRST_HOUDINI_ACTIONS,
         ):
-            assert (
-                _call.args[0].name == action.name
-            ), f"Action: {action.name} missing from init actions"
+            assert _call.args[0].name == name, f"Action: {name} missing from init actions"
 
     @patch.object(HoudiniAdaptor, "_action_queue")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.LoggingSubprocess")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
     def test_populate_action_queue_less_init_data(
         self,
         mock_server: Mock,
@@ -280,11 +268,9 @@ class TestHoudiniAdaptor_on_start:
 
 class TestHoudiniAdaptor_on_run:
     @patch("time.sleep")
-    @patch(
-        "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0
-    )
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.LoggingSubprocess")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0)
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
     def test_on_run(
         self,
         mock_server: Mock,
@@ -311,18 +297,16 @@ class TestHoudiniAdaptor_on_run:
 
     @patch("time.sleep")
     @patch(
-        "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.HoudiniAdaptor._is_rendering",
+        "deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor._is_rendering",
         new_callable=PropertyMock,
     )
     @patch(
-        "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.HoudiniAdaptor._houdini_is_running",
+        "deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor._houdini_is_running",
         new_callable=PropertyMock,
     )
-    @patch(
-        "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0
-    )
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.LoggingSubprocess")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0)
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
     def test_on_run_render_fail(
         self,
         mock_server: Mock,
@@ -355,14 +339,12 @@ class TestHoudiniAdaptor_on_run:
         )
 
 
-class TestHoudiniAdaptor_on_end:
+class TestHoudiniAdaptor_on_stop:
     @patch("time.sleep")
-    @patch(
-        "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0
-    )
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.LoggingSubprocess")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
-    def test_on_end(
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0)
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
+    def test_on_stop(
         self,
         mock_server: Mock,
         mock_logging_subprocess: Mock,
@@ -381,17 +363,17 @@ class TestHoudiniAdaptor_on_end:
 
         try:
             # WHEN
-            adaptor.on_end()
+            adaptor.on_stop()
         except Exception as e:
             pytest.fail(f"Test raised an exception when it shouldn't have: {e}")
         else:
             # THEN
-            pass  # on_end ran without exception
+            pass  # on_stop ran without exception
 
 
 class TestHoudiniAdaptor_on_cleanup:
     @patch("time.sleep")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor._logger")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor._logger")
     def test_on_cleanup_houdini_not_graceful_shutdown(
         self, mock_logger: Mock, mock_sleep: Mock, init_data: dict
     ) -> None:
@@ -400,7 +382,7 @@ class TestHoudiniAdaptor_on_cleanup:
         adaptor = HoudiniAdaptor(init_data)
 
         with patch(
-            "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.HoudiniAdaptor._houdini_is_running",
+            "deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor._houdini_is_running",
             new_callable=lambda: True,
         ), patch.object(adaptor, "_HOUDINI_END_TIMEOUT_SECONDS", 0.01), patch.object(
             adaptor, "_houdini_client"
@@ -418,7 +400,7 @@ class TestHoudiniAdaptor_on_cleanup:
         mock_client.terminate.assert_called_once()
 
     @patch("time.sleep")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor._logger")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor._logger")
     def test_on_cleanup_server_not_graceful_shutdown(
         self, mock_logger: Mock, mock_sleep: Mock, init_data: dict
     ) -> None:
@@ -427,7 +409,7 @@ class TestHoudiniAdaptor_on_cleanup:
         adaptor = HoudiniAdaptor(init_data)
 
         with patch(
-            "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.HoudiniAdaptor._houdini_is_running",
+            "deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor._houdini_is_running",
             new_callable=lambda: False,
         ), patch.object(adaptor, "_SERVER_END_TIMEOUT_SECONDS", 0.01), patch.object(
             adaptor, "_server_thread"
@@ -441,11 +423,9 @@ class TestHoudiniAdaptor_on_cleanup:
         mock_server_thread.join.assert_called_once_with(timeout=0.01)
 
     @patch("time.sleep")
-    @patch(
-        "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0
-    )
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.LoggingSubprocess")
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.AdaptorServer")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=0)
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
     def test_on_cleanup(
         self,
         mock_server: Mock,
@@ -463,10 +443,10 @@ class TestHoudiniAdaptor_on_cleanup:
 
         adaptor.on_start()
         adaptor.on_run(run_data)
-        adaptor.on_end()
+        adaptor.on_stop()
 
         with patch(
-            "deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.HoudiniAdaptor._houdini_is_running",
+            "deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor._houdini_is_running",
             new_callable=lambda: False,
         ):
             # WHEN
@@ -490,7 +470,7 @@ class TestHoudiniAdaptor_on_cleanup:
         # THEN
         assert regex_callbacks is adaptor._regex_callbacks
 
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.HoudiniAdaptor.update_status")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor.update_status")
     def test_handle_complete(self, mock_update_status: Mock, init_data: dict):
         """Tests that the _handle_complete method updates the progress correctly"""
         # GIVEN
@@ -518,7 +498,7 @@ class TestHoudiniAdaptor_on_cleanup:
     ]
 
     @pytest.mark.parametrize("regex_index, stdout, expected_progress", handle_progess_params)
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.HoudiniAdaptor.update_status")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor.update_status")
     @patch.object(HoudiniAdaptor, "_is_rendering", new_callable=PropertyMock(return_value=True))
     def test_handle_progress(
         self,
@@ -556,7 +536,7 @@ class TestHoudiniAdaptor_on_cleanup:
     ]
 
     @pytest.mark.parametrize("stdout, regex_valid", handle_error_params)
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.HoudiniAdaptor.update_status")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor.update_status")
     @patch.object(HoudiniAdaptor, "_is_rendering", new_callable=PropertyMock(return_value=True))
     def test_handle_error_valid_regex(
         self,
@@ -587,7 +567,7 @@ class TestHoudiniAdaptor_on_cleanup:
     ]
 
     @pytest.mark.parametrize("stdout, regex_valid", handle_error_params)
-    @patch("deadline_adaptor_for_houdini.HoudiniAdaptor.adaptor.HoudiniAdaptor.update_status")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor.update_status")
     @patch.object(HoudiniAdaptor, "_is_rendering", new_callable=PropertyMock(return_value=True))
     def test_handle_error_invalid_regex(
         self,

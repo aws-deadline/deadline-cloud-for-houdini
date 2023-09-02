@@ -4,26 +4,20 @@ from __future__ import annotations
 
 import logging
 import os
-import platform
 import re
 import shutil
 import sys
 import threading
 import time
-from dataclasses import dataclass
 from functools import wraps
 from typing import Callable
 
-from openjobio_adaptor_runtime import AdaptorDataValidators as AdaptorDataValidators
-from openjobio_adaptor_runtime_client import Action
-from openjobio_adaptor_runtime import (
-    Adaptor,
-    AdaptorConfiguration,
-    LoggingSubprocess,
-    RegexCallback,
-    RegexHandler,
-)
-from openjobio_adaptor_runtime.adaptors.adaptor_ipc import ActionsQueue, AdaptorServer
+from openjobio.adaptor_runtime.adaptors import Adaptor, AdaptorDataValidators
+from openjobio.adaptor_runtime.adaptors.configuration import AdaptorConfiguration
+from openjobio.adaptor_runtime.process import LoggingSubprocess
+from openjobio.adaptor_runtime.app_handlers import RegexCallback, RegexHandler
+from openjobio.adaptor_runtime.application_ipc import ActionsQueue, AdaptorServer
+from openjobio.adaptor_runtime_client import Action
 
 _logger = logging.getLogger(__name__)
 
@@ -34,19 +28,15 @@ class HoudiniNotRunningError(Exception):
     pass
 
 
-@dataclass(frozen=True)
-class ActionItem:
-    name: str
-    # requires_path_mapping: bool = False
-
-
 _FIRST_HOUDINI_ACTIONS = [
-    ActionItem("scene_file"),
-    ActionItem("render_node"),
-    ActionItem("ignore_input_nodes"),
+    "scene_file",
+    "render_node",
+    # remove this action untl we find root cause for this error:
+    # ERROR: openjobio_fail: Error encountered while starting adaptor: 'ignore_input_nodes'
+    # "ignore_input_nodes",
 ]
 _HOUDINI_RUN_KEYS = {
-    ActionItem("frame"),
+    "frame",
 }
 
 # Only capture the major minor group (ie. 3.3)
@@ -91,19 +81,19 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
 
     # Variables used for keeping track of produced outputs for progress reporting.
     # Will be optionally changed after the scene is set.
-    _expected_outputs: int = 0  # Total number of renders to perform.
+    _expected_outputs: int = 1  # Total number of renders to perform.
     _produced_outputs: int = 0  # Counter for tracking number of complete renders.
 
     @staticmethod
     def _get_timer(timeout: int | float) -> Callable[[], bool]:
         """
-        Given a timeout length, returns a lambda which returns True until the timeout occurs.
+        Given a timeout length, returns a lambda which returns False until the timeout occurs.
 
         Args:
             timeout (int): The amount of time (in seconds) to wait before timing out.
         """
         timeout_time = time.time() + timeout
-        return lambda: time.time() < timeout_time
+        return lambda: time.time() >= timeout_time
 
     @property
     def _has_exception(self) -> bool:
@@ -157,8 +147,8 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         Returns:
             str: The socket path the adaptor server is running on.
         """
-        is_not_timed_out = self._get_timer(self._SERVER_START_TIMEOUT_SECONDS)
-        while (self._server is None or self._server.socket_path is None) and is_not_timed_out():
+        is_timed_out = self._get_timer(self._SERVER_START_TIMEOUT_SECONDS)
+        while (self._server is None or self._server.socket_path is None) and not is_timed_out():
             time.sleep(0.01)
 
         if self._server is not None and self._server.socket_path is not None:
@@ -297,7 +287,7 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         """
         for dir_ in sys.path:
             path = os.path.join(
-                dir_, "deadline_adaptor_for_houdini", "HoudiniClient", "houdini_client.py"
+                dir_, "deadline", "houdini_adaptor", "HoudiniClient", "houdini_client.py"
             )
             if os.path.isfile(path):
                 return path
@@ -307,22 +297,37 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             f"following directories: {sys.path[1:]}"
         )
 
-    def _start_houdini_client(self, houdini_version: str) -> None:
+    def _start_houdini_client(self) -> None:
         """
         Starts the houdini client by launching Houdini with the houdini_client.py file.
-
-        Args:
-            houdini_version (str): The version of Houdini that we are launching.
 
         Raises:
             FileNotFoundError: If the houdini_client.py file or the scene file could not be found.
         """
-        exe_path = self.config.get_executable_path(platform.system(), houdini_version)
-        houdini_client_path = self._get_houdini_client_path()
+        hython_exe = "hython"
         regexhandler = RegexHandler(self._get_regex_callbacks())
 
+        # Add the OpenJobIO namespace directory to PYTHONPATH, so that adaptor_runtime_client
+        # will be available directly to the houdini client.
+        import openjobio.adaptor_runtime_client
+        import deadline.houdini_adaptor
+
+        openjobio_namespace_dir = os.path.dirname(
+            os.path.dirname(openjobio.adaptor_runtime_client.__file__)
+        )
+        deadline_namespace_dir = os.path.dirname(os.path.dirname(deadline.houdini_adaptor.__file__))
+        python_path_addition = f"{openjobio_namespace_dir}{os.pathsep}{deadline_namespace_dir}"
+        if "PYTHONPATH" in os.environ:
+            os.environ[
+                "PYTHONPATH"
+            ] = f"{os.environ['PYTHONPATH']}{os.pathsep}{python_path_addition}"
+        else:
+            os.environ["PYTHONPATH"] = python_path_addition
+
+        houdini_client_path = self._get_houdini_client_path()
+
         self._houdini_client = LoggingSubprocess(
-            args=[exe_path, houdini_client_path],
+            args=[hython_exe, houdini_client_path],
             stdout_handler=regexhandler,
             stderr_handler=regexhandler,
         )
@@ -353,20 +358,6 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
 
         return major_minor
 
-    def _action_from_action_item(self, item: ActionItem, data: dict) -> Action:
-        """
-        Return an Action object from an ActionItem object. Applies pathmapping if necessary.
-
-        Args:
-            item (ActionItem): The ActionItem to convert to an Action
-            data (dict): The data dict to provide with the action
-
-        Returns:
-            Action: An Action object
-        """
-        value = data.get(item.name, "")
-        return Action(item.name, {item.name: value})
-
     def on_start(self) -> None:
         """
         For job stickiness. Will start everything required for the Task. Will be used for all
@@ -384,36 +375,23 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
 
         self.update_status(progress=0, status_message="Initializing Houdini")
         self._start_houdini_server_thread()
+        self._populate_action_queue()
 
-        version = str(self.init_data.get("version"))
-        version = self._get_major_minor_version(version)
-        self._start_houdini_client(version)
+        self._start_houdini_client()
 
-        is_not_timed_out = self._get_timer(self._HOUDINI_START_TIMEOUT_SECONDS)
-        while (
-            self._houdini_is_running
-            and not self._has_exception
-            and len(self._action_queue) > 0
-            and is_not_timed_out()
-        ):
-            time.sleep(0.1)  # busy wait for houdini to finish initialization
-
-        if len(self._action_queue) > 0:
-            if is_not_timed_out():
-                raise RuntimeError(
-                    "Houdini encountered an error and was not "
-                    "able to complete initialization actions."
-                )
-            else:
+        is_timed_out = self._get_timer(self._HOUDINI_START_TIMEOUT_SECONDS)
+        while self._houdini_is_running and not self._has_exception and len(self._action_queue) > 0:
+            if is_timed_out():
                 raise TimeoutError(
                     "Houdini did not complete initialization actions in "
                     f"{self._HOUDINI_START_TIMEOUT_SECONDS} seconds and failed to start."
                 )
-        for action_item in _FIRST_HOUDINI_ACTIONS:
-            self._action_queue.enqueue_action(
-                self._action_from_action_item(
-                    action_item, {action_item.name: self.init_data[action_item.name]}
-                )
+
+            time.sleep(0.1)  # busy wait for houdini to finish initialization
+
+        if len(self._action_queue) > 0:
+            raise RuntimeError(
+                "Houdini encountered an error and was not able to complete initialization actions."
             )
 
     def on_run(self, run_data: dict) -> None:
@@ -425,18 +403,24 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         if not self._houdini_is_running:
             raise HoudiniNotRunningError("Cannot render because Houdini is not running.")
 
+        # frame argument is string type and will fail validation unless we
+        # recast to int
+        # TODO: morgan - Fix this bug
+        run_data["frame"] = int(run_data["frame"])
         self.validators.run_data.validate(run_data)
-        self._produced_outputs = 0
-        self._expected_outputs = 1
+        # ERROR: Entrypoint failed:
+        # ERROR: openjobio_fail: Error encountered while running adaptor: '1' is not of type 'number'
+        #
+        # Failed validating 'type' in schema['properties']['frame']:
+        #     {'type': 'number'}
+        #
+        # On instance['frame']:
+        #     '1'
         self._is_rendering = True
 
-        for action_item in _HOUDINI_RUN_KEYS:
-            if action_item.name in run_data:
-                self._action_queue.enqueue_action(
-                    self._action_from_action_item(
-                        action_item, {action_item.name: run_data[action_item.name]}
-                    )
-                )
+        for name in _HOUDINI_RUN_KEYS:
+            if name in run_data:
+                self._action_queue.enqueue_action(Action(name, {name: run_data[name]}))
 
         self._action_queue.enqueue_action(Action("start_render", {"frame": run_data["frame"]}))
 
@@ -452,7 +436,7 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
                 f"Exit code {exit_code}"
             )
 
-    def on_end(self) -> None:
+    def on_stop(self) -> None:
         """ """
         self._action_queue.enqueue_action(Action("close"), front=True)
         return
@@ -464,8 +448,8 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         self._performing_cleanup = True
 
         self._action_queue.enqueue_action(Action("close"), front=True)
-        is_not_timed_out = self._get_timer(self._HOUDINI_END_TIMEOUT_SECONDS)
-        while self._houdini_is_running and is_not_timed_out():
+        is_timed_out = self._get_timer(self._HOUDINI_END_TIMEOUT_SECONDS)
+        while self._houdini_is_running and not is_timed_out():
             time.sleep(0.1)
         if self._houdini_is_running and self._houdini_client:
             _logger.error(
@@ -494,3 +478,12 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             return
 
         self._houdini_client.terminate(grace_time_s=0)
+
+    def _populate_action_queue(self) -> None:
+        """
+        Populates the adaptor server's action queue with actions from the init_data that the Houdini
+        Client will request and perform. The action must be present in the _FIRST_HOUDINI_ACTIONS
+        set to be added to the action queue.
+        """
+        for name in _FIRST_HOUDINI_ACTIONS:
+            self._action_queue.enqueue_action(Action(name, {name: self.init_data[name]}))
