@@ -37,8 +37,8 @@ def _get_dependencies(pyproject_dict: dict[str, Any]) -> list[str]:
         raise Exception("pyproject.toml is missing dependencies section")
 
     dependencies = pyproject_dict["project"]["dependencies"]
-    deps_noopenjobio = filter(lambda dep: not dep.startswith("openjobio"), dependencies)
-    return list(map(lambda dep: dep.replace(" ", ""), deps_noopenjobio))
+    deps_noopenjd = filter(lambda dep: not dep.startswith("openjd"), dependencies)
+    return list(map(lambda dep: dep.replace(" ", ""), deps_noopenjd))
 
 
 def _get_package_version_regex(package: str) -> re.Pattern:
