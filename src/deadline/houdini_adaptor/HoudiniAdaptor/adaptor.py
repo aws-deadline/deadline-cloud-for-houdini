@@ -12,12 +12,12 @@ import time
 from functools import wraps
 from typing import Callable
 
-from openjobio.adaptor_runtime.adaptors import Adaptor, AdaptorDataValidators
-from openjobio.adaptor_runtime.adaptors.configuration import AdaptorConfiguration
-from openjobio.adaptor_runtime.process import LoggingSubprocess
-from openjobio.adaptor_runtime.app_handlers import RegexCallback, RegexHandler
-from openjobio.adaptor_runtime.application_ipc import ActionsQueue, AdaptorServer
-from openjobio.adaptor_runtime_client import Action
+from openjd.adaptor_runtime.adaptors import Adaptor, AdaptorDataValidators
+from openjd.adaptor_runtime.adaptors.configuration import AdaptorConfiguration
+from openjd.adaptor_runtime.process import LoggingSubprocess
+from openjd.adaptor_runtime.app_handlers import RegexCallback, RegexHandler
+from openjd.adaptor_runtime.application_ipc import ActionsQueue, AdaptorServer
+from openjd.adaptor_runtime_client import Action
 
 _logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ _FIRST_HOUDINI_ACTIONS = [
     "scene_file",
     "render_node",
     # remove this action untl we find root cause for this error:
-    # ERROR: openjobio_fail: Error encountered while starting adaptor: 'ignore_input_nodes'
+    # ERROR: openjd_fail: Error encountered while starting adaptor: 'ignore_input_nodes'
     # "ignore_input_nodes",
 ]
 _HOUDINI_RUN_KEYS = {
@@ -307,16 +307,16 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         hython_exe = "hython"
         regexhandler = RegexHandler(self._get_regex_callbacks())
 
-        # Add the OpenJobIO namespace directory to PYTHONPATH, so that adaptor_runtime_client
+        # Add the openjd namespace directory to PYTHONPATH, so that adaptor_runtime_client
         # will be available directly to the houdini client.
-        import openjobio.adaptor_runtime_client
+        import openjd.adaptor_runtime_client
         import deadline.houdini_adaptor
 
-        openjobio_namespace_dir = os.path.dirname(
-            os.path.dirname(openjobio.adaptor_runtime_client.__file__)
+        openjd_namespace_dir = os.path.dirname(
+            os.path.dirname(openjd.adaptor_runtime_client.__file__)
         )
         deadline_namespace_dir = os.path.dirname(os.path.dirname(deadline.houdini_adaptor.__file__))
-        python_path_addition = f"{openjobio_namespace_dir}{os.pathsep}{deadline_namespace_dir}"
+        python_path_addition = f"{openjd_namespace_dir}{os.pathsep}{deadline_namespace_dir}"
         if "PYTHONPATH" in os.environ:
             os.environ[
                 "PYTHONPATH"
@@ -409,7 +409,7 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         run_data["frame"] = int(run_data["frame"])
         self.validators.run_data.validate(run_data)
         # ERROR: Entrypoint failed:
-        # ERROR: openjobio_fail: Error encountered while running adaptor: '1' is not of type 'number'
+        # ERROR: openjd_fail: Error encountered while running adaptor: '1' is not of type 'number'
         #
         # Failed validating 'type' in schema['properties']['frame']:
         #     {'type': 'number'}

@@ -10,8 +10,8 @@ license = ""
 requires-python = ">=3.9"
 
 dependencies = [
-    "deadline == 0.22.*",
-    "openjobio == 0.8.*",
+    "deadline == 0.23.*",
+    "openjd == 0.10.*",
 ]
 
 [project.scripts]
@@ -32,12 +32,9 @@ version_scheme = "post-release"
 version-file = "_version.py"
 
 [tool.hatch.build.hooks.custom]
-path = "hatch_version_hook.py"
+path = "hatch_custom_hook.py"
 
-[[tool.hatch.build.hooks.custom.copy_map]]
-sources = [
-  "_version.py",
-]
+[tool.hatch.build.hooks.custom.copy_version_py]
 destinations = [
   "src/deadline/houdini_adaptor",
   "src/deadline/houdini_submitter",
@@ -76,7 +73,7 @@ line-length = 100
 [tool.ruff.isort]
 known-first-party = [
   "deadline",
-  "openjobio"
+  "openjd"
 ]
 
 [tool.black]
