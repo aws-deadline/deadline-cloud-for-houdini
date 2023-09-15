@@ -10,7 +10,7 @@ license = ""
 requires-python = ">=3.9"
 
 dependencies = [
-    "deadline == 0.19.*",
+    "deadline == 0.22.*",
     "openjobio == 0.8.*",
 ]
 
