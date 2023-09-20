@@ -2,7 +2,11 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 set -xeuo pipefail
 
-python deps_bundle.py
+SCRIPT_FOLDER=$(dirname "$0")
+GIT_ROOT=$(dirname "${SCRIPT_FOLDER}")
+
+cd "${GIT_ROOT}"
+python "${SCRIPT_FOLDER}"/deps_bundle.py
 
 rm -f dependency_bundle/deadline_cloud_for_houdini_submitter-deps-windows.zip
 rm -f dependency_bundle/deadline_cloud_for_houdini_submitter-deps-linux.zip

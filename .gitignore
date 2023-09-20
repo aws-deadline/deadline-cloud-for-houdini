@@ -8,5 +8,7 @@ __pycache__/
 /htmlcov
 .vscode
 *_version.py
-/wheels/
+houdini_version.txt
 /dependency_bundle/
+/dev_install/
+/wheels/

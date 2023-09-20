@@ -1,7 +1,7 @@
 {
     "env": [
         {
-            "DEADLINE_CLOUD_FOR_HOUDINI": "$HOME/deadline_cloud_for_houdini"
+            "DEADLINE_CLOUD_FOR_HOUDINI": "$HOME/deadline/houdini_submitter"
         },
         {
             "PYTHONPATH": "$DEADLINE_CLOUD_FOR_HOUDINI/python"
