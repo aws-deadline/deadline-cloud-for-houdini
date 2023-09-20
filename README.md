@@ -34,6 +34,13 @@ hatch run fmt
 hatch run all:test
 ```
 
+## Use development Submitter in Houdini
+```
+hatch run install
+```
+
+A development version of the Deadline Cloud node is then available in `/out` by pressing TAB, typing `deadline`, and adding it to the network.
+
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
