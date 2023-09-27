@@ -10,7 +10,7 @@ license = ""
 requires-python = ">=3.9"
 
 dependencies = [
-    "deadline == 0.23.*",
+    "deadline == 0.28.*",
     "openjd == 0.10.*",
 ]
 
