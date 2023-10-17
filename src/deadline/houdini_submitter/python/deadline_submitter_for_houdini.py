@@ -11,7 +11,7 @@ from deadline.client.job_bundle.adaptors import (
     parse_frame_range,
 )
 from deadline.client import api
-from deadline.client.job_bundle.submission import FlatAssetReferences
+from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.job_bundle import create_job_history_bundle_dir
 from deadline.client.config import get_setting
 from deadline.client.config.config_file import str2bool
@@ -35,8 +35,8 @@ def _get_houdini_version() -> str:
     return hou.applicationVersionString()
 
 
-def _get_scene_asset_references(rop_node: hou.Node) -> FlatAssetReferences:
-    asset_references = FlatAssetReferences()
+def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
+    asset_references = AssetReferences()
     input_filenames: set[str] = set()
     input_filenames.add(_get_hip_file())
     for n in hou.fileReferences():
@@ -418,8 +418,8 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     return job_template
 
 
-def _get_asset_references(rop_node: hou.Node) -> FlatAssetReferences:
-    asset_references = FlatAssetReferences()
+def _get_asset_references(rop_node: hou.Node) -> AssetReferences:
+    asset_references = AssetReferences()
     for n in rop_node.parm("input_filenames").multiParmInstances():
         asset_references.input_filenames.add(n.eval())
     for n in rop_node.parm("input_directories").multiParmInstances():
@@ -430,7 +430,7 @@ def _get_asset_references(rop_node: hou.Node) -> FlatAssetReferences:
 
 
 def _create_job_bundle(
-    rop_node: hou.Node, job_bundle_dir: str, asset_references: FlatAssetReferences
+    rop_node: hou.Node, job_bundle_dir: str, asset_references: AssetReferences
 ) -> None:
     job_bundle_path = Path(job_bundle_dir)
     job_template = _get_job_template(rop_node)
@@ -481,6 +481,8 @@ def p_save_bundle(kwargs):
 def p_submit(kwargs):
     node = kwargs["node"]
     name = node.parm("name").evalAsString()
+    # TODO: Populate from queue environment
+    queue_parameters: list[dict[str, Any]] = []
     asset_references = _get_asset_references(node)
     try:
         deadline = api.get_boto3_client("deadline")
@@ -494,7 +496,7 @@ def p_submit(kwargs):
 
         queue = deadline.get_queue(farmId=farm_id, queueId=queue_id)
 
-        queue_role_session = api.get_queue_boto3_session(
+        queue_role_session = api.get_queue_user_boto3_session(
             deadline=deadline,
             farm_id=farm_id,
             queue_id=queue_id,
@@ -508,15 +510,16 @@ def p_submit(kwargs):
             session=queue_role_session,
         )
 
-        SubmitJobProgressDialog.start_submission(
+        job_progress_dialog = SubmitJobProgressDialog(parent=hou.qt.mainWindow())
+        job_progress_dialog.start_submission(
             farm_id,
             queue_id,
             storage_profile_id,
             job_bundle_dir,
+            queue_parameters,
             asset_manager,
             deadline,
             auto_accept=str2bool(get_setting("settings.auto_accept")),
-            parent=hou.qt.mainWindow(),
         )
     except Exception as exc:
         print(str(exc))
