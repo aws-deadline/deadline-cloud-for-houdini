@@ -22,7 +22,6 @@ from deadline.job_attachments.models import JobAttachmentS3Settings
 
 import hou
 
-INSTALLATION_REQUIREMENTS_DEFAULT = "houdini-19.5"
 IGNORE_REF_VALUES = ("opdef:", "oplib:", "temp:")
 IGNORE_REF_PARMS = ("taskgraphfile", "pdg_workingdir", "soho_program")
 
@@ -155,10 +154,6 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     separate_steps = rop.parm("separate_steps").eval()
     rop_steps = _get_rop_steps(rop)
     id_steps = {n["id"]: n for n in rop_steps}
-    if rop.parm("override_installation_requirements").eval():
-        installation_requirements = rop.parm("installation_requirements").evalAsString()
-    else:
-        installation_requirements = INSTALLATION_REQUIREMENTS_DEFAULT
     parameter_definitions: list[dict[str, Any]] = []
     parameter_definitions.append(
         {
@@ -167,19 +162,6 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
             "objectType": "FILE",
             "dataFlow": "IN",
             "default": _get_hip_file(),
-        }
-    )
-    parameter_definitions.append(
-        {
-            "name": "RezPackages",
-            "type": "STRING",
-            "userInterface": {
-                "control": "LINE_EDIT",
-                "label": "Rez Packages",
-                "groupLabel": "Software Environment",
-            },
-            "description": "A space-separated list of Rez packages to install",
-            "default": installation_requirements,
         }
     )
     steps: list[dict[str, Any]] = []

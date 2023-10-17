@@ -637,29 +637,6 @@
             }
         }
 
-        group {
-            name    "folder2"
-            label   "Installation Requirements"
-
-            parm {
-                name    "override_installation_requirements"
-                label   "Label"
-                type    toggle
-                nolabel
-                joinnext
-                default { "0" }
-                parmtag { "script_callback_language" "python" }
-            }
-            parm {
-                name    "installation_requirements"
-                label   "Override Installation Requirements"
-                type    string
-                default { "houdini-19.5" }
-                disablewhen "{ override_installation_requirements == 0 }"
-                parmtag { "script_callback_language" "python" }
-            }
-        }
-
     }
 
     group {
