@@ -149,149 +149,6 @@ def _get_parameter_values(node: hou.Node) -> dict[str, Any]:
     }
 
 
-# ==========================
-# ==========================
-# ==========================
-# TODO -- Delete from here to end marker once the submitter has been updated
-# to leverage Queue Environments
-
-
-class OJIOToken:
-    def __init__(self, token: str) -> None:
-        self.token = token
-
-    def __str__(self) -> str:
-        return "{{ " + self.token + " }}"
-
-
-# add OJIOToken to the YAML representer
-def ojio_token_representer(dumper: yaml.Dumper, token: OJIOToken) -> yaml.Node:
-    return dumper.represent_data(str(token))
-
-
-yaml.add_representer(OJIOToken, ojio_token_representer)
-
-REZ_ENTER_SCRIPT = """#!/bin/env bash
-
-set -euo pipefail
-
-if [ ! -z "{{Param.RezPackages}}" ]; then
-    echo "Rez Package List:"
-    echo "   {{Param.RezPackages}}"
-
-    # Create the environment
-    /usr/local/bin/deadline-rez init \\
-        -d "{{Session.WorkingDirectory}}" \\
-        {{Param.RezPackages}}
-
-    # Capture the environment's vars
-    {{Env.File.InitialVars}}
-    . /usr/local/bin/deadline-rez activate \\
-        -d "{{Session.WorkingDirectory}}"
-    {{Env.File.CaptureVars}}
-else
-    echo "No Rez Packages, skipping environment creation."
-fi
-"""
-
-REZ_EXIT_SCRIPT = """#!/bin/env bash
-
-set -euo pipefail
-
-if [ ! -z "{{Param.RezPackages}}" ]; then
-    echo "Rez Package List:"
-    echo "   {{Param.RezPackages}}"
-
-    /usr/local/bin/deadline-rez destroy \\
-        -d "{{ Session.WorkingDirectory }}"
-else
-    echo "No Rez Packages, skipping environment teardown."
-fi
-"""
-
-ENV_INITIALVARS_SCRIPT = """#!/usr/bin/env python3
-import os, json
-envfile = "{{Session.WorkingDirectory}}/.envInitial"
-with open(envfile, "w", encoding="utf8") as f:
-    json.dump(dict(os.environ), f)
-"""
-
-ENV_CAPTUREVARS_SCRIPT = """#!/usr/bin/env python3
-import os, json, sys
-envfile = "{{Session.WorkingDirectory}}/.envInitial"
-if os.path.isfile(envfile):
-    with open(envfile, "r", encoding="utf8") as f:
-        before = json.load(f)
-else:
-    print("No initial environment found, must run Env.File.CaptureVars script first")
-    sys.exit(1)
-after = dict(os.environ)
-
-put = {k: v for k, v in after.items() if v != before.get(k)}
-delete = {k for k in before if k not in after}
-
-for k, v in put.items():
-    print(f"updating {k}={v}")
-    print(f"openjobio_env: {k}={v}")
-for k in delete:
-    print(f"openjobio_unset_env: {k}")
-"""
-
-
-def _get_rez_environment() -> dict[str, Any]:
-    """This is deprecated, and moving to Queue Environments."""
-    return {
-        "name": "Rez",
-        "description": "Initializes and destroys the Rez environment for the run",
-        "script": {
-            "actions": {
-                "onEnter": {
-                    "command": str(OJIOToken("Env.File.Enter")),
-                },
-                "onExit": {
-                    "command": str(OJIOToken("Env.File.Exit")),
-                },
-            },
-            "embeddedFiles": [
-                {
-                    "name": "Enter",
-                    "filename": "rez-enter.sh",
-                    "type": "TEXT",
-                    "runnable": True,
-                    "data": REZ_ENTER_SCRIPT,
-                },
-                {
-                    "name": "Exit",
-                    "filename": "rez-exit.sh",
-                    "type": "TEXT",
-                    "runnable": True,
-                    "data": REZ_EXIT_SCRIPT,
-                },
-                {
-                    "name": "InitialVars",
-                    "filename": "initial-vars.sh",
-                    "type": "TEXT",
-                    "runnable": True,
-                    "data": ENV_INITIALVARS_SCRIPT,
-                },
-                {
-                    "name": "CaptureVars",
-                    "filename": "capture-vars.sh",
-                    "type": "TEXT",
-                    "runnable": True,
-                    "data": ENV_CAPTUREVARS_SCRIPT,
-                },
-            ],
-        },
-    }
-
-
-# TODO - END MARKER
-# ==========================
-# ==========================
-# ==========================
-
-
 def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     job_name = rop.parm("name").evalAsString()
     job_description = rop.parm("description").evalAsString()
@@ -395,7 +252,6 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         "specificationVersion": "jobtemplate-2023-09",
         "name": job_name,
         "parameterDefinitions": parameter_definitions,
-        "jobEnvironments": [_get_rez_environment()],
         "steps": steps,
     }
     if job_description:
@@ -413,6 +269,8 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                 job_template["parameterDefinitions"].extend(
                     override_environment["parameterDefinitions"]
                 )
+                if "jobEnvironments" not in job_template:
+                    job_template["jobEnvironments"] = []
                 job_template["jobEnvironments"].append(override_environment["environment"])
     return job_template
 
@@ -480,7 +338,7 @@ def p_save_bundle(kwargs):
 def p_submit(kwargs):
     node = kwargs["node"]
     name = node.parm("name").evalAsString()
-    # TODO: Populate from queue environment
+    # TODO: Populate from queue environment so that parameters can be overridden.
     queue_parameters: list[dict[str, Any]] = []
     asset_references = _get_asset_references(node)
     try:
