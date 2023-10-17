@@ -34,7 +34,7 @@ echo "Installing Submitter for Houdini ${HOUDINI_FULL_VERSION}"
 # % - delete the shortest string to the right that matches
 HOUDINI_MAJOR_MINOR=${HOUDINI_FULL_VERSION%.*}
 DEV_INSTALL_LOCATION=${GIT_ROOT}/dev_install
-HDA_SOURCE=${GIT_ROOT}/src/deadline/houdini_submitter/otls/deadline_cloud
+HDA_SOURCE=${GIT_ROOT}/src/deadline/houdini_submitter/otls/deadline_cloud.hda
 HDA_BUILD=${DEV_INSTALL_LOCATION}/otls/deadline_cloud.hda
 DEPS_BUNDLE_DEST=${DEV_INSTALL_LOCATION}/python
 
