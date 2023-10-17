@@ -566,7 +566,7 @@
 
         groupsimple {
             name    "folder0"
-            label   "Description"
+            label   "Job Properties"
 
             parm {
                 name    "name"
@@ -580,6 +580,41 @@
                 label   "Description"
                 type    string
                 default { "" }
+                parmtag { "script_callback_language" "python" }
+            }
+            parm {
+                name    "priority"
+                label   "Priority"
+                type    integer
+                default { "50" }
+                range   { 1 100 }
+                parmtag { "script_callback_language" "python" }
+            }
+            parm {
+                name    "initial_status"
+                label   "Initial State"
+                type    ordinal
+                default { "0" }
+                menu {
+                    "READY"     "READY"
+                    "SUSPENDED" "SUSPENDED"
+                }
+                parmtag { "script_callback_language" "python" }
+            }
+            parm {
+                name    "failed_tasks_limit"
+                label   "Failed Tasks Limit"
+                type    integer
+                default { "20" }
+                range   { 1 200 }
+                parmtag { "script_callback_language" "python" }
+            }
+            parm {
+                name    "task_retry_limit"
+                label   "Task Retry Limit"
+                type    integer
+                default { "5" }
+                range   { 1 10 }
                 parmtag { "script_callback_language" "python" }
             }
         }
@@ -599,41 +634,6 @@
                 label   "Queue"
                 type    label
                 default { "<unknown>" }
-            }
-            parm {
-                name    "initial_status"
-                label   "Initial Status"
-                type    ordinal
-                default { "0" }
-                menu {
-                    "READY"     "READY"
-                    "PAUSED"    "PAUSED"
-                }
-                parmtag { "script_callback_language" "python" }
-            }
-            parm {
-                name    "failed_tasks_limit"
-                label   "Failed Tasks Limit"
-                type    integer
-                default { "100" }
-                range   { 1 200 }
-                parmtag { "script_callback_language" "python" }
-            }
-            parm {
-                name    "task_retry_limit"
-                label   "Task Retry Limit"
-                type    integer
-                default { "5" }
-                range   { 1 10 }
-                parmtag { "script_callback_language" "python" }
-            }
-            parm {
-                name    "priority"
-                label   "Priority"
-                type    integer
-                default { "50" }
-                range   { 1 100 }
-                parmtag { "script_callback_language" "python" }
             }
         }
 

@@ -4,7 +4,7 @@ parameterDefinitions:
   type: PATH
   objectType: DIRECTORY
   dataFlow: IN
-  description: A directory that contains wheels for openjd, deadline, and the overridden adaptor.
+  description: A directory that contains wheels for openjd_adaptor_runtime, deadline, and the overridden adaptor.
 - name: OverrideAdaptorName
   type: STRING
   description: The name of the adaptor to override, for example HoudiniAdaptor.

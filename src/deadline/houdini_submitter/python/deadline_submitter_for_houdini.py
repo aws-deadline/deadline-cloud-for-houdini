@@ -87,8 +87,7 @@ def _get_rop_steps(rop: hou.Node):
     cmd = "render -p -c -F %s" % rop.path()
     out, err = hou.hscript(cmd)
     if err:
-        # should not happen
-        raise Exception("hscript render: failed to list steps")
+        raise Exception("hscript render: failed to list steps\n\n{}".format(err))
     rop_steps: list[dict[str, Any]] = []
     for n in out.split("\n"):
         if not n.strip():

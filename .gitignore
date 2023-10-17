@@ -12,3 +12,4 @@ houdini_version.txt
 /dependency_bundle/
 /dev_install/
 /wheels/
+**/otls/backup
