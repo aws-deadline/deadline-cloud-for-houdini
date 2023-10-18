@@ -1,4 +1,4 @@
-## Deadline Cloud Houdini Integration
+# Amazon Deadline Cloud for Houdini
 
 This package has two active branches:
 
@@ -7,35 +7,43 @@ This package has two active branches:
 
 ## Development
 
-# Build / Test / Release
+See [DEVELOPMENT](DEVELOPMENT.md) for more information.
 
-## Build the package.
-```
+## Build / Test / Release
+
+### Build the package
+
+```bash
 hatch build
 ```
 
-## Run tests
-```
+### Run tests
+
+```bash
 hatch run test
 ```
 
-## Run linting
-```
+### Run linting
+
+```bash
 hatch run lint
 ```
 
-## Run formating
-```
+### Run formatting
+
+```bash
 hatch run fmt
 ```
 
-## Run tests for all supported Python versions.
-```
+## Run tests for all supported Python versions
+
+```bash
 hatch run all:test
 ```
 
 ## Use development Submitter in Houdini
-```
+
+```bash
 hatch run install
 ```
 

@@ -11,7 +11,7 @@ from deadline.client.job_bundle.adaptors import (
     parse_frame_range,
 )
 from deadline.client import api
-from deadline.client.job_bundle.submission import FlatAssetReferences
+from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.job_bundle import create_job_history_bundle_dir
 from deadline.client.config import get_setting
 from deadline.client.config.config_file import str2bool
@@ -22,7 +22,6 @@ from deadline.job_attachments.models import JobAttachmentS3Settings
 
 import hou
 
-INSTALLATION_REQUIREMENTS_DEFAULT = "houdini-19.5"
 IGNORE_REF_VALUES = ("opdef:", "oplib:", "temp:")
 IGNORE_REF_PARMS = ("taskgraphfile", "pdg_workingdir", "soho_program")
 
@@ -35,8 +34,8 @@ def _get_houdini_version() -> str:
     return hou.applicationVersionString()
 
 
-def _get_scene_asset_references(rop_node: hou.Node) -> FlatAssetReferences:
-    asset_references = FlatAssetReferences()
+def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
+    asset_references = AssetReferences()
     input_filenames: set[str] = set()
     input_filenames.add(_get_hip_file())
     for n in hou.fileReferences():
@@ -87,8 +86,7 @@ def _get_rop_steps(rop: hou.Node):
     cmd = "render -p -c -F %s" % rop.path()
     out, err = hou.hscript(cmd)
     if err:
-        # should not happen
-        raise Exception("hscript render: failed to list steps")
+        raise Exception("hscript render: failed to list steps\n\n{}".format(err))
     rop_steps: list[dict[str, Any]] = []
     for n in out.split("\n"):
         if not n.strip():
@@ -150,159 +148,12 @@ def _get_parameter_values(node: hou.Node) -> dict[str, Any]:
     }
 
 
-# ==========================
-# ==========================
-# ==========================
-# TODO -- Delete from here to end marker once the submitter has been updated
-# to leverage Queue Environments
-
-
-class OJIOToken:
-    def __init__(self, token: str) -> None:
-        self.token = token
-
-    def __str__(self) -> str:
-        return "{{ " + self.token + " }}"
-
-
-# add OJIOToken to the YAML representer
-def ojio_token_representer(dumper: yaml.Dumper, token: OJIOToken) -> yaml.Node:
-    return dumper.represent_data(str(token))
-
-
-yaml.add_representer(OJIOToken, ojio_token_representer)
-
-REZ_ENTER_SCRIPT = """#!/bin/env bash
-
-set -euo pipefail
-
-if [ ! -z "{{Param.RezPackages}}" ]; then
-    echo "Rez Package List:"
-    echo "   {{Param.RezPackages}}"
-
-    # Create the environment
-    /usr/local/bin/deadline-rez init \\
-        -d "{{Session.WorkingDirectory}}" \\
-        {{Param.RezPackages}}
-
-    # Capture the environment's vars
-    {{Env.File.InitialVars}}
-    . /usr/local/bin/deadline-rez activate \\
-        -d "{{Session.WorkingDirectory}}"
-    {{Env.File.CaptureVars}}
-else
-    echo "No Rez Packages, skipping environment creation."
-fi
-"""
-
-REZ_EXIT_SCRIPT = """#!/bin/env bash
-
-set -euo pipefail
-
-if [ ! -z "{{Param.RezPackages}}" ]; then
-    echo "Rez Package List:"
-    echo "   {{Param.RezPackages}}"
-
-    /usr/local/bin/deadline-rez destroy \\
-        -d "{{ Session.WorkingDirectory }}"
-else
-    echo "No Rez Packages, skipping environment teardown."
-fi
-"""
-
-ENV_INITIALVARS_SCRIPT = """#!/usr/bin/env python3
-import os, json
-envfile = "{{Session.WorkingDirectory}}/.envInitial"
-with open(envfile, "w", encoding="utf8") as f:
-    json.dump(dict(os.environ), f)
-"""
-
-ENV_CAPTUREVARS_SCRIPT = """#!/usr/bin/env python3
-import os, json, sys
-envfile = "{{Session.WorkingDirectory}}/.envInitial"
-if os.path.isfile(envfile):
-    with open(envfile, "r", encoding="utf8") as f:
-        before = json.load(f)
-else:
-    print("No initial environment found, must run Env.File.CaptureVars script first")
-    sys.exit(1)
-after = dict(os.environ)
-
-put = {k: v for k, v in after.items() if v != before.get(k)}
-delete = {k for k in before if k not in after}
-
-for k, v in put.items():
-    print(f"updating {k}={v}")
-    print(f"openjobio_env: {k}={v}")
-for k in delete:
-    print(f"openjobio_unset_env: {k}")
-"""
-
-
-def _get_rez_environment() -> dict[str, Any]:
-    """This is deprecated, and moving to Queue Environments."""
-    return {
-        "name": "Rez",
-        "description": "Initializes and destroys the Rez environment for the run",
-        "script": {
-            "actions": {
-                "onEnter": {
-                    "command": str(OJIOToken("Env.File.Enter")),
-                },
-                "onExit": {
-                    "command": str(OJIOToken("Env.File.Exit")),
-                },
-            },
-            "embeddedFiles": [
-                {
-                    "name": "Enter",
-                    "filename": "rez-enter.sh",
-                    "type": "TEXT",
-                    "runnable": True,
-                    "data": REZ_ENTER_SCRIPT,
-                },
-                {
-                    "name": "Exit",
-                    "filename": "rez-exit.sh",
-                    "type": "TEXT",
-                    "runnable": True,
-                    "data": REZ_EXIT_SCRIPT,
-                },
-                {
-                    "name": "InitialVars",
-                    "filename": "initial-vars.sh",
-                    "type": "TEXT",
-                    "runnable": True,
-                    "data": ENV_INITIALVARS_SCRIPT,
-                },
-                {
-                    "name": "CaptureVars",
-                    "filename": "capture-vars.sh",
-                    "type": "TEXT",
-                    "runnable": True,
-                    "data": ENV_CAPTUREVARS_SCRIPT,
-                },
-            ],
-        },
-    }
-
-
-# TODO - END MARKER
-# ==========================
-# ==========================
-# ==========================
-
-
 def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     job_name = rop.parm("name").evalAsString()
     job_description = rop.parm("description").evalAsString()
     separate_steps = rop.parm("separate_steps").eval()
     rop_steps = _get_rop_steps(rop)
     id_steps = {n["id"]: n for n in rop_steps}
-    if rop.parm("override_installation_requirements").eval():
-        installation_requirements = rop.parm("installation_requirements").evalAsString()
-    else:
-        installation_requirements = INSTALLATION_REQUIREMENTS_DEFAULT
     parameter_definitions: list[dict[str, Any]] = []
     parameter_definitions.append(
         {
@@ -311,19 +162,6 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
             "objectType": "FILE",
             "dataFlow": "IN",
             "default": _get_hip_file(),
-        }
-    )
-    parameter_definitions.append(
-        {
-            "name": "RezPackages",
-            "type": "STRING",
-            "userInterface": {
-                "control": "LINE_EDIT",
-                "label": "Rez Packages",
-                "groupLabel": "Software Environment",
-            },
-            "description": "A space-separated list of Rez packages to install",
-            "default": installation_requirements,
         }
     )
     steps: list[dict[str, Any]] = []
@@ -396,7 +234,6 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         "specificationVersion": "jobtemplate-2023-09",
         "name": job_name,
         "parameterDefinitions": parameter_definitions,
-        "jobEnvironments": [_get_rez_environment()],
         "steps": steps,
     }
     if job_description:
@@ -414,12 +251,14 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                 job_template["parameterDefinitions"].extend(
                     override_environment["parameterDefinitions"]
                 )
+                if "jobEnvironments" not in job_template:
+                    job_template["jobEnvironments"] = []
                 job_template["jobEnvironments"].append(override_environment["environment"])
     return job_template
 
 
-def _get_asset_references(rop_node: hou.Node) -> FlatAssetReferences:
-    asset_references = FlatAssetReferences()
+def _get_asset_references(rop_node: hou.Node) -> AssetReferences:
+    asset_references = AssetReferences()
     for n in rop_node.parm("input_filenames").multiParmInstances():
         asset_references.input_filenames.add(n.eval())
     for n in rop_node.parm("input_directories").multiParmInstances():
@@ -430,7 +269,7 @@ def _get_asset_references(rop_node: hou.Node) -> FlatAssetReferences:
 
 
 def _create_job_bundle(
-    rop_node: hou.Node, job_bundle_dir: str, asset_references: FlatAssetReferences
+    rop_node: hou.Node, job_bundle_dir: str, asset_references: AssetReferences
 ) -> None:
     job_bundle_path = Path(job_bundle_dir)
     job_template = _get_job_template(rop_node)
@@ -481,6 +320,8 @@ def p_save_bundle(kwargs):
 def p_submit(kwargs):
     node = kwargs["node"]
     name = node.parm("name").evalAsString()
+    # TODO: Populate from queue environment so that parameters can be overridden.
+    queue_parameters: list[dict[str, Any]] = []
     asset_references = _get_asset_references(node)
     try:
         deadline = api.get_boto3_client("deadline")
@@ -494,7 +335,7 @@ def p_submit(kwargs):
 
         queue = deadline.get_queue(farmId=farm_id, queueId=queue_id)
 
-        queue_role_session = api.get_queue_boto3_session(
+        queue_role_session = api.get_queue_user_boto3_session(
             deadline=deadline,
             farm_id=farm_id,
             queue_id=queue_id,
@@ -508,15 +349,16 @@ def p_submit(kwargs):
             session=queue_role_session,
         )
 
-        SubmitJobProgressDialog.start_submission(
+        job_progress_dialog = SubmitJobProgressDialog(parent=hou.qt.mainWindow())
+        job_progress_dialog.start_submission(
             farm_id,
             queue_id,
             storage_profile_id,
             job_bundle_dir,
+            queue_parameters,
             asset_manager,
             deadline,
             auto_accept=str2bool(get_setting("settings.auto_accept")),
-            parent=hou.qt.mainWindow(),
         )
     except Exception as exc:
         print(str(exc))
@@ -579,8 +421,8 @@ def get_houdini_environments(init_data_attachment: dict[str, Any]) -> list[dict[
                         "args": [
                             "daemon",
                             "start",
-                            # "--path-mapping-rules",
-                            # "file://{{Session.PathMappingRulesFile}},
+                            "--path-mapping-rules",
+                            "file://{{Session.PathMappingRulesFile}}",
                             "--connection-file",
                             "{{ Session.WorkingDirectory }}/connection.json",
                             "--init-data",
