@@ -324,6 +324,13 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         else:
             os.environ["PYTHONPATH"] = python_path_addition
 
+        # If there are path mapping rules, set the houdini environment variable to enable them
+        houdini_pathmap = self._get_houdini_pathmap()
+        if houdini_pathmap:
+            os.environ["HOUDINI_PATHMAP"] = houdini_pathmap
+
+        _logger.info("Setting HOUDINI_PATHMAP to: {}".format(houdini_pathmap))
+
         houdini_client_path = self._get_houdini_client_path()
 
         self._houdini_client = LoggingSubprocess(
@@ -331,6 +338,23 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             stdout_handler=regexhandler,
             stderr_handler=regexhandler,
         )
+
+    def _get_houdini_pathmap(self) -> str:
+        """Builds a dict of source to destination strings from the path mapping rules
+
+        The string representation of the dict can then be used to set HOUDINI_PATHMAP
+
+        Returns:
+            str: The value to set HOUDINI_PATHMAP to
+        """
+        path_mapping_rules: dict[str, str] = {}
+
+        for rule in self._path_mapping_rules:
+            path_mapping_rules[rule.source_path] = rule.destination_path
+
+        if path_mapping_rules:
+            return str(path_mapping_rules)
+        return ""
 
     @staticmethod
     def _get_major_minor_version(houdini_version: str) -> str:

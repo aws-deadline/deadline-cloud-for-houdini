@@ -421,8 +421,8 @@ def get_houdini_environments(init_data_attachment: dict[str, Any]) -> list[dict[
                         "args": [
                             "daemon",
                             "start",
-                            # "--path-mapping-rules",
-                            # "file://{{Session.PathMappingRulesFile}},
+                            "--path-mapping-rules",
+                            "file://{{Session.PathMappingRulesFile}}",
                             "--connection-file",
                             "{{ Session.WorkingDirectory }}/connection.json",
                             "--init-data",
