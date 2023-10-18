@@ -4,6 +4,6 @@ pytest-cov ~= 4.1
 pytest-xdist ~= 3.3
 twine ~= 4.0
 mypy ~= 1.5
-black ~= 23.9
+black ~= 23.10
 ruff ~= 0.0.290
 types-pyyaml ~= 6.0
