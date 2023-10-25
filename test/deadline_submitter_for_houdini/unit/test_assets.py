@@ -1,7 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
 from .mock_hou import hou_module as hou
-from deadline.houdini_submitter.python.deadline_submitter_for_houdini import (
+from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
     _get_scene_asset_references,
 )
 
