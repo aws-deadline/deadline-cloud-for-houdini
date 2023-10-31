@@ -1,0 +1,100 @@
+<component>
+    <name>deadline_cloud_for_houdini</name>
+    <description>Deadline Cloud for Houdini</description>
+    <detailedDescription>Houdini plugin for submitting jobs to Amazon Deadline Cloud.</detailedDescription>
+    <canBeEdited>1</canBeEdited>
+    <selected>0</selected>
+    <show>1</show>
+    <folderList>
+        <folder>
+            <description>Program Files</description>
+            <destination>${houdini_installdir}</destination>
+            <name>houdini</name>
+            <platforms>all</platforms>
+            <distributionFileList>
+                <distributionDirectory allowWildcards="1">
+                    <origin>components/deadline-cloud-for-houdini/src/deadline/houdini_submitter/*</origin>
+                </distributionDirectory>
+            </distributionFileList>
+        </folder>
+        <folder>
+            <description>Package</description>
+            <destination>${houdini_user_pref_dir_default}/packages</destination>
+            <name>houdinipackage</name>
+            <platforms>all</platforms>
+            <distributionFileList>
+                <distributionDirectory allowWildcards="1">
+                    <origin>components/deadline-cloud-for-houdini/packages/*</origin>
+                </distributionDirectory>
+            </distributionFileList>
+        </folder>
+        <folder>
+             <description>Dependency Files</description>
+             <destination>${installdir}/tmp/houdini_deps</destination>
+             <name>houdinideps</name>
+             <platforms>all</platforms>
+             <distributionFileList>
+                 <distributionDirectory allowWildcards="1">
+                     <origin>components/deadline-cloud-for-houdini/dependency_bundle</origin>
+                 </distributionDirectory>
+             </distributionFileList>
+         </folder>
+    </folderList>
+    <initializationActionList>
+        <setInstallerVariable name="all_components" value="${all_components} deadline_cloud_for_houdini"/>
+	</initializationActionList>
+    <readyToInstallActionList>
+		<setInstallerVariable name="houdini_installdir" value="${installdir}/Submitters/Houdini"/>
+        <if>
+             <conditionRuleList>
+                 <platformTest type="windows"/>
+             </conditionRuleList>
+             <actionList>
+                 <setInstallerVariable name="houdini_deps_platform" value="windows"/>
+                 <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/Documents/houdini19.5"/>
+             </actionList>
+         </if>
+         <if>
+             <conditionRuleList>
+                 <platformTest type="linux"/>
+             </conditionRuleList>
+             <actionList>
+                 <setInstallerVariable name="houdini_deps_platform" value="linux"/>
+                 <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/houdini19.5"/>
+             </actionList>
+         </if>
+         <if>
+             <conditionRuleList>
+                 <platformTest type="osx"/>
+             </conditionRuleList>
+             <actionList>
+                 <setInstallerVariable name="houdini_deps_platform" value="macos"/>
+                 <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/houdini19.5"/>
+             </actionList>
+         </if>
+	</readyToInstallActionList>
+	<parameterList>
+		<stringParameter name="deadline_cloud_for_houdini_summary" ask="0" cliOptionShow="0">
+			<value>Deadline Cloud for Houdini
+- Install the integrated Houdini submitter files to the installation directory
+- Register the plug-in with Houdini by installing and configuring a package file.</value>
+		</stringParameter>
+	</parameterList>
+    <postInstallationActionList>
+        <unzip>
+            <destinationDirectory>${houdini_installdir}/python</destinationDirectory>
+            <zipFile>${installdir}/tmp/houdini_deps/dependency_bundle/deadline_cloud_for_houdini_submitter-deps-${houdini_deps_platform}.zip</zipFile>
+        </unzip>
+        <deleteFile>
+            <path>${installdir}/tmp/houdini_deps</path>
+        </deleteFile>
+        <substitute>
+            <files>${houdini_user_pref_dir_default}/packages/deadline_submitter_for_houdini.json</files>
+            <type>exact</type>
+            <encoding>utf-8</encoding>
+            <substitutionList>
+                <substitution pattern="INSTALL_DIR_PLACEHOLDER" value="${installdir}" />
+            </substitutionList>
+        </substitute>
+    </postInstallationActionList>
+</component>
