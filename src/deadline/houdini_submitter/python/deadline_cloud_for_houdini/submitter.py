@@ -3,6 +3,7 @@
 import os
 import sys
 import yaml
+import json
 from typing import Any
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from deadline.client.ui.dialogs.submit_job_progress_dialog import SubmitJobProgr
 from deadline.client.ui.dialogs import DeadlineConfigDialog, DeadlineLoginDialog
 from deadline.job_attachments.upload import S3AssetManager
 from deadline.job_attachments.models import JobAttachmentS3Settings
+
+from .queue_parameters import update_queue_parameters, get_queue_parameter_values_as_openjd
 
 import hou
 
@@ -144,6 +147,7 @@ def _get_parameter_values(node: hou.Node) -> dict[str, Any]:
             {"name": "deadline:targetTaskRunStatus", "value": initial_status},
             {"name": "deadline:maxFailedTasksCount", "value": failed_tasks_limit},
             {"name": "deadline:maxRetriesPerTask", "value": task_retry_limit},
+            *get_queue_parameter_values_as_openjd(node),
         ]
     }
 
@@ -154,7 +158,12 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     separate_steps = rop.parm("separate_steps").eval()
     rop_steps = _get_rop_steps(rop)
     id_steps = {n["id"]: n for n in rop_steps}
-    parameter_definitions: list[dict[str, Any]] = []
+    queue_parameter_definitions_json = rop.userData("queue_parameter_definitions")
+    parameter_definitions: list[dict[str, Any]] = (
+        json.loads(queue_parameter_definitions_json)
+        if queue_parameter_definitions_json is not None
+        else []
+    )
     parameter_definitions.append(
         {
             "name": "HipFile",
@@ -379,6 +388,7 @@ def p_settings(kwargs):
     queue_id = get_setting("defaults.queue_id")
     queue_response = deadline.get_queue(farmId=farm_id, queueId=queue_id)
     node.parm("queue").set(queue_response["displayName"])
+    update_queue_parameters(farm_id, queue_id, node)
 
 
 def p_login(kwargs):
@@ -393,6 +403,7 @@ def p_login(kwargs):
     queue_id = get_setting("defaults.queue_id")
     queue_response = deadline.get_queue(farmId=farm_id, queueId=queue_id)
     node.parm("queue").set(queue_response["displayName"])
+    update_queue_parameters(farm_id, queue_id, node)
 
 
 def p_logout(kwargs):
@@ -400,6 +411,13 @@ def p_logout(kwargs):
     node.parm("farm").set("")
     node.parm("queue").set("")
     api.logout()
+
+
+def p_update_queue_parameters(kwargs):
+    node = kwargs["node"]
+    farm_id = get_setting("defaults.farm_id")
+    queue_id = get_setting("defaults.queue_id")
+    update_queue_parameters(farm_id, queue_id, node)
 
 
 # TODO: remove this and swap to default job template

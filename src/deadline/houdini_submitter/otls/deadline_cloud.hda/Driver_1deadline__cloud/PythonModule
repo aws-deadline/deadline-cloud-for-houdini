@@ -1,8 +1,9 @@
-from deadline.houdini_submitter.python.deadline_submitter_for_houdini import (
+from deadline_cloud_for_houdini.submitter import (
     p_parse_files,
     p_save_bundle,
     p_submit,
     p_login,
     p_logout,
     p_settings,
+    p_update_queue_parameters,
 )

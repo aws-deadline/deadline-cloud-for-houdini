@@ -2,7 +2,7 @@
 
 from .mock_hou import hou_module as hou
 
-from deadline.houdini_submitter.python.deadline_submitter_for_houdini import _get_rop_steps
+from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import _get_rop_steps
 
 
 def test_get_rop_steps():
