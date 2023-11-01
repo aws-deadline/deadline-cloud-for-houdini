@@ -67,7 +67,7 @@ fi
 
 if [[ ! -f "${DEPS_BUNDLE_ZIP}" ]]; then
     echo "Grabbing Deadline Cloud for Houdini dependencies"
-    "${SCRIPT_FOLDER}/deps_bundle.sh"
+    "${GIT_ROOT}/depsBundle.sh"
 fi
 
 echo "Deleting existing Deadline Cloud for Houdini installation"
@@ -96,7 +96,9 @@ echo "Creating Deadline Cloud HDA at ${HDA_BUILD}"
 "${HOTL_EXE}" -l "${HDA_SOURCE}" "${HDA_BUILD}"
 
 echo "Installing Deadline Cloud for Houdini scripts"
-pip install --find-links "${GIT_ROOT}/dist/" deadline_cloud_for_houdini --no-deps --target "${DEPS_BUNDLE_DEST}"
+# used to be pip install, but the installer doesn't currently pip install the package, so we just copy it over instead to match
+# pip install --find-links "${GIT_ROOT}/dist/" deadline_cloud_for_houdini --no-deps --target "${DEPS_BUNDLE_DEST}"
+rsync -a ${GIT_ROOT}/src/deadline/houdini_submitter/python/deadline_cloud_for_houdini "${DEPS_BUNDLE_DEST}"
 
 echo "Unpacking Submitter Dependencies to ${DEPS_BUNDLE_DEST}"
 unzip -q "${DEPS_BUNDLE_ZIP}" -d "${DEPS_BUNDLE_DEST}"
