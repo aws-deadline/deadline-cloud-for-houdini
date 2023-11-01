@@ -23,10 +23,13 @@ def _get_project_dict() -> dict[str, Any]:
             subprocess.run(toml_install_pip_args, check=True)
             sys.path.insert(0, toml_env)
             import toml
+        mode = "r"
     else:
-        import libtoml as toml
+        import tomllib as toml
 
-    with open("pyproject.toml") as pyproject_toml:
+        mode = "rb"
+
+    with open(str(Path(__file__).parents[1] / "pyproject.toml"), mode) as pyproject_toml:
         return toml.load(pyproject_toml)
 
 
