@@ -10,6 +10,7 @@ __pycache__/
 *_version.py
 houdini_version.txt
 /dependency_bundle/
+/scripts/dependency_bundle/
 /dev_install/
 /wheels/
 **/otls/backup
