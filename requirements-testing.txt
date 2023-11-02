@@ -7,3 +7,4 @@ mypy ~= 1.6
 black ~= 23.11
 ruff ~= 0.1.4
 types-pyyaml ~= 6.0
+pipgrip ~= 0.10
