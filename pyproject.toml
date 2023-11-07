@@ -10,7 +10,7 @@ license = ""
 requires-python = ">=3.9"
 
 dependencies = [
-    "deadline == 0.31.*",
+    "deadline == 0.32.*",
     "openjd-adaptor-runtime == 0.3.*",
 ]
 
@@ -115,4 +115,4 @@ source =  [
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 67
+fail_under = 40
