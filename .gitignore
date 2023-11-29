@@ -14,3 +14,4 @@ houdini_version.txt
 /dev_install/
 /wheels/
 **/otls/backup
+plugin_env

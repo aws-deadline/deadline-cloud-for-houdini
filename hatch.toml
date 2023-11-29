@@ -19,7 +19,7 @@ lint = [
   "style",
   "typing",
 ]
-install = "bash {root}/scripts/install_dev_submitter.sh {args:}"
+install = "python {root}/scripts/install_dev_submitter.py {args:}"
 
 [[envs.test.matrix]]
 python = ["3.9", "3.10", "3.11"]

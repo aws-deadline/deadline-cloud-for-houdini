@@ -5,43 +5,16 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
-import sys
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+from _project import get_project_dict, get_dependencies, get_pip_platform
+
 SUPPORTED_PYTHON_VERSIONS = ["3.9", "3.10", "3.11"]
-SUPPORTED_PLATFORMS = ["win_amd64", "manylinux2014_x86_64", "macosx_10_9_x86_64"]
+SUPPORTED_PLATFORMS = ["Windows", "Linux", "Darwin"]
 NATIVE_DEPENDENCIES = ["xxhash"]
-
-
-def _get_project_dict() -> dict[str, Any]:
-    if sys.version_info < (3, 11):
-        with TemporaryDirectory() as toml_env:
-            toml_install_pip_args = ["pip", "install", "--target", toml_env, "toml"]
-            subprocess.run(toml_install_pip_args, check=True)
-            sys.path.insert(0, toml_env)
-            import toml
-        mode = "r"
-    else:
-        import tomllib as toml
-
-        mode = "rb"
-
-    with open(str(Path(__file__).parents[1] / "pyproject.toml"), mode) as pyproject_toml:
-        return toml.load(pyproject_toml)
-
-
-def _get_dependencies(pyproject_dict: dict[str, Any]) -> list[str]:
-    if "project" not in pyproject_dict:
-        raise Exception("pyproject.toml is missing project section")
-    if "dependencies" not in pyproject_dict["project"]:
-        raise Exception("pyproject.toml is missing dependencies section")
-
-    dependencies = pyproject_dict["project"]["dependencies"]
-    deps_noopenjd = filter(lambda dep: not dep.startswith("openjd"), dependencies)
-    return list(map(lambda dep: dep.replace(" ", ""), deps_noopenjd))
 
 
 def _get_package_version_regex(package: str) -> re.Pattern:
@@ -81,9 +54,9 @@ def _download_native_dependencies(working_directory: Path, base_env: Path) -> li
     ]
     native_dependency_paths = []
     for version in SUPPORTED_PYTHON_VERSIONS:
-        for platform in SUPPORTED_PLATFORMS:
+        for plat in map(get_pip_platform, SUPPORTED_PLATFORMS):
             native_dependency_path = (
-                working_directory / "native" / f"{version.replace('.', '_')}_{platform}"
+                working_directory / "native" / f"{version.replace('.', '_')}_{plat}"
             )
             native_dependency_paths.append(native_dependency_path)
             native_dependency_path.mkdir(parents=True)
@@ -93,7 +66,7 @@ def _download_native_dependencies(working_directory: Path, base_env: Path) -> li
                 "--target",
                 str(native_dependency_path),
                 "--platform",
-                platform,
+                plat,
                 "--python-version",
                 version,
                 "--only-binary=:all:",
@@ -141,9 +114,10 @@ def _copy_zip_to_destination(zip_path: Path) -> None:
 def build_deps_bundle() -> None:
     with TemporaryDirectory() as working_directory:
         working_directory = Path(working_directory)
-        project_dict = _get_project_dict()
-        dependencies = _get_dependencies(project_dict)
-        base_env = _build_base_environment(working_directory, dependencies)
+        project_dict = get_project_dict()
+        dependencies = get_dependencies(project_dict)
+        deps_noopenjd = filter(lambda dep: not dep.startswith("openjd"), dependencies)
+        base_env = _build_base_environment(working_directory, deps_noopenjd)
         native_dependency_paths = _download_native_dependencies(working_directory, base_env)
         _copy_native_to_base_env(base_env, native_dependency_paths)
         zip_path = _get_zip_path(working_directory, project_dict)

@@ -2,15 +2,31 @@
 
 ## Submitter Development Workflow
 
-WARNING: This workflow installs additional Python packages into your Houdini's python distribution.
+This workflow creates a "houdini package", a JSON file which tells Houdini where to find the plugin files. This workflow is preferred because it does not install any files directly into your Houdini installation, and it uses the same functionality to load the plugin as is used by the submitter installer. Because we use the paths of our clone of the repository, we only need to run this script once after creating a new development environment, or if the dependencies change, and then changes to the code will be present the next time you launch Houdini.
 
-1. Create a development location within which to do your git checkouts. For example `~/deadline-clients`. Clone packages from this directory with commands like `git clone git@github.com:casillas2/deadline-cloud-for-houdini.git`. You'll also want the `deadline-cloud` and `openjd-adaptor-runtime` repos.
-2. Switch to your Houdini directory, like `cd "C:\Program Files\hfs19.5"`.
-3. Run `.\bin\hython -m pip install -e C:\Users\<username>\deadline-clients\deadline-cloud` to install the Amazon Deadline Cloud Client Library in edit mode.
-4. Run `.\bin\hython -m pip install -e C:\Users\<username>\deadline-clients\openjd-adaptor-runtime-for-python` to install the Open Job Description Adaptor Runtime Library in edit mode.
-5. Run `.\bin\hython -m pip install -e C:\Users\<username>\deadline-clients\deadline-cloud-for-houdini` to install the Houdini submitter in edit mode.
-6. Run Houdini. Go to File > Import > Houdini Digital Asset Select the `src\deadline\houdini_submitter\otls\deadline_cloud.hda` directory. Press "Install and Create", which should create a "deadline_cloud1" node in the output context.
-7. To edit the deadline_cloud hda, go to Assets > Asset Manager. Under Operator Type Libraries > Current HIP File, you will find "Driver/deadline_cloud". Right click, select Type Properties. From the Parameter tab you can modify the parameter interface, as you hit Apply you will see that the "DialogScript" file in the hda source files has been updated.
+1. Clone this repository somewhere on the machine you have Houdini installed on:
+
+   ```sh
+   git clone git@github.com:casillas2/deadline-cloud-for-houdini.git
+   cd deadline-cloud-for-houdini
+   ```
+
+2. Create a Houdini package using the provided script, specifying the full houdini version:
+
+   ```sh
+   hatch run install --houdini-version X.Y
+   ```
+
+4. (Optional) If you need to make changes to the Houdini submitter and deadline-cloud at the same time, you can do the following to do an in-place install of deadline-cloud from a clone of the deadline-cloud repository. Note that this will print an error message if the current version of deadline-cloud is greater than specified in deadline-cloud-for-houdini's dependencies, but in most cases this can be ignored:
+
+   ```sh
+   cd ..
+   git clone git@github.com:casillas2/deadline-cloud.git
+   cd deadline-cloud-for-houdini
+   hatch run install --houdini-version X.Y --local-dep ../deadline-cloud
+   ```
+
+5. (Optional) To edit the deadline_cloud hda, go to Assets > Asset Manager. Under Operator Type Libraries > Current HIP File, you will find "Driver/deadline_cloud". Right click, select Type Properties. From the Parameter tab you can modify the parameter interface, as you hit Apply you will see that the "DialogScript" file in the hda source files has been updated.
 
 ## Application Interface Adaptor Development Workflow
 
