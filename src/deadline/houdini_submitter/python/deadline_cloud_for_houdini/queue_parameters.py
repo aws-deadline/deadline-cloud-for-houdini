@@ -9,7 +9,7 @@ from deadline.client.api._queue_parameters import get_queue_parameter_definition
 
 
 _QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS = {
-    "RezPackages": "houdini",
+    "RezPackages": "houdini deadline_cloud_for_houdini",
 }
 
 
@@ -140,10 +140,10 @@ def _get_equivalent_bool(original_value: str) -> Optional[bool]:
 
 
 def _get_default_value(param: dict[str, Any]) -> tuple[Union[str, int, float], ...]:
-    if "default" in param:
-        return (param["default"],)
-    elif param["name"] in _QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS:
+    if param["name"] in _QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS:
         return (_QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS[param["name"]],)
+    elif "default" in param:
+        return (param["default"],)
     else:
         return ()
 
