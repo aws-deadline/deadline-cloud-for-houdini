@@ -20,12 +20,21 @@ from deadline.job_attachments.upload import S3AssetManager
 from deadline.job_attachments.models import JobAttachmentS3Settings
 
 from .queue_parameters import update_queue_parameters, get_queue_parameter_values_as_openjd
-from ._version import version
+from ._version import version  # type: ignore
 
 import hou
 
 IGNORE_REF_VALUES = ("opdef:", "oplib:", "temp:")
-IGNORE_REF_PARMS = ("taskgraphfile", "pdg_workingdir", "soho_program")
+IGNORE_REF_PARMS = (
+    "taskgraphfile",
+    "pdg_workingdir",
+    "soho_program",
+    "BakeView_img_file_path",
+    "OutputDeepWriter_file",
+    "SettingsOutput_img_file_path",
+    "RS_outputFileNamePrefix",
+    "savetodirectory_directory",
+)
 
 
 def _get_hip_file() -> str:
@@ -37,42 +46,138 @@ def _get_houdini_version() -> str:
 
 
 def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
+    # collect input filenames
     asset_references = AssetReferences()
     input_filenames: set[str] = set()
     input_filenames.add(_get_hip_file())
-    for n in hou.fileReferences():
-        if n[0]:
-            if n[0].node() == rop_node:
+    for parm, ref in hou.fileReferences():
+        if parm:
+            if parm.node() == rop_node:
                 continue
-            if n[1].startswith(IGNORE_REF_VALUES):
+            if ref.startswith(IGNORE_REF_VALUES):
                 continue
-            if n[0].name() in IGNORE_REF_PARMS:
+            if parm.name() in IGNORE_REF_PARMS:
                 continue
-        if os.path.isdir(n[1]):
+        if os.path.isdir(ref):
             continue
-        input_filenames.add(n[1])
-    rop_steps = _get_rop_steps(rop_node)
+        input_filenames.add(ref)
     rop_dir_map = {
+        # Mantra/karma
         "Driver/ifd": "vm_picture",
         "Driver/karma": "picture",
+        # Husk
+        "Lop/usdrender_rop": _husk_outputs,
+        # Arnold
+        "Driver/arnold": "ar_picture",
+        # Vray
+        "Driver/vray_renderer": "SettingsOutput_img_file_path",
+        "Sop/rop_vrayproxy": "filepath",
+        "Driver/rop_vrayproxy": "filepath",
+        # Renderman
+        "Driver/ris::3.0": _renderman_outputs,
+        # Redshift
+        "Driver/Redshift_ROP": "RS_outputFileNamePrefix",
+        # Geo
         "Driver/geometry": "sopoutput",
         "Driver/alembic": "filename",
         "Sop/filecache": "file",
-        "Sop/rop_geometry": "sopoutput",
-        "Sop/rop_alembic": "filename",
     }
+    # collect output dirs for each ROP
+    all_inputs = rop_node.inputAncestors()
     output_directories: set[str] = set()
-    for n in rop_steps:
-        node = hou.node(n["rop"])
+    for node in all_inputs:
         type_name = node.type().nameWithCategory()
         out_parm = rop_dir_map.get(type_name, None)
         if out_parm is not None:
-            path = node.parm(out_parm).eval()
-            if path:
+            if callable(out_parm):
+                computed_dirs = out_parm(node)
+                output_directories.update(computed_dirs)
+            else:
+                path = node.parm(out_parm).eval()
                 output_directories.add(os.path.dirname(path))
     asset_references.input_filenames = input_filenames
     asset_references.output_directories = output_directories
     return asset_references
+
+
+def _get_wedge_render_node(node: hou.Node):
+    """Return ROP set as input or parameter to a wedge node
+
+    This ROP may have a network of input ROP nodes that will also be modified
+    by the wedge node
+    """
+    rendernode = None
+    if len(node.inputs()) > 0:
+        rendernode = node.inputs()[0]
+        if rendernode:
+            renderpath = rendernode.path()
+    if rendernode is None:
+        renderpath = node.parm("driver").eval()
+        rendernode = node.node(renderpath)
+    return rendernode
+
+
+def _get_steps(node: hou.Node):
+    """Convert a network of ROP nodes into a list of steps
+
+    Return a list of wedged steps if all the inputs terminate in a valid wedge
+    node.
+    """
+    wedged_steps = _get_wedge_steps(node)
+    if wedged_steps is not None:
+        # valid wedged network detected
+        return wedged_steps
+    else:
+        # standard network
+        return _get_rop_steps(node)
+
+
+def _get_wedge_steps(rop: hou.Node):
+    """Convert ancestors of a wedge node into a list of wedged steps"""
+    wedge_nodes = []
+    # all inputs nodes must be wedge type
+    for input_node in rop.inputs():
+        if input_node.type().name() != "wedge":
+            return None
+        else:
+            wedge_nodes.append(input_node)
+    # wedge inputs must have no ancestor wedge nodes
+    for wedge_node in wedge_nodes:
+        for node in wedge_node.inputAncestors():
+            if node.type().name() == "wedge":
+                print("Nested wedge nodes not supported")
+                return None
+    wedged_steps: list[dict[str, Any]] = []
+    for wedge_node in wedge_nodes:
+        # houdini uses a prefix to name separate wedge sets
+        # NOTE: a prefix name clash will produce invalid job description
+        prefix = wedge_node.parm("prefix").eval()
+        # compute wedge set
+        hm = wedge_node.hdaModule()
+        allwedge, stashedparms, errormsg = hm.getwedges(wedge_node)
+        rop_node = _get_wedge_render_node(wedge_node)
+        # get all the steps driven by the wedge
+        rop_steps = _get_rop_steps(rop_node)
+        # wedge each list of steps with prefix-wedgenum
+        wedgenum = 0
+        for _ in allwedge:
+            for rop_step in rop_steps:
+                wedge = dict(**rop_step)
+                # add wedge node and num to use in adaptor
+                wedge["wedge_node"] = wedge_node.path()
+                wedge["wedgenum"] = wedgenum
+                # append wedge suffix to name and dependency names
+                suffix = f"{prefix}-{wedgenum}"
+                wedge["name"] = f"{rop_step['name']}-{suffix}"
+                if "dependency_names" in wedge:
+                    dependency_names = [
+                        f"{dependency_name}-{suffix}"
+                        for dependency_name in wedge["dependency_names"]
+                    ]
+                    wedge["dependency_names"] = dependency_names
+                wedged_steps.append(wedge)
+            wedgenum += 1
+    return wedged_steps
 
 
 def _get_rop_steps(rop: hou.Node):
@@ -85,10 +190,10 @@ def _get_rop_steps(rop: hou.Node):
     <<id>> [ <<dependencies>> ] <<node>> ( <<frames>> )
     ```
     """
-    cmd = "render -p -c -F %s" % rop.path()
+    cmd = f"render -p -c -F {rop.path()}"
     out, err = hou.hscript(cmd)
     if err:
-        raise Exception("hscript render: failed to list steps\n\n{}".format(err))
+        raise Exception(f"hscript render: failed to list steps\n\n{str(err)}")
     rop_steps: list[dict[str, Any]] = []
     for n in out.split("\n"):
         if not n.strip():
@@ -124,14 +229,22 @@ def _get_rop_steps(rop: hou.Node):
             continue
         step_dict = {
             "id": _id,
-            "name": "%s-%s" % (path, _id),
-            "deps": deps,
+            "name": f"{path}-{_id}",
+            "dependency_ids": deps,
             "rop": path,
+            "wedgenum": "",
+            "wedge_node": "",
             "start": range_ints[0],
             "stop": range_ints[1],
             "step": range_ints[2],
         }
         rop_steps.append(step_dict)
+    # expand full dependency names once the list is complete
+    id_steps = {n["id"]: n for n in rop_steps}
+    for rop in rop_steps:
+        if rop["dependency_ids"]:
+            names = [id_steps[n]["name"] for n in rop["dependency_ids"]]
+            rop["dependency_names"] = names
     return rop_steps
 
 
@@ -152,12 +265,80 @@ def _get_parameter_values(node: hou.Node) -> dict[str, Any]:
     }
 
 
+def _is_node_locked(rop_path: str) -> bool:
+    """Check rop path lineage for any locked nodes.
+
+    Locked nodes can not be driven by the adaptor and must be unlocked before
+    submission.
+    """
+    path_parts = rop_path.split("/")
+    for i, n in enumerate(path_parts):
+        node_path = "/".join(path_parts[0:i])
+        node = hou.node(node_path)
+        if not node:
+            continue
+        if node.isLockedHDA():
+            return True
+    return False
+
+
+def _renderman_outputs(node: hou.Node) -> set[str]:
+    """Obtain list of outputs from renderman displays with a file device"""
+    output_directories: set[str] = set()
+    displays = node.parm("ri_displays").eval()
+    for index in range(displays):
+        device = node.parm(f"ri_device_{index}").eval()
+        # skip display devices, only collect file devices
+        if device in ("it", "houdini"):
+            continue
+        path = node.parm(f"ri_display_{index}").eval()
+        output_directories.add(os.path.dirname(path))
+    return output_directories
+
+
+def _husk_outputs(node: hou.Node) -> set[str]:
+    """Obtain list of outputs by searching the standard /Render/Products scope
+    of the USD stage input
+    """
+    output_directories: set[str] = set()
+    for n in node.inputs():
+        try:
+            products = n.stage().GetPrimAtPath("/Render/Products")
+        except Exception:
+            # no products found in standard namespace
+            return output_directories
+        for child in products.GetChildren():
+            if child.GetTypeName() == "RenderProduct":
+                product_name_attr = child.GetAttribute("productName")
+                path = product_name_attr.Get(0)
+                output_directories.add(os.path.dirname(path))
+    return output_directories
+
+
+def _unlock_node(rop_path: str) -> bool:
+    """Unlock the first locked node in the path lineage"""
+    path_parts = rop_path.split("/")
+    for i, _ in enumerate(path_parts):
+        node_path = "/".join(path_parts[0:i])
+        node = hou.node(node_path)
+        if not node:
+            continue
+        if node.isLockedHDA():
+            try:
+                node.allowEditingOfContents(propagate=True)
+                return True
+            except Exception as exc:
+                print(f"Failed to unlock: {node_path}")
+                print(str(exc))
+                return False
+    return False
+
+
 def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     job_name = rop.parm("name").evalAsString()
     job_description = rop.parm("description").evalAsString()
     separate_steps = rop.parm("separate_steps").eval()
-    rop_steps = _get_rop_steps(rop)
-    id_steps = {n["id"]: n for n in rop_steps}
+    rop_steps = _get_steps(rop)
     queue_parameter_definitions_json = rop.userData("queue_parameter_definitions")
     parameter_definitions: list[dict[str, Any]] = (
         json.loads(queue_parameter_definitions_json)
@@ -178,13 +359,15 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     if not separate_steps:
         rop_steps = [rop_steps[0]]
         ignore_input_nodes = "false"
-    for n in rop_steps:
+    for step in rop_steps:
         # init data
         init_data_contents = []
         init_data_contents.append("scene_file: '{{Param.HipFile}}'\n")
-        init_data_contents.append("render_node: '%s'\n" % n["rop"])
-        init_data_contents.append("version: %s\n" % _get_houdini_version())
-        init_data_contents.append("ignore_input_nodes: %s\n" % ignore_input_nodes)
+        init_data_contents.append(f"render_node: '{step['rop']}'\n")
+        init_data_contents.append(f"version: {_get_houdini_version()}\n")
+        init_data_contents.append(f"ignore_input_nodes: {ignore_input_nodes}\n")
+        init_data_contents.append(f"wedgenum: '{step['wedgenum']}'\n")
+        init_data_contents.append(f"wedge_node: '{step['wedge_node']}'\n")
         init_data_attachment = {
             "name": "initData",
             "filename": "init-data.yaml",
@@ -195,13 +378,13 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         environments = get_houdini_environments(init_data_attachment)
         # task run data
         task_data_contents = []
-        task_data_contents.append("render_node: %s\n" % n["rop"])
+        task_data_contents.append(f"render_node: {step['rop']}\n")
         task_data_contents.append("frame: {{Task.Param.Frame}}\n")
         task_data_contents.append("ignore_input_nodes: true\n")
         # step
-        frame_range = "{start}-{stop}:{step}".format(**n)
+        frame_range = "{start}-{stop}:{step}".format(**step)
         step = {
-            "name": n["name"],
+            "name": step["name"],
             "parameterSpace": {
                 "taskParameterDefinitions": [{"name": "Frame", "range": frame_range, "type": "INT"}]
             },
@@ -233,8 +416,8 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                 },
             },
         }
-        if n["deps"]:
-            deps = [{"dependsOn": id_steps[d]["name"]} for d in n["deps"]]
+        if "dependency_names" in step:
+            deps = [{"dependsOn": d} for d in step["dependency_names"]]
             step["dependencies"] = deps
         steps.append(step)
     job_template = {
@@ -289,8 +472,7 @@ def _create_job_bundle(
         deadline_yaml_dump(asset_references.to_dict(), f, indent=1)
 
 
-def p_parse_files(kwargs):
-    node = kwargs["node"]
+def _parse_files(node):
     asset_references = _get_scene_asset_references(node)
     for ref in ("input_filenames", "input_directories", "output_directories"):
         p = node.parm(ref)
@@ -302,7 +484,18 @@ def p_parse_files(kwargs):
             n.set(paths[i])
 
 
-def p_save_bundle(kwargs):
+def callback(kwargs):
+    """ROP parameter callback wrapper"""
+    function_name = f"{kwargs['parm'].name()}_callback"
+    globals()[function_name](kwargs)
+
+
+def parse_files_callback(kwargs):
+    node = kwargs["node"]
+    _parse_files(node)
+
+
+def save_bundle_callback(kwargs):
     node = kwargs["node"]
     name = node.parm("name").evalAsString()
     asset_references = _get_asset_references(node)
@@ -314,7 +507,7 @@ def p_save_bundle(kwargs):
         if sys.platform == "win32":
             os.startfile(job_bundle_dir)
         hou.ui.displayMessage(
-            "Saved the submission as a job bundle: %s" % job_bundle_dir,
+            f"Saved the submission as a job bundle: {job_bundle_dir}",
             title="Houdini Job Submission",
         )
     except Exception as exc:
@@ -324,12 +517,107 @@ def p_save_bundle(kwargs):
         )
 
 
-def p_submit(kwargs):
+def submit_callback(kwargs):
     node = kwargs["node"]
     name = node.parm("name").evalAsString()
     # TODO: Populate from queue environment so that parameters can be overridden.
     queue_parameters: list[JobParameter] = []
     asset_references = _get_asset_references(node)
+
+    # check for locked rops, Karma for example
+    all_inputs = node.inputAncestors()
+    locked_rops = []
+    for n in all_inputs:
+        node_path = n.path()
+        if _is_node_locked(node_path):
+            locked_rops.append(node_path)
+
+    if locked_rops:
+        auto_unlock = node.parm("auto_unlock_rops").eval()
+        if not auto_unlock:
+            buttons = (
+                "Unlock and save",
+                "Always unlock and save",
+                "Ignore",
+                "Cancel",
+            )
+            unlock_choice = hou.ui.displayMessage(
+                "Locked ROPs found in network",
+                title="Warning",
+                buttons=buttons,
+                details="\n".join(locked_rops),
+            )
+            if unlock_choice == 3:
+                print("user Cancelled")
+                return
+            if unlock_choice == 0:
+                for n in locked_rops:
+                    _unlock_node(n)
+                hou.hipFile.save()
+            if unlock_choice == 1:
+                for n in locked_rops:
+                    _unlock_node(n)
+                node.parm("auto_unlock_rops").set(1)
+                hou.hipFile.save()
+        else:
+            for n in locked_rops:
+                _unlock_node(n)
+            hou.hipFile.save()
+
+    # check hip is listed in input_filenames
+    hip_file = _get_hip_file()
+    hip_input = hip_file in asset_references.input_filenames
+    if not hip_input:
+        auto_parse = node.parm("auto_parse_hip").eval()
+        if not auto_parse:
+            buttons = (
+                "Parse and save",
+                "Always parse and save",
+                "Ignore",
+                "Cancel",
+            )
+            parse_choice = hou.ui.displayMessage(
+                "Hip file not found in file references", title="Warning", buttons=buttons
+            )
+            if parse_choice == 3:
+                print("user Cancelled")
+                return
+            if parse_choice == 0:
+                _parse_files(node)
+                hou.hipFile.save()
+            if parse_choice == 1:
+                _parse_files(node)
+                node.parm("auto_parse_hip").set(1)
+                hou.hipFile.save()
+        else:
+            _parse_files(node)
+            hou.hipFile.save()
+
+    # check for unsaved changes
+    hip_unsaved = hou.hipFile.hasUnsavedChanges()
+    if hip_unsaved:
+        auto_save = node.parm("auto_save_hip").eval()
+        if not auto_save:
+            buttons = (
+                "Save",
+                "Always save",
+                "Ignore",
+                "Cancel",
+            )
+            save_choice = hou.ui.displayMessage(
+                "Hip file has unsaved changes", title="Warning", buttons=buttons
+            )
+            if save_choice == 3:
+                print("user Cancelled")
+                return
+            if save_choice == 0:
+                hou.hipFile.save()
+            if save_choice == 1:
+                node.parm("auto_save_hip").set(1)
+                hou.hipFile.save()
+        else:
+            hou.hipFile.save()
+
     try:
         # Initialize telemetry client, opt-out is respected
         api.get_deadline_cloud_library_telemetry_client().update_common_details(
@@ -381,7 +669,7 @@ def p_submit(kwargs):
         )
 
 
-def p_settings(kwargs):
+def settings_callback(kwargs):
     node = kwargs["node"]
     node.parm("farm").set("<refreshing>")
     node.parm("queue").set("<refreshing>")
@@ -396,7 +684,7 @@ def p_settings(kwargs):
     update_queue_parameters(farm_id, queue_id, node)
 
 
-def p_login(kwargs):
+def login_callback(kwargs):
     node = kwargs["node"]
     node.parm("farm").set("<refreshing>")
     node.parm("queue").set("<refreshing>")
@@ -411,14 +699,14 @@ def p_login(kwargs):
     update_queue_parameters(farm_id, queue_id, node)
 
 
-def p_logout(kwargs):
+def logout_callback(kwargs):
     node = kwargs["node"]
     node.parm("farm").set("")
     node.parm("queue").set("")
     api.logout()
 
 
-def p_update_queue_parameters(kwargs):
+def update_queue_parameters_callback(kwargs):
     node = kwargs["node"]
     farm_id = get_setting("defaults.farm_id")
     queue_id = get_setting("defaults.queue_id")

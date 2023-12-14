@@ -5,7 +5,9 @@
         "scene_file": { "type": "string" },
         "render_node": { "type": "string" },
         "version": { "type": "string" },
-        "ignore_input_nodes": { "type": "boolean" }
+        "ignore_input_nodes": { "type": "boolean" },
+        "wedgenum": { "type": "string" },
+        "wedge_node": { "type": "string" }
     },
     "required": [ "scene_file", "render_node", "version"]
 }
