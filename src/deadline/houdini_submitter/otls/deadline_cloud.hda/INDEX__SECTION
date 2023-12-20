@@ -1,7 +1,7 @@
 Operator:     deadline_cloud
 Label:        Deadline Cloud
 Path:         oplib:/Driver/deadline_cloud?Driver/deadline_cloud
-Icon:         opdef:/Driver/deadline_cloud?IconImage
+Icon:         opdef:/Driver/deadline_cloud?IconSVG
 Table:        Driver
 License:      
 Extra:        
@@ -10,5 +10,5 @@ Inputs:       1 to 1000
 Subnet:       false
 Python:       false
 Empty:        false
-Modified:     Tue Oct 17 16:35:41 2023
+Modified:     Tue Dec 19 15:44:57 2023
 
