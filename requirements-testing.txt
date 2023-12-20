@@ -5,6 +5,6 @@ pytest-xdist ~= 3.5
 twine ~= 4.0
 mypy ~= 1.6
 black ~= 23.12
-ruff ~= 0.1.4
+ruff ~= 0.1.8
 types-pyyaml ~= 6.0
 pipgrip ~= 0.10
