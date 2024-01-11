@@ -6,6 +6,7 @@ from typing import Any, Optional, Union
 import hou
 
 from deadline.client.api._queue_parameters import get_queue_parameter_definitions
+from deadline.client.job_bundle.parameters import JobParameter
 
 
 _QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS = {
@@ -14,10 +15,10 @@ _QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS = {
 
 
 def _get_queue_parameter_groups(
-    queue_parameter_definitions: list[dict[str, Any]]
-) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
-    groups: dict[str, list[dict[str, Any]]] = {}
-    no_group: list[dict[str, Any]] = []
+    queue_parameter_definitions: list[JobParameter],
+) -> tuple[dict[str, list[JobParameter]], list[JobParameter]]:
+    groups: dict[str, list[JobParameter]] = {}
+    no_group: list[JobParameter] = []
     for definition in queue_parameter_definitions:
         if "userInterface" in definition and "groupLabel" in definition["userInterface"]:
             if definition["userInterface"]["groupLabel"] not in groups:
@@ -45,7 +46,7 @@ def _get_name_without_prefix(prefixed_name: str) -> str:
     return prefixed_name[len(_QUEUE_ENVIRONMENT_NAME_PREFIX) :]
 
 
-def _is_param_hidden(param: dict[str, Any]) -> bool:
+def _is_param_hidden(param: JobParameter) -> bool:
     if "userInterface" in param and "control" in param["userInterface"]:
         control = param["userInterface"]["control"]
         if control == "HIDDEN":
@@ -53,7 +54,7 @@ def _is_param_hidden(param: dict[str, Any]) -> bool:
     return False
 
 
-def _get_menu_items(param: dict[str, Any]) -> tuple[Union[int, float, str], ...]:
+def _get_menu_items(param: JobParameter) -> tuple[Union[int, float, str], ...]:
     if "userInterface" in param and "control" in param["userInterface"]:
         control = param["userInterface"]["control"]
         if control == "DROPDOWN_LIST":
@@ -117,7 +118,7 @@ def _bool_string_from_allowed(allowed_bool_strings: str, value: Union[bool, int,
         raise ValueError(f"Unknown set of allowed bool strings: {allowed_bool_strings}")
 
 
-def _get_checkbox(param: dict[str, Any]) -> bool:
+def _get_checkbox(param: JobParameter) -> bool:
     if "userInterface" in param and "control" in param["userInterface"]:
         control = param["userInterface"]["control"]
         if control == "CHECK_BOX":
@@ -139,7 +140,7 @@ def _get_equivalent_bool(original_value: str) -> Optional[bool]:
     return original_value in _TRUTHY
 
 
-def _get_default_value(param: dict[str, Any]) -> tuple[Union[str, int, float], ...]:
+def _get_default_value(param: JobParameter) -> tuple[Union[str, int, float], ...]:
     if param["name"] in _QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS:
         return (_QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS[param["name"]],)
     elif "default" in param:
@@ -148,7 +149,7 @@ def _get_default_value(param: dict[str, Any]) -> tuple[Union[str, int, float], .
         return ()
 
 
-def _get_control_for_string_parameter(param: dict[str, Any]) -> hou.ParmTemplate:
+def _get_control_for_string_parameter(param: JobParameter) -> hou.ParmTemplate:
     label = (
         param["userInterface"]["label"]
         if "userInterface" in param and "label" in param["userInterface"]
@@ -190,7 +191,7 @@ def _get_control_for_string_parameter(param: dict[str, Any]) -> hou.ParmTemplate
     )
 
 
-def _get_control_for_int_parameter(param: dict[str, Any]) -> hou.ParmTemplate:
+def _get_control_for_int_parameter(param: JobParameter) -> hou.ParmTemplate:
     label = (
         param["userInterface"]["label"]
         if "userInterface" in param and "label" in param["userInterface"]
@@ -221,7 +222,7 @@ def _get_control_for_int_parameter(param: dict[str, Any]) -> hou.ParmTemplate:
     )
 
 
-def _get_control_for_float_parameter(param: dict[str, Any]) -> hou.ParmTemplate:
+def _get_control_for_float_parameter(param: JobParameter) -> hou.ParmTemplate:
     label = (
         param["userInterface"]["label"]
         if "userInterface" in param and "label" in param["userInterface"]
@@ -250,7 +251,7 @@ def _get_control_for_float_parameter(param: dict[str, Any]) -> hou.ParmTemplate:
     )
 
 
-def _get_control_for_parameter(param: dict[str, Any]) -> hou.ParmTemplate:
+def _get_control_for_parameter(param: JobParameter) -> hou.ParmTemplate:
     if param["type"] == "STRING" or param["type"] == "PATH":
         return _get_control_for_string_parameter(param)
     elif param["type"] == "INT":
@@ -262,7 +263,7 @@ def _get_control_for_parameter(param: dict[str, Any]) -> hou.ParmTemplate:
 
 
 def _get_folder_for_group(
-    group_definitions: list[dict[str, Any]], group_name: str, group_label: str
+    group_definitions: list[JobParameter], group_name: str, group_label: str
 ) -> hou.FolderParmTemplate:
     group_definitions_by_name = {definition["name"]: definition for definition in group_definitions}
     group_folder = hou.FolderParmTemplate(
@@ -278,7 +279,7 @@ def _get_folder_for_group(
 
 
 def _get_queue_parameter_values(
-    node: hou.Node, queue_parameter_definitions: list[dict[str, Any]]
+    node: hou.Node, queue_parameter_definitions: list[JobParameter]
 ) -> dict[str, Union[float, int, str]]:
     existing_values: dict[str, Union[float, int, str]] = {}
     for definition in queue_parameter_definitions:
@@ -322,7 +323,7 @@ def get_queue_parameter_values_as_openjd(node: hou.Node) -> list[dict[str, Any]]
 
 
 def _rebuild_queue_parameters_ui(
-    queue_parameter_definitions: list[dict[str, Any]], node: hou.Node
+    queue_parameter_definitions: list[JobParameter], node: hou.Node
 ) -> None:
     (
         queue_parameter_definition_groups,
@@ -369,9 +370,7 @@ def _restore_queue_parameter_values(
                     parm.set(value)
 
 
-def get_queue_parameter_definitions_from_service(
-    farm_id: str, queue_id: str
-) -> list[dict[str, Any]]:
+def get_queue_parameter_definitions_from_service(farm_id: str, queue_id: str) -> list[JobParameter]:
     return get_queue_parameter_definitions(farmId=farm_id, queueId=queue_id)
 
 
