@@ -14,6 +14,7 @@ from deadline.client.job_bundle.adaptors import (
 from deadline.client import api
 from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.job_bundle import create_job_history_bundle_dir
+from deadline.client.job_bundle.parameters import JobParameter
 from deadline.client.config import get_setting
 from deadline.client.config.config_file import str2bool
 from deadline.client.ui.dialogs.submit_job_progress_dialog import SubmitJobProgressDialog
@@ -330,7 +331,7 @@ def p_submit(kwargs):
     node = kwargs["node"]
     name = node.parm("name").evalAsString()
     # TODO: Populate from queue environment so that parameters can be overridden.
-    queue_parameters: list[dict[str, Any]] = []
+    queue_parameters: list[JobParameter] = []
     asset_references = _get_asset_references(node)
     try:
         deadline = api.get_boto3_client("deadline")
