@@ -10,7 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from _project import get_project_dict, get_dependencies, get_pip_platform
+from _project import get_project_dict, get_dependencies, get_pip_platform, Dependency
 
 SUPPORTED_PYTHON_VERSIONS = ["3.9", "3.10", "3.11"]
 SUPPORTED_PLATFORMS = ["Windows", "Linux", "Darwin"]
@@ -32,16 +32,17 @@ def _get_package_version(package: str, install_path: Path) -> str:
     raise Exception(f"Could not find version for package {package}")
 
 
-def _build_base_environment(working_directory: Path, dependencies: list[str]) -> Path:
+def _build_base_environment(working_directory: Path, dependencies: list[Dependency]) -> Path:
     (working_directory / "base_env").mkdir()
     base_env_path = working_directory / "base_env"
+    dependencies_for_pip = [d.for_pip() for d in dependencies]
     base_env_pip_args = [
         "pip",
         "install",
         "--target",
         str(base_env_path),
         "--only-binary=:all:",
-        *dependencies,
+        *dependencies_for_pip,
     ]
     subprocess.run(base_env_pip_args, check=True)
     return base_env_path
@@ -115,8 +116,10 @@ def build_deps_bundle() -> None:
     with TemporaryDirectory() as working_directory:
         working_directory = Path(working_directory)
         project_dict = get_project_dict()
-        dependencies = get_dependencies(project_dict)
-        deps_noopenjd = filter(lambda dep: not dep.startswith("openjd"), dependencies)
+        dependencies: list[Dependency] = get_dependencies(project_dict)
+        deps_noopenjd: list[Dependency] = filter(
+            lambda dep: not dep.name.startswith("openjd"), dependencies
+        )
         base_env = _build_base_environment(working_directory, deps_noopenjd)
         native_dependency_paths = _download_native_dependencies(working_directory, base_env)
         _copy_native_to_base_env(base_env, native_dependency_paths)
