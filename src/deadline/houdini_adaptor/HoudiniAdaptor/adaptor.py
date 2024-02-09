@@ -148,11 +148,11 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             str: The socket path the adaptor server is running on.
         """
         is_timed_out = self._get_timer(self._SERVER_START_TIMEOUT_SECONDS)
-        while (self._server is None or self._server.socket_path is None) and not is_timed_out():
+        while (self._server is None or self._server.server_path is None) and not is_timed_out():
             time.sleep(0.01)
 
-        if self._server is not None and self._server.socket_path is not None:
-            return self._server.socket_path
+        if self._server is not None and self._server.server_path is not None:
+            return self._server.server_path
 
         raise RuntimeError("Could not find a socket because the server did not finish initializing")
 
@@ -167,7 +167,7 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
     def _start_houdini_server_thread(self) -> None:
         """
         Starts the houdini adaptor server in a thread.
-        Sets the environment variable "HOUDINI_ADAPTOR_SOCKET_PATH" to
+        Sets the environment variable "HOUDINI_ADAPTOR_SERVER_PATH" to
         the socket the server is running
         on after the server has finished starting.
         """
@@ -175,7 +175,7 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             target=self._start_houdini_server, name="HoudiniAdaptorServerThread"
         )
         self._server_thread.start()
-        os.environ["HOUDINI_ADAPTOR_SOCKET_PATH"] = self._wait_for_socket()
+        os.environ["HOUDINI_ADAPTOR_SERVER_PATH"] = self._wait_for_socket()
 
     @property
     def validators(self) -> AdaptorDataValidators:

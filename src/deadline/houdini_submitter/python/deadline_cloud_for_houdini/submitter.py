@@ -8,9 +8,6 @@ from typing import Any
 from pathlib import Path
 
 from deadline.client.job_bundle._yaml import deadline_yaml_dump
-from deadline.client.job_bundle.adaptors import (
-    parse_frame_range,
-)
 from deadline.client import api
 from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.job_bundle import create_job_history_bundle_dir
@@ -148,6 +145,7 @@ def _get_parameter_values(node: hou.Node) -> dict[str, Any]:
             {"name": "deadline:targetTaskRunStatus", "value": initial_status},
             {"name": "deadline:maxFailedTasksCount", "value": failed_tasks_limit},
             {"name": "deadline:maxRetriesPerTask", "value": task_retry_limit},
+            {"name": "HipFile", "value": _get_hip_file()},
             *get_queue_parameter_values_as_openjd(node),
         ]
     }
@@ -200,13 +198,11 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         task_data_contents.append("frame: {{Task.Param.Frame}}\n")
         task_data_contents.append("ignore_input_nodes: true\n")
         # step
-        frame_list = "{start}-{stop}:{step}".format(**n)
+        frame_range = "{start}-{stop}:{step}".format(**n)
         step = {
             "name": n["name"],
             "parameterSpace": {
-                "taskParameterDefinitions": [
-                    {"name": "Frame", "range": parse_frame_range(frame_list), "type": "INT"}
-                ]
+                "taskParameterDefinitions": [{"name": "Frame", "range": frame_range, "type": "INT"}]
             },
             "stepEnvironments": environments,
             "script": {
