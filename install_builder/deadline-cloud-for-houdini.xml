@@ -1,7 +1,7 @@
 <component>
     <name>deadline_cloud_for_houdini</name>
-    <description>Deadline Cloud for Houdini</description>
-    <detailedDescription>Houdini plugin for submitting jobs to Amazon Deadline Cloud.</detailedDescription>
+    <description>Deadline Cloud for Houdini 19.5</description>
+    <detailedDescription>Houdini plugin for submitting jobs to Amazon Deadline Cloud. Compatible with Houdini 19.5.</detailedDescription>
     <canBeEdited>1</canBeEdited>
     <selected>0</selected>
     <show>1</show>
@@ -75,8 +75,9 @@
 	</readyToInstallActionList>
 	<parameterList>
 		<stringParameter name="deadline_cloud_for_houdini_summary" ask="0" cliOptionShow="0">
-			<value>Deadline Cloud for Houdini
-- Install the integrated Houdini submitter files to the installation directory
+			<value>Deadline Cloud for Houdini 19.5
+- Compatible with Houdini 19.5.
+- Install the integrated Houdini submitter files to the installation directory.
 - Register the plug-in with Houdini by installing and configuring a package file.</value>
 		</stringParameter>
 	</parameterList>
