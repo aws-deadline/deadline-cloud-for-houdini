@@ -66,7 +66,7 @@ class TestHoudiniAdaptor_on_start:
     ) -> None:
         """Tests that on_start completes without error"""
         adaptor = HoudiniAdaptor(init_data)
-        mock_server.return_value.socket_path = "/tmp/9999"
+        mock_server.return_value.server_path = "/tmp/9999"
         adaptor.on_start()
 
     @patch("time.sleep")
@@ -87,7 +87,7 @@ class TestHoudiniAdaptor_on_start:
         socket_mock = PropertyMock(
             side_effect=[None, None, None, "/tmp/9999", "/tmp/9999", "/tmp/9999"]
         )
-        type(mock_server.return_value).socket_path = socket_mock
+        type(mock_server.return_value).server_path = socket_mock
 
         # WHEN
         adaptor.on_start()
@@ -158,7 +158,7 @@ class TestHoudiniAdaptor_on_start:
         """
         # GIVEN
         adaptor = HoudiniAdaptor(init_data)
-        mock_server.return_value.socket_path = "/tmp/9999"
+        mock_server.return_value.server_path = "/tmp/9999"
         new_timeout = 0.01
 
         with patch.object(adaptor, "_HOUDINI_START_TIMEOUT_SECONDS", new_timeout), pytest.raises(
@@ -190,7 +190,7 @@ class TestHoudiniAdaptor_on_start:
         """
         # GIVEN
         adaptor = HoudiniAdaptor(init_data)
-        mock_server.return_value.socket_path = "/tmp/9999"
+        mock_server.return_value.server_path = "/tmp/9999"
 
         with pytest.raises(RuntimeError) as exc_info:
             # WHEN
@@ -216,7 +216,7 @@ class TestHoudiniAdaptor_on_start:
         # GIVEN
         mock_actions_queue.__len__.return_value = 0
         adaptor = HoudiniAdaptor(init_data)
-        mock_server.return_value.socket_path = "/tmp/9999"
+        mock_server.return_value.server_path = "/tmp/9999"
 
         # WHEN
         adaptor.on_start()
@@ -254,7 +254,7 @@ class TestHoudiniAdaptor_on_start:
         missing_field = "scene_file"
         mock_actions_queue.__len__.return_value = 0
         adaptor = HoudiniAdaptor(init_data)
-        mock_server.return_value.socket_path = "/tmp/9999"
+        mock_server.return_value.server_path = "/tmp/9999"
 
         # WHEN
         try:
@@ -283,7 +283,7 @@ class TestHoudiniAdaptor_on_run:
         """Tests that on_run waits for completion"""
         # GIVEN
         adaptor = HoudiniAdaptor(init_data)
-        mock_server.return_value.socket_path = "/tmp/9999"
+        mock_server.return_value.server_path = "/tmp/9999"
         # First side_effect value consumed by setter
         is_rendering_mock = PropertyMock(side_effect=[None, True, False])
         HoudiniAdaptor._is_rendering = is_rendering_mock
@@ -324,7 +324,7 @@ class TestHoudiniAdaptor_on_run:
         mock_houdini_is_running.side_effect = [True, True, True, False, False]
         mock_logging_subprocess.return_value.returncode = 1
         adaptor = HoudiniAdaptor(init_data)
-        mock_server.return_value.socket_path = "/tmp/9999"
+        mock_server.return_value.server_path = "/tmp/9999"
         adaptor.on_start()
 
         # WHEN
@@ -355,7 +355,7 @@ class TestHoudiniAdaptor_on_stop:
     ) -> None:
         # GIVEN
         adaptor = HoudiniAdaptor(init_data)
-        mock_server.return_value.socket_path = "/tmp/9999"
+        mock_server.return_value.server_path = "/tmp/9999"
         is_rendering_mock = PropertyMock(return_value=False)
         HoudiniAdaptor._is_rendering = is_rendering_mock
         adaptor.on_start()
@@ -437,7 +437,7 @@ class TestHoudiniAdaptor_on_cleanup:
     ) -> None:
         # GIVEN
         adaptor = HoudiniAdaptor(init_data)
-        mock_server.return_value.socket_path = "/tmp/9999"
+        mock_server.return_value.server_path = "/tmp/9999"
         is_rendering_mock = PropertyMock(return_value=False)
         HoudiniAdaptor._is_rendering = is_rendering_mock
 

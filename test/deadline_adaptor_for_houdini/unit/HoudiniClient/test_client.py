@@ -15,11 +15,11 @@ class TestHoudiniClient:
     @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.HTTPClientInterface")
     def test_houdiniclient(self, mock_httpclient: Mock) -> None:
         """Tests that the houdini client can initialize, set a renderer and close"""
-        client = HoudiniClient(socket_path=str(9999))
+        client = HoudiniClient(server_path=str(9999))
         client.close()
 
     @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.os.path.exists")
-    @patch.dict(os.environ, {"HOUDINI_ADAPTOR_SOCKET_PATH": "socket_path"})
+    @patch.dict(os.environ, {"HOUDINI_ADAPTOR_SERVER_PATH": "server_path"})
     @patch("deadline.houdini_adaptor.HoudiniClient.HoudiniClient.poll")
     @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.HTTPClientInterface")
     def test_main(self, mock_httpclient: Mock, mock_poll: Mock, mock_exists: Mock) -> None:
@@ -31,7 +31,7 @@ class TestHoudiniClient:
         main()
 
         # THEN
-        mock_exists.assert_called_once_with("socket_path")
+        mock_exists.assert_called_once_with("server_path")
         mock_poll.assert_called_once()
 
     @patch.dict(os.environ, {}, clear=True)
@@ -45,11 +45,11 @@ class TestHoudiniClient:
         # THEN
         assert str(exc_info.value) == (
             "HoudiniClient cannot connect to the Adaptor because the environment variable "
-            "HOUDINI_ADAPTOR_SOCKET_PATH does not exist"
+            "HOUDINI_ADAPTOR_SERVER_PATH does not exist"
         )
         mock_poll.assert_not_called()
 
-    @patch.dict(os.environ, {"HOUDINI_ADAPTOR_SOCKET_PATH": "/a/path/that/does/not/exist"})
+    @patch.dict(os.environ, {"HOUDINI_ADAPTOR_SERVER_PATH": "/a/path/that/does/not/exist"})
     @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.os.path.exists")
     @patch("deadline.houdini_adaptor.HoudiniClient.HoudiniClient.poll")
     def test_main_server_socket_not_exists(self, mock_poll: Mock, mock_exists: Mock) -> None:
@@ -62,10 +62,10 @@ class TestHoudiniClient:
             main()
 
         # THEN
-        mock_exists.assert_called_once_with(os.environ["HOUDINI_ADAPTOR_SOCKET_PATH"])
+        mock_exists.assert_called_once_with(os.environ["HOUDINI_ADAPTOR_SERVER_PATH"])
         assert str(exc_info.value) == (
             "HoudiniClient cannot connect to the Adaptor because the socket at the path defined by "
-            "the environment variable HOUDINI_ADAPTOR_SOCKET_PATH does not exist. Got: "
-            f"{os.environ['HOUDINI_ADAPTOR_SOCKET_PATH']}"
+            "the environment variable HOUDINI_ADAPTOR_SERVER_PATH does not exist. Got: "
+            f"{os.environ['HOUDINI_ADAPTOR_SERVER_PATH']}"
         )
         mock_poll.assert_not_called()

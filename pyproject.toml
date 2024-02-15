@@ -11,10 +11,12 @@ requires-python = ">=3.9"
 
 dependencies = [
     "deadline == 0.37.*",
-    "openjd-adaptor-runtime == 0.3.*",
+    "openjd-adaptor-runtime == 0.4.*",
 ]
 
 [project.scripts]
+houdini-openjd = "deadline.houdini_adaptor.HoudiniAdaptor:main"
+# The binary name 'HoudiniAdaptor' is deprecated.
 HoudiniAdaptor = "deadline.houdini_adaptor.HoudiniAdaptor:main"
 
 [tool.hatch.build]
@@ -38,6 +40,7 @@ path = "hatch_custom_hook.py"
 destinations = [
   "src/deadline/houdini_adaptor",
   "src/deadline/houdini_submitter",
+  "src/deadline/houdini_submitter/python/deadline_cloud_for_houdini",
 ]
 
 [tool.hatch.build.targets.sdist]

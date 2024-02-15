@@ -30,7 +30,7 @@ class HoudiniVersion:
         "19.5": "3.9",
     }
 
-    def __init__(self, arg_version: Optional[str]):
+    def __init__(self, arg_version: Optional[str] = None):
         version = self._get_houdini_version(arg_version)
         match = self.VERSION_REGEX.match(version)
         if match is None:
@@ -137,6 +137,7 @@ def install_submitter_package(houdini_version_arg: Optional[str], local_deps: li
     major_minor = houdini_version.major_minor()
 
     plugin_env_path = get_git_root() / "plugin_env"
+    os.makedirs(plugin_env_path, exist_ok=True)
     _build_deps_env(
         plugin_env_path,
         houdini_version.python_major_minor(),

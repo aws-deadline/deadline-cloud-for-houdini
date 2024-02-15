@@ -30,8 +30,8 @@ class HoudiniClient(HTTPClientInterface):
     Client that runs in Houdini for the Houdini Adaptor
     """
 
-    def __init__(self, socket_path: str) -> None:
-        super().__init__(socket_path=socket_path)
+    def __init__(self, server_path: str) -> None:
+        super().__init__(server_path=server_path)
         self.actions.update(HoudiniHandler().action_dict)
 
     def close(self, args: Optional[dict] = None) -> None:
@@ -42,21 +42,21 @@ class HoudiniClient(HTTPClientInterface):
 
 
 def main():
-    socket_path = os.environ.get("HOUDINI_ADAPTOR_SOCKET_PATH")
-    if not socket_path:
+    server_path = os.environ.get("HOUDINI_ADAPTOR_SERVER_PATH")
+    if not server_path:
         raise OSError(
             "HoudiniClient cannot connect to the Adaptor because the environment variable "
-            "HOUDINI_ADAPTOR_SOCKET_PATH does not exist"
+            "HOUDINI_ADAPTOR_SERVER_PATH does not exist"
         )
 
-    if not os.path.exists(socket_path):
+    if not os.path.exists(server_path):
         raise OSError(
             "HoudiniClient cannot connect to the Adaptor because the socket at the path defined by "
-            "the environment variable HOUDINI_ADAPTOR_SOCKET_PATH does not exist. Got: "
-            f"{os.environ['HOUDINI_ADAPTOR_SOCKET_PATH']}"
+            "the environment variable HOUDINI_ADAPTOR_SERVER_PATH does not exist. Got: "
+            f"{os.environ['HOUDINI_ADAPTOR_SERVER_PATH']}"
         )
 
-    client = HoudiniClient(socket_path)
+    client = HoudiniClient(server_path)
     client.poll()
 
 

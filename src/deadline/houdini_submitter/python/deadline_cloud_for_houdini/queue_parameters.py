@@ -5,13 +5,9 @@ from typing import Any, Optional, Union
 
 import hou
 
+from ._version import version_tuple as adaptor_version_tuple
 from deadline.client.api._queue_parameters import get_queue_parameter_definitions
 from deadline.client.job_bundle.parameters import JobParameter
-
-
-_QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS = {
-    "RezPackages": "houdini deadline_cloud_for_houdini",
-}
 
 
 def _get_queue_parameter_groups(
@@ -141,8 +137,13 @@ def _get_equivalent_bool(original_value: str) -> Optional[bool]:
 
 
 def _get_default_value(param: JobParameter) -> tuple[Union[str, int, float], ...]:
-    if param["name"] in _QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS:
-        return (_QUEUE_ENVIRONMENT_SPECIAL_DEFAULTS[param["name"]],)
+    houdini_version = ".".join(hou.applicationVersionString().split(".")[:2])
+    adaptor_version = ".".join(str(v) for v in adaptor_version_tuple[:2])
+
+    if param["name"] == "RezPackages":
+        return (f"houdini-{houdini_version}.* deadline_cloud_for_houdini",)
+    elif param["name"] == "CondaPackages":
+        return (f"houdini={houdini_version}.* houdini-openjd={adaptor_version}.*",)
     elif "default" in param:
         return (param["default"],)
     else:
