@@ -42,6 +42,7 @@ test = "pytest --no-cov {args:test/*/integ}"
 test = "pytest --no-cov {args:test/*/e2e}"
 
 [envs.release]
+detached = true
 dependencies = [
   "python-semantic-release == 8.7.*"
 ]
