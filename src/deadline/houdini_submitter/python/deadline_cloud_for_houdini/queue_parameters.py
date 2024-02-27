@@ -141,7 +141,7 @@ def _get_default_value(param: JobParameter) -> tuple[Union[str, int, float], ...
     adaptor_version = ".".join(str(v) for v in adaptor_version_tuple[:2])
 
     if param["name"] == "RezPackages":
-        return (f"houdini-{houdini_version}.* deadline_cloud_for_houdini",)
+        return (f"houdini-{houdini_version} deadline_cloud_for_houdini",)
     elif param["name"] == "CondaPackages":
         return (f"houdini={houdini_version}.* houdini-openjd={adaptor_version}.*",)
     elif "default" in param:
