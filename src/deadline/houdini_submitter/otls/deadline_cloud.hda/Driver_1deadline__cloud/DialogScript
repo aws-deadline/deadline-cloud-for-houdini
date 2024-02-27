@@ -606,7 +606,7 @@
                 label   "Failed Tasks Limit"
                 type    integer
                 default { "20" }
-                range   { 1 200 }
+                range   { 0 200 }
                 parmtag { "script_callback_language" "python" }
             }
             parm {
@@ -614,7 +614,7 @@
                 label   "Task Retry Limit"
                 type    integer
                 default { "5" }
-                range   { 1 10 }
+                range   { 0 10 }
                 parmtag { "script_callback_language" "python" }
             }
         }
