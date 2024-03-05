@@ -216,7 +216,7 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                 ],
                 "actions": {
                     "onRun": {
-                        "command": "HoudiniAdaptor",
+                        "command": "houdini-openjd",
                         "args": [
                             "daemon",
                             "run",
@@ -432,7 +432,7 @@ def get_houdini_environments(init_data_attachment: dict[str, Any]) -> list[dict[
                 ],
                 "actions": {
                     "onEnter": {
-                        "command": "HoudiniAdaptor",
+                        "command": "houdini-openjd",
                         "args": [
                             "daemon",
                             "start",
@@ -448,7 +448,7 @@ def get_houdini_environments(init_data_attachment: dict[str, Any]) -> list[dict[
                         },
                     },
                     "onExit": {
-                        "command": "HoudiniAdaptor",
+                        "command": "houdini-openjd",
                         "args": [
                             "daemon",
                             "stop",

@@ -10,8 +10,8 @@ license = ""
 requires-python = ">=3.9"
 
 dependencies = [
-    "deadline == 0.37.*",
-    "openjd-adaptor-runtime == 0.4.*",
+    "deadline == 0.38.*",
+    "openjd-adaptor-runtime == 0.5.*",
 ]
 
 [project.scripts]
@@ -68,20 +68,16 @@ module = ["hou.*"]
 ignore_missing_imports = true
 
 [tool.ruff]
-ignore = [
-  "E501",
-]
 line-length = 100
 
-[tool.ruff.isort]
-known-first-party = [
-  "deadline",
-  "openjd"
-]
+[tool.ruff.lint]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["deadline", "openjd"]
 
 [tool.black]
 line-length = 100
-
 
 [tool.pytest.ini_options]
 xfail_strict = true
@@ -118,7 +114,7 @@ source =  [
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 40
+fail_under = 48
 
 [tool.semantic_release]
 # Can be removed or set to true once we are v1

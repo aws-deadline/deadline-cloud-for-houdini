@@ -12,7 +12,7 @@ import time
 from functools import wraps
 from typing import Callable
 
-from openjd.adaptor_runtime.adaptors import Adaptor, AdaptorDataValidators
+from openjd.adaptor_runtime.adaptors import Adaptor, AdaptorDataValidators, SemanticVersion
 from openjd.adaptor_runtime.adaptors.configuration import AdaptorConfiguration
 from openjd.adaptor_runtime.process import LoggingSubprocess
 from openjd.adaptor_runtime.app_handlers import RegexCallback, RegexHandler
@@ -83,6 +83,10 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
     # Will be optionally changed after the scene is set.
     _expected_outputs: int = 1  # Total number of renders to perform.
     _produced_outputs: int = 0  # Counter for tracking number of complete renders.
+
+    @property
+    def integration_data_interface_version(self) -> SemanticVersion:
+        return SemanticVersion(major=0, minor=1)
 
     @staticmethod
     def _get_timer(timeout: int | float) -> Callable[[], bool]:
@@ -318,9 +322,9 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         deadline_namespace_dir = os.path.dirname(os.path.dirname(deadline.houdini_adaptor.__file__))
         python_path_addition = f"{openjd_namespace_dir}{os.pathsep}{deadline_namespace_dir}"
         if "PYTHONPATH" in os.environ:
-            os.environ[
-                "PYTHONPATH"
-            ] = f"{os.environ['PYTHONPATH']}{os.pathsep}{python_path_addition}"
+            os.environ["PYTHONPATH"] = (
+                f"{os.environ['PYTHONPATH']}{os.pathsep}{python_path_addition}"
+            )
         else:
             os.environ["PYTHONPATH"] = python_path_addition
 
