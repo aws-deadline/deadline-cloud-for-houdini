@@ -11,7 +11,7 @@ __all__ = ["main"]
 _logger = _logging.getLogger(__name__)
 
 
-def main() -> None:
+def main(reentry_exe=None) -> int:
     """
     Entry point for the Houdini Adaptor
     """
@@ -22,13 +22,14 @@ def main() -> None:
         raise RuntimeError(f"Must be run as a module. Do not run {__file__} directly")
 
     try:
-        _EntryPoint(HoudiniAdaptor).start()
+        _EntryPoint(HoudiniAdaptor).start(reentry_exe=reentry_exe)
     except Exception as e:
         _logger.error(f"Entrypoint failed: {e}")
-        _sys.exit(1)
+        return 1
 
     _logger.info("Done HoudiniAdaptor main")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    _sys.exit(main())

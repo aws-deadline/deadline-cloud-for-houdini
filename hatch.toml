@@ -8,7 +8,7 @@ sync = "pip install -r requirements-testing.txt"
 test = "pytest {args:test}"
 typing = "mypy {args:src test}"
 style = [
-  "ruff {args:.}",
+  "ruff check {args:.}",
   "black --check --diff {args:.}",
 ]
 fmt = [
