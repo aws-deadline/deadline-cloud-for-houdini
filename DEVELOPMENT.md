@@ -1,4 +1,4 @@
-# Amazon Deadline Cloud for Houdini Development
+# AWS Deadline Cloud for Houdini Development
 
 ## Submitter Development Workflow
 

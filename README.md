@@ -1,4 +1,4 @@
-# Amazon Deadline Cloud for Houdini
+# AWS Deadline Cloud for Houdini
 
 This package has two active branches:
 
