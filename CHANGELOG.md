@@ -1,3 +1,8 @@
+## 0.5.1 (2024-03-15)
+
+### Chores
+* update deps deadline-cloud 0.40 (#87) ([`92497cf`](https://github.com/casillas2/deadline-cloud-for-houdini/commit/92497cf0f3d116249f0c126bbbe30902286dd0b1))
+
 ## 0.5.0 (2024-03-08)
 
 ### BREAKING CHANGES
