@@ -16,3 +16,6 @@ setattr(this_module, "node", MagicMock(name=module_name + ".node"))
 setattr(this_module, "hipFile", Mock(name=module_name + ".hipFile"))
 setattr(this_module, "LoadWarning", Mock(name=module_name + ".LoadWarning"))
 setattr(this_module, "Node", Mock(name=module_name + ".Node"))
+setattr(
+    this_module, "applicationVersionString", Mock(name=module_name + ".applicationVersionString")
+)

@@ -12,12 +12,16 @@ import time
 from functools import wraps
 from typing import Callable
 
+from deadline.client.api import get_deadline_cloud_library_telemetry_client, TelemetryClient
+from openjd.adaptor_runtime._version import version as openjd_adaptor_version
 from openjd.adaptor_runtime.adaptors import Adaptor, AdaptorDataValidators, SemanticVersion
 from openjd.adaptor_runtime.adaptors.configuration import AdaptorConfiguration
 from openjd.adaptor_runtime.process import LoggingSubprocess
 from openjd.adaptor_runtime.app_handlers import RegexCallback, RegexHandler
 from openjd.adaptor_runtime.application_ipc import ActionsQueue, AdaptorServer
 from openjd.adaptor_runtime_client import Action
+
+from .._version import version as adaptor_version
 
 _logger = logging.getLogger(__name__)
 
@@ -38,10 +42,6 @@ _FIRST_HOUDINI_ACTIONS = [
 _HOUDINI_RUN_KEYS = {
     "frame",
 }
-
-# Only capture the major minor group (ie. 3.3)
-# patch version (ie .3) is a optional non-capturing subgroup.
-_MAJOR_MINOR_RE = re.compile(r"^(\d+\.\d+)(\.\d+)?$")
 
 
 def _check_for_exception(func: Callable) -> Callable:
@@ -78,6 +78,8 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
     _performing_cleanup = False
     _regex_callbacks: list | None = None
     _validators: AdaptorDataValidators | None = None
+    _telemetry_client: TelemetryClient | None = None
+    _houdini_version: str = ""
 
     # Variables used for keeping track of produced outputs for progress reporting.
     # Will be optionally changed after the scene is set.
@@ -204,6 +206,9 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             completed_regexes = [re.compile(".*Finished Rendering.*")]
             progress_regexes = [re.compile(".*ALF_PROGRESS ([0-9]+)%.*")]
             error_regexes = [re.compile(".*Error: .*|.*\\[Error\\].*", re.IGNORECASE)]
+            version_regexes = [
+                re.compile("HoudiniClient: Houdini Version ([0-9]+.[0-9]+)(.[0-9]+)?")
+            ]
 
             callback_list.append(RegexCallback(completed_regexes, self._handle_complete))
             callback_list.append(RegexCallback(progress_regexes, self._handle_progress))
@@ -216,6 +221,7 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
                     self._handle_license_error,
                 )
             )
+            callback_list.append(RegexCallback(version_regexes, self._handle_houdini_version))
 
             self._regex_callbacks = callback_list
         return self._regex_callbacks
@@ -278,6 +284,16 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             " when using Houdini. Check your licensing configuration.\n"
             f"Free disc space: {shutil_usage.free//1024//1024}M\n"
         )
+
+    def _handle_houdini_version(self, match: re.Match) -> None:
+        """
+        Callback for stdout that indicates the Houdini version in use.
+        Args:
+            match (re.Match): The match object from the regex pattern that was matched the message
+        """
+        self._houdini_version = match.groups()[0]
+        if len(match.groups()) > 1:
+            self._houdini_version += match.groups()[1]
 
     def _get_houdini_client_path(self) -> str:
         """
@@ -360,32 +376,6 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             return str(path_mapping_rules)
         return ""
 
-    @staticmethod
-    def _get_major_minor_version(houdini_version: str) -> str:
-        """Grab the major minor information from the Houdini version string.
-
-        We may receive the whole version (ie. 3.3.4) or just the major minor
-        version (ie. 3.3) from init_data. This function should handle both cases.
-
-        Args:
-            houdini_version (str): The houdini version passed with the init_data object
-
-        Returns:
-            str: The MAJOR.MINOR version of Houdini
-        """
-        major_minor = houdini_version
-        match = _MAJOR_MINOR_RE.match(houdini_version)
-        if match:
-            major_minor = match.group(1)
-            _logger.info(f"Using {major_minor} to find Houdini executable")
-        else:
-            _logger.warning(
-                f"Could not find major.minor information from '{houdini_version}', "
-                f"using '{houdini_version}' to find the Houdini executable"
-            )
-
-        return major_minor
-
     def on_start(self) -> None:
         """
         For job stickiness. Will start everything required for the Task. Will be used for all
@@ -416,6 +406,10 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
                 )
 
             time.sleep(0.1)  # busy wait for houdini to finish initialization
+
+        self._get_deadline_telemetry_client().record_event(
+            event_type="com.amazon.rum.deadline.adaptor.runtime.start", event_details={}
+        )
 
         if len(self._action_queue) > 0:
             raise RuntimeError(
@@ -459,6 +453,9 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             #  This is always an error case because the Houdini Client should still be running and
             #  waiting for the next command. If the thread finished, then we cannot continue
             exit_code = self._houdini_client.returncode
+            self._get_deadline_telemetry_client().record_error(
+                {"exit_code": exit_code, "exception_scope": "on_run"}, str(RuntimeError)
+            )
             raise HoudiniNotRunningError(
                 "Houdini exited early and did not render successfully, please check render logs. "
                 f"Exit code {exit_code}"
@@ -515,3 +512,18 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         """
         for name in _FIRST_HOUDINI_ACTIONS:
             self._action_queue.enqueue_action(Action(name, {name: self.init_data[name]}))
+
+    def _get_deadline_telemetry_client(self):
+        """
+        Wrapper around the Deadline Client Library telemetry client, in order to set package-specific information
+        """
+        if not self._telemetry_client:
+            self._telemetry_client = get_deadline_cloud_library_telemetry_client()
+            self._telemetry_client.update_common_details(
+                {
+                    "deadline-cloud-for-houdini-adaptor-version": adaptor_version,
+                    "houdini-version": self._houdini_version,
+                    "open-jd-adaptor-runtime-version": openjd_adaptor_version,
+                }
+            )
+        return self._telemetry_client
