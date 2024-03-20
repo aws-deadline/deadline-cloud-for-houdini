@@ -32,6 +32,7 @@ class HoudiniClient(HTTPClientInterface):
 
     def __init__(self, server_path: str) -> None:
         super().__init__(server_path=server_path)
+        print(f"HoudiniClient: Houdini Version {hou.applicationVersionString()}")
         self.actions.update(HoudiniHandler().action_dict)
 
     def close(self, args: Optional[dict] = None) -> None:

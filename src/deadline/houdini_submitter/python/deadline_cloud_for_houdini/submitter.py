@@ -20,6 +20,7 @@ from deadline.job_attachments.upload import S3AssetManager
 from deadline.job_attachments.models import JobAttachmentS3Settings
 
 from .queue_parameters import update_queue_parameters, get_queue_parameter_values_as_openjd
+from ._version import version
 
 import hou
 
@@ -330,6 +331,13 @@ def p_submit(kwargs):
     queue_parameters: list[JobParameter] = []
     asset_references = _get_asset_references(node)
     try:
+        # Initialize telemetry client, opt-out is respected
+        api.get_deadline_cloud_library_telemetry_client().update_common_details(
+            {
+                "deadline-cloud-for-houdini-submitter-version": version,
+                "houdini-version": _get_houdini_version(),
+            }
+        )
         deadline = api.get_boto3_client("deadline")
 
         job_bundle_dir = create_job_history_bundle_dir("houdini", name)
