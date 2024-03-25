@@ -5,7 +5,7 @@ from typing import Any, Optional, Union
 
 import hou
 
-from ._version import version_tuple as adaptor_version_tuple  # type: ignore
+from ._version import version_tuple as adaptor_version_tuple
 from deadline.client.api._queue_parameters import get_queue_parameter_definitions
 from deadline.client.job_bundle.parameters import JobParameter
 

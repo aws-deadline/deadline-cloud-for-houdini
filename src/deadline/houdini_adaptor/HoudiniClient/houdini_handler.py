@@ -101,7 +101,7 @@ class HoudiniHandler:
                 print(f"Applying wedge: {wedgenum}")
                 hm.applyspecificwedge(self.wedge, wl)
             else:
-                print(f"WEDGENUM out of range: {wedgenum}")
+                raise ValueError(f"WEDGENUM out of range: {wedgenum}")
 
         increment = 1
         self.node.parm("trange").set(1)
