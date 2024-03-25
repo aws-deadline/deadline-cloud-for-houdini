@@ -11,7 +11,7 @@ import pytest
 import deadline.houdini_adaptor.HoudiniAdaptor.adaptor as adaptor_module
 from deadline.houdini_adaptor.HoudiniAdaptor import HoudiniAdaptor
 from deadline.houdini_adaptor.HoudiniAdaptor.adaptor import (
-    _FIRST_HOUDINI_ACTIONS,
+    _REQUIRED_HOUDINI_INIT_KEYS,
     HoudiniNotRunningError,
 )
 
@@ -243,16 +243,10 @@ class TestHoudiniAdaptor_on_start:
 
         # THEN
         calls = mock_actions_queue.enqueue_action.call_args_list
-        for _call, name in zip(calls[: len(_FIRST_HOUDINI_ACTIONS)], _FIRST_HOUDINI_ACTIONS):
-            assert _call.args[0].name == name, f"Action: {name} missing from first actions"
-        for _call, action in zip(
-            calls[
-                len(_FIRST_HOUDINI_ACTIONS) : len(_FIRST_HOUDINI_ACTIONS)
-                + len(_FIRST_HOUDINI_ACTIONS)
-            ],
-            _FIRST_HOUDINI_ACTIONS,
+        for _call, name in zip(
+            calls[: len(_REQUIRED_HOUDINI_INIT_KEYS)], _REQUIRED_HOUDINI_INIT_KEYS
         ):
-            assert _call.args[0].name == name, f"Action: {name} missing from init actions"
+            assert _call.args[0].name == name, f"Action: {name} missing from required init actions"
 
     @patch.object(HoudiniAdaptor, "_action_queue")
     @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")

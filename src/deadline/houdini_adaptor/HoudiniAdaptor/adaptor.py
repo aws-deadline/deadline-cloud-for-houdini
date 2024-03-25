@@ -32,15 +32,16 @@ class HoudiniNotRunningError(Exception):
     pass
 
 
-_FIRST_HOUDINI_ACTIONS = [
+_REQUIRED_HOUDINI_INIT_KEYS = [
     "scene_file",
-    "wedge_node",
-    "wedgenum",
     "render_node",
-    # remove this action untl we find root cause for this error:
-    # ERROR: openjd_fail: Error encountered while starting adaptor: 'ignore_input_nodes'
-    # "ignore_input_nodes",
 ]
+_OPTIONAL_HOUDINI_INIT_KEYS = {
+    "ignore_input_nodes",
+    "wedgenum",
+    "wedge_node",
+}
+
 _HOUDINI_RUN_KEYS = {
     "frame",
 }
@@ -509,11 +510,15 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
     def _populate_action_queue(self) -> None:
         """
         Populates the adaptor server's action queue with actions from the init_data that the Houdini
-        Client will request and perform. The action must be present in the _FIRST_HOUDINI_ACTIONS
-        set to be added to the action queue.
+        Client will request and perform. The action must be present in either the
+        _REQUIRED_HOUDINI_INIT_KEYS or _OPTIONAL_HOUDINI_INIT_KEYS set to be added to the action queue.
         """
-        for name in _FIRST_HOUDINI_ACTIONS:
+        for name in _REQUIRED_HOUDINI_INIT_KEYS:
             self._action_queue.enqueue_action(Action(name, {name: self.init_data[name]}))
+
+        for name in _OPTIONAL_HOUDINI_INIT_KEYS:
+            if name in self.init_data:
+                self._action_queue.enqueue_action(Action(name, {name: self.init_data[name]}))
 
     def _get_deadline_telemetry_client(self):
         """
