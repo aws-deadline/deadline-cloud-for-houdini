@@ -20,7 +20,7 @@ from deadline.job_attachments.upload import S3AssetManager
 from deadline.job_attachments.models import JobAttachmentS3Settings
 
 from .queue_parameters import update_queue_parameters, get_queue_parameter_values_as_openjd
-from ._version import version  # type: ignore
+from ._version import version
 
 import hou
 

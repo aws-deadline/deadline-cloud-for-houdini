@@ -21,7 +21,7 @@ lint = [
 ]
 install = "python {root}/scripts/install_dev_submitter.py {args:}"
 
-[[envs.test.matrix]]
+[[envs.all.matrix]]
 python = ["3.9", "3.10", "3.11"]
 
 [envs.default.env-vars]
