@@ -665,6 +665,27 @@
             disablewhen "{ include_adaptor_wheels == 0 }"
             parmtag { "script_callback_language" "python" }
         }
+        parm {
+             name    "auto_unlock_rops"
+             label   "Automatically unlock ROPs"
+             type    toggle
+             default { "0" }
+             parmtag { "script_callback_language" "python" }
+         }
+         parm {
+             name    "auto_parse_hip"
+             label   "Automatically parse Hip references"
+             type    toggle
+             default { "0" }
+             parmtag { "script_callback_language" "python" }
+         }
+         parm {
+             name    "auto_save_hip"
+             label   "Automatically save Hip"
+             type    toggle
+             default { "0" }
+             parmtag { "script_callback_language" "python" }
+         }
     }
 
     group {
@@ -676,7 +697,7 @@
             label   "Parse Files"
             type    button
             default { "0" }
-            parmtag { "script_callback" "kwargs[\"node\"].hdaModule().p_parse_files(kwargs)" }
+            parmtag { "script_callback" "hou.phm().callback(kwargs)" }
             parmtag { "script_callback_language" "python" }
         }
         multiscroll {
@@ -726,7 +747,7 @@
         type    button
         joinnext
         default { "0" }
-        parmtag { "script_callback" "kwargs[\"node\"].hdaModule().p_login(kwargs)" }
+        parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }
     }
     parm {
@@ -735,7 +756,7 @@
         type    button
         joinnext
         default { "0" }
-        parmtag { "script_callback" "kwargs[\"node\"].hdaModule().p_logout(kwargs)" }
+        parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }
     }
     parm {
@@ -744,7 +765,7 @@
         type    button
         joinnext
         default { "0" }
-        parmtag { "script_callback" "kwargs[\"node\"].hdaModule().p_settings(kwargs)" }
+        parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }
     }
     parm {
@@ -761,7 +782,7 @@
         type    button
         joinnext
         default { "0" }
-        parmtag { "script_callback" "kwargs[\"node\"].hdaModule().p_save_bundle(kwargs)" }
+        parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }
     }
     parm {
@@ -769,7 +790,7 @@
         label   "Submit"
         type    button
         default { "0" }
-        parmtag { "script_callback" "kwargs[\"node\"].hdaModule().p_submit(kwargs)" }
+        parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }
     }
 }

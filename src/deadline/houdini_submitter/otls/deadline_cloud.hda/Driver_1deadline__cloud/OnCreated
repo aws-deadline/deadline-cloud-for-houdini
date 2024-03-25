@@ -11,6 +11,6 @@ try:
     queue_id = get_setting('defaults.queue_id')
     queue_response = deadline.get_queue(farmId=farm_id, queueId=queue_id)
     node.parm('queue').set(queue_response['displayName'])
-    node.hdaModule().p_update_queue_parameters(kwargs)
+    node.hdaModule().update_queue_parameters_callback(kwargs)
 except CredentialRetrievalError:
     print('Expired credentials')

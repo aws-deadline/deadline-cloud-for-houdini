@@ -41,8 +41,7 @@ environment:
         echo ""
 
         echo "Installing adaptor into the venv"
-        pip install '{{Param.AdaptorWheels}}'/openjd*.whl
-        pip install '{{Param.AdaptorWheels}}'/deadline*.whl
+        pip install '{{Param.AdaptorWheels}}'/*.whl
         echo ""
 
         if [ ! -f '{{Session.WorkingDirectory}}/venv/bin/{{Param.OverrideAdaptorName}}' ]; then

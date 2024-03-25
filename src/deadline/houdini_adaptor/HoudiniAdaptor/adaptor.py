@@ -34,6 +34,8 @@ class HoudiniNotRunningError(Exception):
 
 _FIRST_HOUDINI_ACTIONS = [
     "scene_file",
+    "wedge_node",
+    "wedgenum",
     "render_node",
     # remove this action untl we find root cause for this error:
     # ERROR: openjd_fail: Error encountered while starting adaptor: 'ignore_input_nodes'

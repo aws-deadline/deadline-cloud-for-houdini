@@ -28,10 +28,14 @@ class HoudiniHandler:
             "render_node": self.set_render_node,
             "frame": self.set_frame,
             "ignore_input_nodes": self.set_ignore_input_nodes,
+            "wedge_node": self.set_wedge_node,
+            "wedgenum": self.set_wedge_num,
             "start_render": self.start_render,
         }
         self.render_kwargs = {"ignore_input_nodes": True}
         self.node = None
+        self.wedge = None
+        self.wegenum = None
 
     def set_node_settings(self, node):
         # this is a place holder function
@@ -76,10 +80,29 @@ class HoudiniHandler:
             RuntimeError: .
         """
 
+        def setenvvariable(var, val):
+            hou.hscript(f"set {var} = {val}")
+            hou.hscript("varchange")
+
         if not self.node:
             raise TypeError("Render node is 'None', no render node has been loaded")
 
         self.set_node_settings(self.node)
+
+        # handle wedge data
+        if self.wedge and self.wedgenum:
+            print("Wedged step")
+            wedgenum = int(self.wedgenum)
+            hm = self.wedge.hdaModule()
+            allwedge, _stashedparms, _errormsg = hm.getwedges(self.wedge)
+            if 0 <= wedgenum < len(allwedge):
+                wl = allwedge[wedgenum]
+                setenvvariable("WEDGENUM", str(wedgenum))
+                print(f"Applying wedge: {wedgenum}")
+                hm.applyspecificwedge(self.wedge, wl)
+            else:
+                print(f"WEDGENUM out of range: {wedgenum}")
+
         increment = 1
         self.node.parm("trange").set(1)
         frame = self.render_kwargs["frame"]
@@ -91,6 +114,8 @@ class HoudiniHandler:
             ignore_inputs=self.render_kwargs["ignore_input_nodes"],
             method=interleave,
         )
+
+        setenvvariable("WEDGENUM", "")
 
         print("Finished Rendering")
 
@@ -112,8 +137,34 @@ class HoudiniHandler:
         node = hou.node(data.get("render_node", ""))
         if node is None:
             raise TypeError("Render node is 'None', no render node has been loaded")
-        print("node: %s" % node)
+        print(f"node: {node}")
         self.node = node
+
+    def set_wedge_node(self, data: dict) -> None:
+        """
+        sets the wedge node
+
+        args:
+            data (dict):
+        """
+        wedge_node_path = data.get("wedge_node", "")
+        if wedge_node_path:
+            wedge = hou.node(wedge_node_path)
+            if wedge is not None:
+                print(f"wedge node: {wedge}")
+                self.wedge = wedge
+
+    def set_wedge_num(self, data: dict) -> None:
+        """
+        sets the wedge num
+
+        args:
+            data (dict):
+        """
+        wedgenum = data.get("wedgenum", None)
+        if wedgenum is not None:
+            print(f"wedgenum {wedgenum}")
+            self.wedgenum = wedgenum
 
     def set_frame(self, data: dict) -> None:
         """

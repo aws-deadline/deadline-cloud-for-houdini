@@ -28,6 +28,8 @@ def init_data() -> dict:
         "scene_file": "/path/to/scene/houdiniscene-19.5.hip",
         "version": "19.5.435",
         "render_node": "mantra1",
+        "wedge_node": "",
+        "wedgenum": "",
         "ignore_input_nodes": True,
     }
 
@@ -281,7 +283,7 @@ class TestHoudiniAdaptor_on_start:
             text = str(ve).partition("\n")[0]
 
         # THEN
-        assert text == "'%s' is a required property" % missing_field
+        assert text == f"'{missing_field}' is a required property"
 
 
 class TestHoudiniAdaptor_on_run:

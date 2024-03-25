@@ -32,6 +32,8 @@ class TestHoudiniHandler:
             "render_node",
             "frame",
             "ignore_input_nodes",
+            "wedge_node",
+            "wedgenum",
             "start_render",
         ]
         assert handler.render_kwargs["ignore_input_nodes"]

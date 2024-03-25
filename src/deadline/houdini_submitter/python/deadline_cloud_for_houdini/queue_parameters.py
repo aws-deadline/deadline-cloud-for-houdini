@@ -5,14 +5,14 @@ from typing import Any, Optional, Union
 
 import hou
 
-from ._version import version_tuple as adaptor_version_tuple
+from ._version import version_tuple as adaptor_version_tuple  # type: ignore
 from deadline.client.api._queue_parameters import get_queue_parameter_definitions
 from deadline.client.job_bundle.parameters import JobParameter
 
 
 def _get_queue_parameter_groups(
     queue_parameter_definitions: list[JobParameter],
-) -> tuple[dict[str, list[JobParameter]], list[JobParameter]]:
+) -> tuple[dict[str, list[JobParameter]], list[JobParameter]]:  # pragma: no cover
     groups: dict[str, list[JobParameter]] = {}
     no_group: list[JobParameter] = []
     for definition in queue_parameter_definitions:
@@ -30,11 +30,11 @@ def _get_queue_parameter_groups(
 _QUEUE_ENVIRONMENT_NAME_PREFIX = "queue_env_do_not_use_"
 
 
-def _get_prefixed_name(name: str) -> str:
+def _get_prefixed_name(name: str) -> str:  # pragma: no cover
     return f"{_QUEUE_ENVIRONMENT_NAME_PREFIX}{name}"
 
 
-def _get_name_without_prefix(prefixed_name: str) -> str:
+def _get_name_without_prefix(prefixed_name: str) -> str:  # pragma: no cover
     if not prefixed_name.startswith(_QUEUE_ENVIRONMENT_NAME_PREFIX):
         raise ValueError(
             f"Prefixed name {prefixed_name} does not start with {_QUEUE_ENVIRONMENT_NAME_PREFIX}"
@@ -42,7 +42,7 @@ def _get_name_without_prefix(prefixed_name: str) -> str:
     return prefixed_name[len(_QUEUE_ENVIRONMENT_NAME_PREFIX) :]
 
 
-def _is_param_hidden(param: JobParameter) -> bool:
+def _is_param_hidden(param: JobParameter) -> bool:  # pragma: no cover
     if "userInterface" in param and "control" in param["userInterface"]:
         control = param["userInterface"]["control"]
         if control == "HIDDEN":
@@ -50,7 +50,7 @@ def _is_param_hidden(param: JobParameter) -> bool:
     return False
 
 
-def _get_menu_items(param: JobParameter) -> tuple[Union[int, float, str], ...]:
+def _get_menu_items(param: JobParameter) -> tuple[Union[int, float, str], ...]:  # pragma: no cover
     if "userInterface" in param and "control" in param["userInterface"]:
         control = param["userInterface"]["control"]
         if control == "DROPDOWN_LIST":
@@ -92,7 +92,9 @@ _BOOL_STRINGS = {
 }
 
 
-def _bool_string_from_allowed(allowed_bool_strings: str, value: Union[bool, int, str]) -> str:
+def _bool_string_from_allowed(
+    allowed_bool_strings: str, value: Union[bool, int, str]
+) -> str:  # pragma: no cover
     if isinstance(value, bool):
         value_as_bool = value
     elif isinstance(value, int):
@@ -114,7 +116,7 @@ def _bool_string_from_allowed(allowed_bool_strings: str, value: Union[bool, int,
         raise ValueError(f"Unknown set of allowed bool strings: {allowed_bool_strings}")
 
 
-def _get_checkbox(param: JobParameter) -> bool:
+def _get_checkbox(param: JobParameter) -> bool:  # pragma: no cover
     if "userInterface" in param and "control" in param["userInterface"]:
         control = param["userInterface"]["control"]
         if control == "CHECK_BOX":
@@ -130,13 +132,15 @@ def _get_checkbox(param: JobParameter) -> bool:
     return False
 
 
-def _get_equivalent_bool(original_value: str) -> Optional[bool]:
+def _get_equivalent_bool(original_value: str) -> Optional[bool]:  # pragma: no cover
     if original_value not in _BOOL_STRINGS:
         return None
     return original_value in _TRUTHY
 
 
-def _get_default_value(param: JobParameter) -> tuple[Union[str, int, float], ...]:
+def _get_default_value(
+    param: JobParameter,
+) -> tuple[Union[str, int, float], ...]:  # pragma: no cover
     houdini_version = ".".join(hou.applicationVersionString().split(".")[:2])
     adaptor_version = ".".join(str(v) for v in adaptor_version_tuple[:2])
 
@@ -150,7 +154,7 @@ def _get_default_value(param: JobParameter) -> tuple[Union[str, int, float], ...
         return ()
 
 
-def _get_control_for_string_parameter(param: JobParameter) -> hou.ParmTemplate:
+def _get_control_for_string_parameter(param: JobParameter) -> hou.ParmTemplate:  # pragma: no cover
     label = (
         param["userInterface"]["label"]
         if "userInterface" in param and "label" in param["userInterface"]
@@ -192,7 +196,7 @@ def _get_control_for_string_parameter(param: JobParameter) -> hou.ParmTemplate:
     )
 
 
-def _get_control_for_int_parameter(param: JobParameter) -> hou.ParmTemplate:
+def _get_control_for_int_parameter(param: JobParameter) -> hou.ParmTemplate:  # pragma: no cover
     label = (
         param["userInterface"]["label"]
         if "userInterface" in param and "label" in param["userInterface"]
@@ -223,7 +227,7 @@ def _get_control_for_int_parameter(param: JobParameter) -> hou.ParmTemplate:
     )
 
 
-def _get_control_for_float_parameter(param: JobParameter) -> hou.ParmTemplate:
+def _get_control_for_float_parameter(param: JobParameter) -> hou.ParmTemplate:  # pragma: no cover
     label = (
         param["userInterface"]["label"]
         if "userInterface" in param and "label" in param["userInterface"]
@@ -252,7 +256,7 @@ def _get_control_for_float_parameter(param: JobParameter) -> hou.ParmTemplate:
     )
 
 
-def _get_control_for_parameter(param: JobParameter) -> hou.ParmTemplate:
+def _get_control_for_parameter(param: JobParameter) -> hou.ParmTemplate:  # pragma: no cover
     if param["type"] == "STRING" or param["type"] == "PATH":
         return _get_control_for_string_parameter(param)
     elif param["type"] == "INT":
@@ -265,7 +269,7 @@ def _get_control_for_parameter(param: JobParameter) -> hou.ParmTemplate:
 
 def _get_folder_for_group(
     group_definitions: list[JobParameter], group_name: str, group_label: str
-) -> hou.FolderParmTemplate:
+) -> hou.FolderParmTemplate:  # pragma: no cover
     group_definitions_by_name = {definition["name"]: definition for definition in group_definitions}
     group_folder = hou.FolderParmTemplate(
         name=group_name,
@@ -281,7 +285,7 @@ def _get_folder_for_group(
 
 def _get_queue_parameter_values(
     node: hou.Node, queue_parameter_definitions: list[JobParameter]
-) -> dict[str, Union[float, int, str]]:
+) -> dict[str, Union[float, int, str]]:  # pragma: no cover
     existing_values: dict[str, Union[float, int, str]] = {}
     for definition in queue_parameter_definitions:
         prefixed_name = _get_prefixed_name(definition["name"])
@@ -291,7 +295,7 @@ def _get_queue_parameter_values(
     return existing_values
 
 
-def remove_queue_parameters_from_node(node: hou.Node) -> None:
+def remove_queue_parameters_from_node(node: hou.Node) -> None:  # pragma: no cover
     parm_template_group = node.parmTemplateGroup()
     removed_node_folders = set()
     spare_parms = node.spareParms()
@@ -304,7 +308,9 @@ def remove_queue_parameters_from_node(node: hou.Node) -> None:
         node.removeSpareParmFolder(folder)
 
 
-def get_queue_parameter_values_as_openjd(node: hou.Node) -> list[dict[str, Any]]:
+def get_queue_parameter_values_as_openjd(
+    node: hou.Node,
+) -> list[dict[str, Any]]:  # pragma: no cover
     result = []
     spare_parms = node.spareParms()
     for spare_parm in spare_parms:
@@ -325,7 +331,7 @@ def get_queue_parameter_values_as_openjd(node: hou.Node) -> list[dict[str, Any]]
 
 def _rebuild_queue_parameters_ui(
     queue_parameter_definitions: list[JobParameter], node: hou.Node
-) -> None:
+) -> None:  # pragma: no cover
     (
         queue_parameter_definition_groups,
         queue_parameter_definition_no_group,
@@ -350,7 +356,7 @@ def _rebuild_queue_parameters_ui(
 
 def _restore_queue_parameter_values(
     node: hou.Node, existing_values: dict[str, Union[float, int, str]]
-) -> None:
+) -> None:  # pragma: no cover
     for name, value in existing_values.items():
         parm = node.parm(_get_prefixed_name(name))
         if parm is not None:

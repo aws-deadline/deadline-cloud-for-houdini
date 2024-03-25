@@ -10,15 +10,22 @@ sys.modules[module_name] = hou_module
 this_module = sys.modules[module_name]
 # Usage set mocked names here, set mocked return values/properties in unit tests.
 # Mocked names
+
+node_mock = MagicMock(name=module_name + ".node")
+node_mock.userData.return_value = "[]"
+
 setattr(this_module, "exit", Mock(name=module_name + ".exit"))
 setattr(this_module, "logging", Mock(name=module_name + ".logging"))
 setattr(this_module, "renderMethod", Mock(name=module_name + ".renderMethod"))
-setattr(this_module, "node", MagicMock(name=module_name + ".node"))
+setattr(this_module, "node", node_mock)
 setattr(this_module, "hipFile", Mock(name=module_name + ".hipFile"))
 setattr(this_module, "LoadWarning", Mock(name=module_name + ".LoadWarning"))
 setattr(this_module, "Node", Mock(name=module_name + ".Node"))
 setattr(this_module, "Parm", Mock(name=module_name + ".Parm"))
 setattr(this_module, "hscript", Mock(name=module_name + ".hscript"))
+setattr(
+    this_module, "applicationVersionString", Mock(name=module_name + ".applicationVersionString")
+)
 setattr(this_module, "fileReferences", Mock(name=module_name + ".fileReferences"))
 setattr(this_module, "ParmTemplate", Mock(name=module_name + ".ParmTemplate"))
 setattr(this_module, "stringParmType", Mock(name=module_name + ".stringParmType"))
