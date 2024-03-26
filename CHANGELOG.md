@@ -1,3 +1,14 @@
+## 0.5.2 (2024-03-26)
+
+
+### Features
+* Additional renderers and Wedge support (#52) ([`cad0931`](https://github.com/casillas2/deadline-cloud-for-houdini/commit/cad0931c60b1bc42117ed8d1c3233925ecd42e26))
+* Adds telemetry events to submitter and adaptor (#89) ([`96e3c44`](https://github.com/casillas2/deadline-cloud-for-houdini/commit/96e3c44e85bda47dfb59fae9580485e1592316c0))
+
+### Bug Fixes
+* include deadline-cloud in the adaptor packaging script (#97) ([`fc2cb3d`](https://github.com/casillas2/deadline-cloud-for-houdini/commit/fc2cb3d619126fb9ca291ec090fa297b773fe558))
+* throw error on out of bounds wedgenum (#96) ([`cc6aed9`](https://github.com/casillas2/deadline-cloud-for-houdini/commit/cc6aed9a16a1a4152ed625738d351d20a5fbf885))
+
 ## 0.5.1 (2024-03-15)
 
 ### Chores
