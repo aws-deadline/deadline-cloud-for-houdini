@@ -68,6 +68,7 @@ mkdir -p $BINDIR
 if [ $SOURCE = 1 ]; then
     # In source mode, openjd-adaptor-runtime-for-python must be alongside this adaptor source
     RUNTIME_INSTALLABLE=$SCRIPTDIR/../../openjd-adaptor-runtime-for-python
+    CLIENT_INSTALLABLE=$SCRIPTDIR/../../deadline-cloud
     ADAPTOR_INSTALLABLE=$SCRIPTDIR/..
 
     if [ "$CONDA_PLATFORM" = "win-64" ]; then
@@ -93,16 +94,19 @@ if [ $SOURCE = 1 ]; then
         --ignore-installed \
         --no-deps \
         $RUNTIME_INSTALLABLE
+
+    # Install these two at the same time otherwise they overwrite eachother
     pip install \
         --target $PACKAGEDIR \
         --platform $PYPI_PLATFORM \
         --python-version $PYTHON_VERSION \
         --ignore-installed \
         --no-deps \
-        $ADAPTOR_INSTALLABLE
+        $ADAPTOR_INSTALLABLE $CLIENT_INSTALLABLE
 else
     # In PyPI mode, PyPI and/or a CodeArtifact must have these packages
     RUNTIME_INSTALLABLE=openjd-adaptor-runtime-for-python
+    CLIENT_INSTALLABLE=deadline
     ADAPTOR_INSTALLABLE=$ADAPTOR_NAME
 
     pip install \
@@ -112,13 +116,15 @@ else
         --ignore-installed \
         --only-binary=:all: \
         $RUNTIME_INSTALLABLE
+
+    # Install these two at the same time otherwise they overwrite eachother
     pip install \
         --target $PACKAGEDIR \
         --platform $PYPI_PLATFORM \
         --python-version $PYTHON_VERSION \
         --ignore-installed \
         --no-deps \
-        $ADAPTOR_INSTALLABLE
+        $ADAPTOR_INSTALLABLE $CLIENT_INSTALLABLE
 fi
 
 
