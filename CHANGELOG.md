@@ -1,3 +1,10 @@
+## 0.5.3 (2024-03-27)
+
+
+
+### Bug Fixes
+* differentiate between required and optional init keys (#100) ([`c2dd76b`](https://github.com/casillas2/deadline-cloud-for-houdini/commit/c2dd76b34be516c0781a370c97e2d353d0f9b7f5))
+
 ## 0.5.2 (2024-03-26)
 
 
