@@ -362,7 +362,9 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         # up each node by step
         connected_node = rop_steps[-1]
         # remove deps, as only 1 step
-        del connected_node["dependency_names"]
+        connected_node.pop("dependency_names", None)
+        # remove dependency info from name
+        connected_node["name"] = connected_node["rop"]
         rop_steps = [connected_node]
         ignore_input_nodes = "false"
     for node in rop_steps:
