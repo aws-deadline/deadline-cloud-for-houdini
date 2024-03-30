@@ -357,17 +357,23 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     ignore_input_nodes = "true"
     if not separate_steps:
-        rop_steps = [rop_steps[0]]
+        # render the node connected to the deadline cloud node
+        # and all its input nodes. The opposite of splitting it
+        # up each node by step
+        connected_node = rop_steps[-1]
+        # remove deps, as only 1 step
+        del connected_node["dependency_names"]
+        rop_steps = [connected_node]
         ignore_input_nodes = "false"
-    for step in rop_steps:
+    for node in rop_steps:
         # init data
         init_data_contents = []
         init_data_contents.append("scene_file: '{{Param.HipFile}}'\n")
-        init_data_contents.append(f"render_node: '{step['rop']}'\n")
+        init_data_contents.append(f"render_node: '{node['rop']}'\n")
         init_data_contents.append(f"version: {_get_houdini_version()}\n")
         init_data_contents.append(f"ignore_input_nodes: {ignore_input_nodes}\n")
-        init_data_contents.append(f"wedgenum: '{step['wedgenum']}'\n")
-        init_data_contents.append(f"wedge_node: '{step['wedge_node']}'\n")
+        init_data_contents.append(f"wedgenum: '{node['wedgenum']}'\n")
+        init_data_contents.append(f"wedge_node: '{node['wedge_node']}'\n")
         init_data_attachment = {
             "name": "initData",
             "filename": "init-data.yaml",
@@ -378,13 +384,13 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         environments = get_houdini_environments(init_data_attachment)
         # task run data
         task_data_contents = []
-        task_data_contents.append(f"render_node: {step['rop']}\n")
+        task_data_contents.append(f"render_node: {node['rop']}\n")
         task_data_contents.append("frame: {{Task.Param.Frame}}\n")
-        task_data_contents.append("ignore_input_nodes: true\n")
+        task_data_contents.append(f"ignore_input_nodes: {ignore_input_nodes}\n")
         # step
-        frame_range = "{start}-{stop}:{step}".format(**step)
+        frame_range = "{start}-{stop}:{step}".format(**node)
         step = {
-            "name": step["name"],
+            "name": node["name"],
             "parameterSpace": {
                 "taskParameterDefinitions": [{"name": "Frame", "range": frame_range, "type": "INT"}]
             },
@@ -416,8 +422,8 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                 },
             },
         }
-        if "dependency_names" in step:
-            deps = [{"dependsOn": d} for d in step["dependency_names"]]
+        if "dependency_names" in node:
+            deps = [{"dependsOn": d} for d in node["dependency_names"]]
             step["dependencies"] = deps
         steps.append(step)
     job_template = {
