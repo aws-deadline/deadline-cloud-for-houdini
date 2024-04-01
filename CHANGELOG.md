@@ -1,3 +1,16 @@
+## 0.6.0 (2024-04-01)
+
+### BREAKING CHANGES
+* public release (#104) ([`4023c1b`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/4023c1b629d171b8d435d009c60fe5d85b75e9dc))
+
+
+### Bug Fixes
+* include the adaptor deps in the package (#99) ([`c3caa57`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/c3caa5766310bb49ac87190c24be049829609579))
+* safely handle potential deps when not submitting step deps (#106) ([`99f9285`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/99f9285968dbbee1ddf946ddfa503192212b6bec))
+* re-add step dependencies, limit deadline-cloud input nodes, fix single step renders (#105) ([`23e4173`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/23e4173e730cbe58e2e812b5653e3567685ab8b4))
+* include deps with openjd adaptor package (#103) ([`24ffda6`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/24ffda6c280014584e72e3572e10ba62a10e1b63))
+* incorrect package name in create adaptor script (#102) ([`87f36e3`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/87f36e3d9e1c10c86068b6d3ffee4b47091fc0b6))
+
 ## 0.5.3 (2024-03-27)
 
 
