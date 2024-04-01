@@ -34,6 +34,10 @@ dependencies = [
     "openjd-adaptor-runtime == 0.6.*",
 ]
 
+[project.urls]
+Homepage = "https://github.com/aws-deadline/deadline-cloud-for-houdini"
+Source = "https://github.com/aws-deadline/deadline-cloud-for-houdini"
+
 [project.scripts]
 houdini-openjd = "deadline.houdini_adaptor.HoudiniAdaptor:main"
 # The binary name 'HoudiniAdaptor' is deprecated.
