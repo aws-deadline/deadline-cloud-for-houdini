@@ -4,11 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "deadline-cloud-for-houdini"
+description = "The submitter and adaptor to enable Houdini support for AWS Deadline Cloud"
+authors = [
+  {name = "Amazon Web Services"},
+]
 dynamic = ["version"]
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.9"
-description = "The submitter and adaptor to enable Houdini support for AWS Deadline Cloud"
 # https://pypi.org/classifiers/
 classifiers = [
   "Development Status :: 5 - Production/Stable",

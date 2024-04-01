@@ -1,4 +1,48 @@
-# AWS Deadline Cloud for Houdini Development
+# Development documentation
+
+This package has two active branches:
+
+- `mainline` -- For active development. This branch is not intended to be consumed by other packages. Any commit to this branch may break APIs, dependencies, and so on, and thus break any consumer without notice.
+- `release` -- The official release of the package intended for consumers. Any breaking releases will be accompanied with an increase to this package's interface version.
+
+## Build / Test / Release
+
+### Build the package
+
+```bash
+hatch build
+```
+
+### Run tests
+
+```bash
+hatch run test
+```
+
+### Run linting
+
+```bash
+hatch run lint
+```
+
+### Run formatting
+
+```bash
+hatch run fmt
+```
+
+## Run tests for all supported Python versions
+
+```bash
+hatch run all:test
+```
+
+## Use development Submitter in Houdini
+
+```bash
+hatch run install
+```
+A development version of the Deadline Cloud node is then available in `/out` by pressing TAB, typing `deadline`, and adding it to the network.
 
 ## Submitter Development Workflow
 
@@ -7,7 +51,7 @@ This workflow creates a "houdini package", a JSON file which tells Houdini where
 1. Clone this repository somewhere on the machine you have Houdini installed on:
 
    ```sh
-   git clone git@github.com:casillas2/deadline-cloud-for-houdini.git
+   git clone git@github.com:aws-deadline/deadline-cloud-for-houdini.git
    cd deadline-cloud-for-houdini
    ```
 
@@ -21,7 +65,7 @@ This workflow creates a "houdini package", a JSON file which tells Houdini where
 
    ```sh
    cd ..
-   git clone git@github.com:casillas2/deadline-cloud.git
+   git clone git@github.com:aws-deadline/deadline-cloud.git
    cd deadline-cloud-for-houdini
    hatch run install --houdini-version X.Y --local-dep ../deadline-cloud
    ```
