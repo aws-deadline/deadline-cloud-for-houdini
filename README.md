@@ -1,8 +1,8 @@
+# AWS Deadline Cloud for Houdini
+
 [![pypi](https://img.shields.io/pypi/v/deadline-cloud-for-houdini.svg?style=flat)](https://pypi.python.org/pypi/deadline-cloud-for-houdini)
 [![python](https://img.shields.io/pypi/pyversions/deadline-cloud-for-houdini.svg?style=flat)](https://pypi.python.org/pypi/deadline-cloud-for-houdini)
 [![license](https://img.shields.io/pypi/l/deadline-cloud-for-houdini.svg?style=flat)](https://github.com/aws-deadline/deadline-cloud-for-houdini/blob/mainline/LICENSE)
-
-# AWS Deadline Cloud for Houdini
 
 AWS Deadline Cloud for Houdini is a python package that allows users to create [AWS Deadline Cloud][deadline-cloud] jobs from within Houdini. Using the [Open Job Description (OpenJD) Adaptor Runtime][openjd-adaptor-runtime] this package also provides a command line application that adapts Houdini's command line interface to support the [OpenJD specification][openjd].
 

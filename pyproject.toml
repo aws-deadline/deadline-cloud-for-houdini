@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "deadline-cloud-for-houdini"
-description = "The submitter and adaptor to enable Houdini support for AWS Deadline Cloud"
+description = "AWS Deadline Cloud for Houdini"
 authors = [
   {name = "Amazon Web Services"},
 ]
