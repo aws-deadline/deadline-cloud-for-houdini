@@ -100,8 +100,8 @@ if [ $SOURCE = 1 ]; then
         --target $PACKAGEDIR \
         --platform $PYPI_PLATFORM \
         --python-version $PYTHON_VERSION \
+        --only-binary=:all: \
         --ignore-installed \
-        --no-deps \
         $ADAPTOR_INSTALLABLE $CLIENT_INSTALLABLE
 else
     # In PyPI mode, PyPI and/or a CodeArtifact must have these packages
