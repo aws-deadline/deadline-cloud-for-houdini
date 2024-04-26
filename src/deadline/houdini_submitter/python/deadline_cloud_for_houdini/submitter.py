@@ -24,7 +24,7 @@ from ._version import version
 
 import hou
 
-IGNORE_REF_VALUES = ("opdef:", "oplib:", "temp:")
+IGNORE_REF_VALUES = ("opdef:", "oplib:", "temp:", "op:")
 IGNORE_REF_PARMS = (
     "taskgraphfile",
     "pdg_workingdir",
@@ -48,19 +48,23 @@ def _get_houdini_version() -> str:
 def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
     # collect input filenames
     asset_references = AssetReferences()
-    input_filenames: set[str] = set()
-    input_filenames.add(_get_hip_file())
+    asset_references.input_filenames.add(_get_hip_file())
+
     for parm, ref in hou.fileReferences():
-        if parm:
-            if parm.node() == rop_node:
-                continue
-            if ref.startswith(IGNORE_REF_VALUES):
-                continue
-            if parm.name() in IGNORE_REF_PARMS:
-                continue
-        if os.path.isdir(ref):
+        if (
+            (not parm)
+            or (parm.node() == rop_node)
+            or (ref.startswith(IGNORE_REF_VALUES))
+            or (parm.name() in IGNORE_REF_PARMS)
+        ):
             continue
-        input_filenames.add(ref)
+
+        path = parm.evalAsString()
+        if os.path.isdir(path):
+            asset_references.input_directories.add(path)
+        if os.path.isfile(path):
+            asset_references.input_filenames.add(path)
+
     rop_dir_map = {
         # Mantra/karma
         "Driver/ifd": "vm_picture",
@@ -84,19 +88,16 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
     }
     # collect output dirs for each ROP
     all_inputs = rop_node.inputAncestors()
-    output_directories: set[str] = set()
     for node in all_inputs:
         type_name = node.type().nameWithCategory()
         out_parm = rop_dir_map.get(type_name, None)
         if out_parm is not None:
             if callable(out_parm):
                 computed_dirs = out_parm(node)
-                output_directories.update(computed_dirs)
+                asset_references.output_directories.update(computed_dirs)
             else:
                 path = node.parm(out_parm).eval()
-                output_directories.add(os.path.dirname(path))
-    asset_references.input_filenames = input_filenames
-    asset_references.output_directories = output_directories
+                asset_references.output_directories.add(os.path.dirname(path))
     return asset_references
 
 
