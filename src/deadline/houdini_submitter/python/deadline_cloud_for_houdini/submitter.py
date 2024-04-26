@@ -51,13 +51,12 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
     asset_references.input_filenames.add(_get_hip_file())
 
     for parm, ref in hou.fileReferences():
-        if not parm:
-            continue
-        if parm.node() == rop_node:
-            continue
-        if ref.startswith(IGNORE_REF_VALUES):
-            continue
-        if parm.name() in IGNORE_REF_PARMS:
+        if (
+            (not parm)
+            or (parm.node() == rop_node)
+            or (ref.startswith(IGNORE_REF_VALUES))
+            or (parm.name() in IGNORE_REF_PARMS)
+        ):
             continue
 
         path = parm.evalAsString()

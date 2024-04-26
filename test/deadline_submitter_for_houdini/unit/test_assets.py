@@ -14,7 +14,7 @@ def test_get_scene_asset_references():
     )
     node = hou.node
     hou.node.type().name.return_value = "deadline-cloud"
-    temp_parm = hou.Parm
+    mock_parm = hou.Parm
     hou.Parm.node.return_value = node
     hou.Parm.name.return_value = "shadowmap_file"
     hou.node.type().nameWithCategory.return_value = "Driver/ifd"
@@ -30,22 +30,24 @@ def test_get_scene_asset_references():
     file_parm.evalAsString.return_value = "/path/asset.png"
 
     hou.fileReferences.return_value = (
+        # These references should be resolved and added as job attachments
         (dir_parm, "$HIP/houdini19.5/"),
         (file_parm, "$HIP/houdini19.5/otls/Deadline-Cloud.hda"),
-        (temp_parm, "temp:$OS.rat"),
+        # These references should all be skipped based on their reference prefix
+        (mock_parm, "opdef:$OS.rat"),
+        (mock_parm, "oplib:$OS.rat"),
+        (mock_parm, "temp:$OS.rat"),
+        (mock_parm, "op:$OS.rat"),
     )
     mock_os = mock.Mock()
     mock_os.path.isdir = lambda path: path.endswith("/")
     mock_os.path.isfile = lambda path: not path.endswith("/")
 
-    print(mock_os.path.isdir("a"))
-    print(mock_os.path.isdir("a/"))
     with mock.patch(
         "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.os", mock_os
     ):
-        a = _get_scene_asset_references(node)
+        asset_refs = _get_scene_asset_references(node)
 
-    print(a)
-    assert a.input_filenames == {"/path/asset.png", "/some/path/test.hip"}
-    assert a.input_directories == {"/path/assets/"}
-    assert a.output_directories == set()
+    assert asset_refs.input_filenames == {"/path/asset.png", "/some/path/test.hip"}
+    assert asset_refs.input_directories == {"/path/assets/"}
+    assert asset_refs.output_directories == set()
