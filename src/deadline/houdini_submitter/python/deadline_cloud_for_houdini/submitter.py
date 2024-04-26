@@ -253,16 +253,21 @@ def _get_parameter_values(node: hou.Node) -> dict[str, Any]:
     initial_status = node.parm("initial_status").evalAsString()
     failed_tasks_limit = node.parm("failed_tasks_limit").eval()
     task_retry_limit = node.parm("task_retry_limit").eval()
-    return {
-        "parameterValues": [
-            {"name": "deadline:priority", "value": priority},
-            {"name": "deadline:targetTaskRunStatus", "value": initial_status},
-            {"name": "deadline:maxFailedTasksCount", "value": failed_tasks_limit},
-            {"name": "deadline:maxRetriesPerTask", "value": task_retry_limit},
-            {"name": "HipFile", "value": _get_hip_file()},
-            *get_queue_parameter_values_as_openjd(node),
-        ]
-    }
+    parameter_values = [
+        {"name": "deadline:priority", "value": priority},
+        {"name": "deadline:targetTaskRunStatus", "value": initial_status},
+        {"name": "deadline:maxFailedTasksCount", "value": failed_tasks_limit},
+        {"name": "deadline:maxRetriesPerTask", "value": task_retry_limit},
+        {"name": "HipFile", "value": _get_hip_file()},
+        *get_queue_parameter_values_as_openjd(node),
+    ]
+
+    if node.parm("include_adaptor_wheels").eval():
+        parameter_values.append(
+            {"name": "AdaptorWheels", "value": node.parm("adaptor_wheels").evalAsString()}
+        )
+
+    return {"parameterValues": parameter_values}
 
 
 def _is_node_locked(rop_path: str) -> bool:
@@ -445,7 +450,6 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
             )
             with open(override_file) as yaml_file:
                 override_environment = yaml.safe_load(yaml_file)
-                override_environment["parameterDefinitions"][0]["default"] = str(adaptor_wheels)
                 job_template["parameterDefinitions"].extend(
                     override_environment["parameterDefinitions"]
                 )
