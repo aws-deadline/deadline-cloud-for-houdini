@@ -13,4 +13,4 @@ try:
     node.parm('queue').set(queue_response['displayName'])
     node.hdaModule().update_queue_parameters_callback(kwargs)
 except CredentialRetrievalError:
-    print('Expired credentials')
+    print('AWS Deadline Cloud credentials are expired.')
