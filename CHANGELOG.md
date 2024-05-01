@@ -1,3 +1,13 @@
+## 0.6.1 (2024-05-01)
+
+
+
+### Bug Fixes
+* Windows pathmapping rules (#135) ([`d24499d`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/d24499d503846b6c63c786aa1a4c80890108d03e))
+* improve error message for expired credentials (#131) ([`c69ea0b`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/c69ea0bdb40190d286d4e36ccfefc5efb0f1fafd))
+* handle directories, references, and unnecessary files (#132) ([`0a909b3`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/0a909b3485966eb177a9088fb5342dcc880db474))
+* adaptor wheel override (#128) ([`f4260e5`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/f4260e5aff9005422d741421178d737a811ca662))
+
 ## 0.6.0 (2024-04-01)
 
 ### BREAKING CHANGES
