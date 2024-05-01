@@ -532,13 +532,23 @@ def save_bundle_callback(kwargs):
 
 def submit_callback(kwargs):
     node = kwargs["node"]
+    all_inputs = node.inputAncestors()
+
+    if not all_inputs:
+        # there are no inputs to the AWS Deadline Cloud render node
+        hou.ui.displayMessage(
+            "The AWS Deadline Cloud render node (ROP) must have an input ROP specified to submit a job",
+            title="Missing Input Render Node",
+            severity=hou.severityType.Warning,
+        )
+        return
+
     name = node.parm("name").evalAsString()
     # TODO: Populate from queue environment so that parameters can be overridden.
     queue_parameters: list[JobParameter] = []
     asset_references = _get_asset_references(node)
 
     # check for locked rops, Karma for example
-    all_inputs = node.inputAncestors()
     locked_rops = []
     for n in all_inputs:
         node_path = n.path()
