@@ -373,7 +373,9 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         path_mapping_rules: dict[str, str] = {}
 
         for rule in self._path_mapping_rules:
-            path_mapping_rules[rule.source_path] = rule.destination_path
+            path_mapping_rules[rule.source_path.replace("\\", "/")] = rule.destination_path.replace(
+                "\\", "/"
+            )
 
         if path_mapping_rules:
             return str(path_mapping_rules)
