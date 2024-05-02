@@ -505,7 +505,10 @@ class TestHoudiniAdaptor_on_cleanup:
         assert regex_callbacks is adaptor._regex_callbacks
 
     @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor.update_status")
-    def test_handle_complete(self, mock_update_status: Mock, init_data: dict):
+    @patch.object(HoudiniAdaptor, "_is_rendering", new_callable=PropertyMock(return_value=True))
+    def test_handle_complete(
+        self, mock_is_rendering: Mock, mock_update_status: Mock, init_data: dict
+    ):
         """Tests that the _handle_complete method updates the progress correctly"""
         # GIVEN
         adaptor = HoudiniAdaptor(init_data)
