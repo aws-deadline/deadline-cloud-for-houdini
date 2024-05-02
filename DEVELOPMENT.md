@@ -83,7 +83,7 @@ You can work on the adaptor alongside your submitter development workflow using 
    # If you don't have the build package installed already
    $ pip install build
    ...
-   $ ./scripts/build_wheels.sh
+   $ ./scripts/build_wheels.sh (.\scripts\build_wheels.bat on Windows)
    ```
 
    Wheels should have been generated in the "wheels" folder:
