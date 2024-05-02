@@ -102,6 +102,7 @@ def _resolve_dependencies(local_deps: list[Path]) -> dict[str, str]:
         "--json",
         *[dep.for_pip() for dep in flattened_dependency_list],
     ]
+    print(f"Running: {' '.join(args)}")
     result = subprocess.run(args, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)
 
