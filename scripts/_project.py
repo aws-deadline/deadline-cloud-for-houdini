@@ -31,24 +31,15 @@ def get_project_dict(project_path: Optional[Path] = None) -> dict[str, Any]:
 
 
 class Dependency:
+    pip_requirement: str
     name: str
-    operator: Optional[str]
-    version: Optional[str]
 
     def __init__(self, dep: str):
-        components = dep.split(" ")
-        self.name = components[0]
-        if len(components) > 2:
-            self.operator = components[1]
-            self.version = components[2]
-        else:
-            self.operator = None
-            self.version = None
+        self.pip_requirement = dep.strip().split(";", maxsplit=1)[0].replace(" ", "")
+        self.name = dep.strip().split(" ", maxsplit=1)[0]
 
     def for_pip(self) -> str:
-        if self.operator is not None and self.version is not None:
-            return f"{self.name}{self.operator}{self.version}"
-        return self.name
+        return self.pip_requirement
 
     def __repr__(self) -> str:
         return self.for_pip()
