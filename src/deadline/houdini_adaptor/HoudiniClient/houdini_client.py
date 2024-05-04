@@ -10,12 +10,12 @@ from typing import Optional
 # so that importing just the adaptor_runtime_client should work.
 try:
     from adaptor_runtime_client import (  # type: ignore[import]
-        HTTPClientInterface,
+        ClientInterface,
     )
     from houdini_adaptor.HoudiniClient.houdini_handler import HoudiniHandler  # type: ignore[import]
 except ImportError:
     from openjd.adaptor_runtime_client import (
-        HTTPClientInterface,
+        ClientInterface,
     )
     from deadline.houdini_adaptor.HoudiniClient.houdini_handler import HoudiniHandler
 
@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover
     raise OSError("Could not find the Houdini module. Are you running this inside of Houdini?")
 
 
-class HoudiniClient(HTTPClientInterface):
+class HoudiniClient(ClientInterface):
     """
     Client that runs in Houdini for the Houdini Adaptor
     """
