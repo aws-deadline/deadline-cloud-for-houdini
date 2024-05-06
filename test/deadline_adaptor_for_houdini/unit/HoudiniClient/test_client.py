@@ -12,8 +12,8 @@ from deadline.houdini_adaptor.HoudiniClient.houdini_client import HoudiniClient,
 
 
 class TestHoudiniClient:
-    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.HTTPClientInterface")
-    def test_houdiniclient(self, mock_httpclient: Mock) -> None:
+    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.ClientInterface")
+    def test_houdiniclient(self, mock_client_interface: Mock) -> None:
         """Tests that the houdini client can initialize, set a renderer and close"""
         client = HoudiniClient(server_path=str(9999))
         client.close()
@@ -21,8 +21,8 @@ class TestHoudiniClient:
     @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.os.path.exists")
     @patch.dict(os.environ, {"HOUDINI_ADAPTOR_SERVER_PATH": "server_path"})
     @patch("deadline.houdini_adaptor.HoudiniClient.HoudiniClient.poll")
-    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.HTTPClientInterface")
-    def test_main(self, mock_httpclient: Mock, mock_poll: Mock, mock_exists: Mock) -> None:
+    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.ClientInterface")
+    def test_main(self, mock_client_interface: Mock, mock_poll: Mock, mock_exists: Mock) -> None:
         """Tests that the main method starts the houdini client polling method"""
         # GIVEN
         mock_exists.return_value = True
