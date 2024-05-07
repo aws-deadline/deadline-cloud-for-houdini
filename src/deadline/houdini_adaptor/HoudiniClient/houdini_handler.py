@@ -39,39 +39,58 @@ class HoudiniHandler:
 
     def set_node_settings(self, node):
         # this is a place holder function
-        # TODO remove after commom node library implemented
+        # TODO remove after common node library implemented
 
         node_type = node.type().nameWithCategory().split("/")
-        if node_type[0] == "Driver":
-            if node_type[1] == "ifd":
-                # mantra render node
-                alfredProgress = node.parm("vm_alfprogress")
-                if alfredProgress is not None:
-                    alfredProgress.set(1)
-                    print("Enabled Alfred style progress")
 
-                verbosity = node.parm("vm_verbose")
-                if verbosity is not None:
-                    verbosity.set(3)
-                    print("Set verbosity to 3")
+        if node_type[0] != "Driver":
+            return
 
-            elif node_type[1] == "karma":
-                alfredProgress = node.parm("alfprogress")
-                if alfredProgress is not None:
-                    alfredProgress.set(1)
-                    print("Enabled Alfred style progress")
-                verbosity = node.parm("verbosity")
-                if verbosity is not None:
+        if len(node_type) < 2:
+            return
+
+        if node_type[1] == "ifd":
+            # Mantra render node
+            alfredProgress = node.parm("vm_alfprogress")
+            if alfredProgress is not None:
+                alfredProgress.set(1)
+                print("Enabled Alfred style progress")
+            verbosity = node.parm("vm_verbose")
+            if verbosity is not None:
+                # Mantra verbosity is an int with range 0 to 5
+                if isinstance(verbosity.eval(), int) and verbosity.eval() < 2:
+                    # 2 provides basic logging, we set it as a minimum to help with debugging issues
+                    verbosity.set(2)
+                    if verbosity.eval() == 2:
+                        # The verbosity won't be changed if the parameter is "keyed", so we check the value before
+                        # logging that it was increased
+                        # https://www.sidefx.com/docs/houdini/network/parms.html#color
+                        print("Increased verbosity to 2 to include basic logging")
+                print(f"Logging verbosity is set to {verbosity.eval()}")
+            return
+
+        if node_type[1] == "usdrender":
+            # Karma render node
+            alfredProgress = node.parm("alfprogress")
+            if alfredProgress is not None:
+                alfredProgress.set(1)
+                print("Enabled Alfred style progress")
+            verbosity = node.parm("verbosity")
+            if verbosity is not None:
+                # Karma verbosity is a str with options "", "3", "9", "9p", "9P"
+                # 3 means "Rendering Statistics", we set it as a minimum to help with debugging issues
+                if isinstance(verbosity.eval(), str) and verbosity.eval() == "":
                     verbosity.set("3")
-                    hou.logging.setRenderLogVerbosity(3)
-                    print("Set verbosity to 3")
-
-        else:
-            pass
+                    if verbosity.eval() == "3":
+                        # The verbosity won't be changed if the parameter is "keyed", so we check the value before
+                        # logging that it was increased
+                        # https://www.sidefx.com/docs/houdini/network/parms.html#color
+                        print("Increased verbosity to '3' to include basic logging")
+                print(f"Logging verbosity is set to '{verbosity.eval()}'")
 
     def start_render(self, data: dict) -> None:
         """
-        Uses active node and calls hou's render, currently hardcoded to rendering a single fram
+        Uses active node and calls hou's render, currently hardcoded to rendering a single frame
 
         Args:
             data (dict):

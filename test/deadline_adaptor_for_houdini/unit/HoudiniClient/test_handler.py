@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from unittest import TestCase
 from unittest.mock import Mock, patch
 
 import pytest
@@ -118,64 +117,148 @@ class TestHoudiniHandler:
 
     # test case for code coverage this tests
     # code that will be removed to the common node library
-    def test_set_node_settings(self, capfd):
+    @pytest.mark.parametrize("driver_node", ["Driver/other", "NotDriver", "Driver"])
+    def test_set_node_settings_driver_unrecognized_no_change(self, capfd, driver_node):
+        handler = HoudiniHandler()
+        hou.node.type().nameWithCategory.return_value = driver_node
+        parm_mock = Mock(name="testparm")
+        hou.node.parm = parm_mock
+
+        handler.set_node_settings(hou.node)
+
+        assert parm_mock().eval.call_count == 0
+        assert parm_mock().set.call_count == 0
+
+    @pytest.mark.parametrize("low_verbosity", [0, 1])
+    def test_set_node_settings_driver_ifd_low_setting_increased_to_2(self, capfd, low_verbosity):
         handler = HoudiniHandler()
 
-        side_effect = [
-            "Driver/other",
-            "Driver/ifd",
-            "Driver/karma",
-            "NotDriver",
-        ]
-        hou.node.type().nameWithCategory.side_effect = side_effect
-        hou.node.parm.return_value = Mock(name="parm")
+        hou.node.type().nameWithCategory.return_value = "Driver/ifd"
+        alfred_parm_mock = Mock(name="alfredparm")
+        verbosity_parm_mock = Mock(name="verbosityparm")
+        verbosity_parm_mock.eval.side_effect = [low_verbosity, low_verbosity, 2, 2, 2]
+        parm_func_mock = Mock(side_effect=[alfred_parm_mock, verbosity_parm_mock])
+        hou.node.parm = parm_func_mock
 
         handler.set_node_settings(hou.node)
-        assert (
-            not hou.logging.setRenderLogVerbosity.called
-        ), "hou.logging.setRenderLogVerbosity was called and should not have been"
-        assert not hou.node.parm.called, "hou.node.parm was called and should not have been"
 
-        handler.set_node_settings(hou.node)
-        TestCase().assertEqual(hou.node.parm.call_count, 2)
-        hou.node.parm.reset_mock()
-        assert (
-            not hou.logging.setRenderLogVerbosity.called
-        ), "hou.logging.setRenderLogVerbosity was called and should not have been"
+        assert parm_func_mock.call_count == 2
+        alfred_parm_mock.set.assert_called_once_with(1)
+        verbosity_parm_mock.set.assert_called_once_with(2)
         out, _ = capfd.readouterr()
-        assert out[-49:] == "Enabled Alfred style progress\nSet verbosity to 3\n"
-
-        handler.set_node_settings(hou.node)
-        TestCase().assertEqual(hou.node.parm.call_count, 2)
-        hou.node.parm.reset_mock()
-        out, _ = capfd.readouterr()
-        assert out[-49:] == "Enabled Alfred style progress\nSet verbosity to 3\n"
-        hou.logging.setRenderLogVerbosity.assert_called_once_with(3)
-        hou.logging.setRenderLogVerbosity.reset_mock()
-
-        handler.set_node_settings(hou.node)
         assert (
-            not hou.logging.setRenderLogVerbosity.called
-        ), "hou.logging.setRenderLogVerbosity was called and should not have been"
-        assert not hou.node.parm.called, "hou.node.parm was called and should not have been"
+            "Enabled Alfred style progress\nIncreased verbosity to 2 to include basic logging\nLogging verbosity is set to 2\n"
+            in out
+        )
 
-    def test_do_not_set_node_settings(self, capfd):
+    @pytest.mark.parametrize("high_verbosity", [2, 3, 4, 5])
+    def test_set_node_settings_driver_ifd_high_verbosity_no_change(self, capfd, high_verbosity):
         handler = HoudiniHandler()
 
-        side_effect = ["Driver/ifd", "Driver/karma"]
-        hou.node.type().nameWithCategory.side_effect = side_effect
-        hou.node.parm.return_value = None
+        hou.node.type().nameWithCategory.return_value = "Driver/ifd"
+        alfred_parm_mock = Mock(name="alfredparm")
+        verbosity_parm_mock = Mock(name="verbosityparm")
+        verbosity_parm_mock.eval.return_value = high_verbosity
+        parm_func_mock = Mock(side_effect=[alfred_parm_mock, verbosity_parm_mock])
+        hou.node.parm = parm_func_mock
 
         handler.set_node_settings(hou.node)
+
+        assert parm_func_mock.call_count == 2
+        alfred_parm_mock.set.assert_called_once_with(1)
+        verbosity_parm_mock.set.assert_not_called()
+        out, _ = capfd.readouterr()
         assert (
-            not hou.logging.setRenderLogVerbosity.called
-        ), "hou.logging.setRenderLogVerbosity was called and should not have been"
-        out, _ = capfd.readouterr()
-        assert out == ""
-        hou.node.parm.reset_mock()
+            f"Enabled Alfred style progress\nLogging verbosity is set to {high_verbosity}\n" in out
+        )
+
+    def test_set_node_settings_driver_ifd_keyed_parameter_correct_log_messages(self, capfd):
+        handler = HoudiniHandler()
+
+        hou.node.type().nameWithCategory.return_value = "Driver/ifd"
+        alfred_parm_mock = Mock(name="alfredparm")
+        verbosity_parm_mock = Mock(name="verbosityparm")
+        verbosity_parm_mock.eval.return_value = 0
+        parm_func_mock = Mock(side_effect=[alfred_parm_mock, verbosity_parm_mock])
+        hou.node.parm = parm_func_mock
+
         handler.set_node_settings(hou.node)
-        TestCase().assertEqual(hou.node.parm.call_count, 2)
-        hou.node.parm.reset_mock()
+
+        assert parm_func_mock.call_count == 2
+        alfred_parm_mock.set.assert_called_once_with(1)
+        verbosity_parm_mock.set.assert_called_once_with(2)
         out, _ = capfd.readouterr()
-        assert out == ""
-        assert not hou.logging.setRenderLogVerbosity.called
+        assert "include basic logging" not in out
+        assert "Enabled Alfred style progress\nLogging verbosity is set to 0\n" in out
+
+    def test_set_node_settings_driver_usdrender_none_increased_to_3(self, capfd):
+        handler = HoudiniHandler()
+
+        hou.node.type().nameWithCategory.return_value = "Driver/usdrender"
+        alfred_parm_mock = Mock(name="alfredparm")
+        verbosity_parm_mock = Mock(name="verbosityparm")
+        verbosity_parm_mock.eval.side_effect = ["", "", "3", "3", "3"]
+        parm_func_mock = Mock(side_effect=[alfred_parm_mock, verbosity_parm_mock])
+        hou.node.parm = parm_func_mock
+
+        handler.set_node_settings(hou.node)
+
+        assert parm_func_mock.call_count == 2
+        alfred_parm_mock.set.assert_called_once_with(1)
+        verbosity_parm_mock.set.assert_called_once_with("3")
+        out, _ = capfd.readouterr()
+        assert (
+            "Enabled Alfred style progress\nIncreased verbosity to '3' to include basic logging\nLogging verbosity is set to '3'\n"
+            in out
+        )
+
+    @pytest.mark.parametrize("verbosity", ["3", "9", "9p", "9P"])
+    def test_set_node_settings_driver_usdrender_high_verbosity_not_changed(self, capfd, verbosity):
+        handler = HoudiniHandler()
+
+        hou.node.type().nameWithCategory.return_value = "Driver/usdrender"
+        alfred_parm_mock = Mock(name="alfredparm")
+        verbosity_parm_mock = Mock(name="verbosityparm")
+        verbosity_parm_mock.eval.return_value = verbosity
+        parm_func_mock = Mock(side_effect=[alfred_parm_mock, verbosity_parm_mock])
+        hou.node.parm = parm_func_mock
+
+        handler.set_node_settings(hou.node)
+
+        assert parm_func_mock.call_count == 2
+        alfred_parm_mock.set.assert_called_once_with(1)
+        verbosity_parm_mock.set.assert_not_called()
+        out, _ = capfd.readouterr()
+        assert f"Enabled Alfred style progress\nLogging verbosity is set to '{verbosity}'\n" in out
+
+    def test_set_node_settings_driver_usdrender_keyed_parameter_correct_log_messages(self, capfd):
+        handler = HoudiniHandler()
+
+        hou.node.type().nameWithCategory.return_value = "Driver/usdrender"
+        alfred_parm_mock = Mock(name="alfredparm")
+        verbosity_parm_mock = Mock(name="verbosityparm")
+        verbosity_parm_mock.eval.return_value = ""
+        parm_func_mock = Mock(side_effect=[alfred_parm_mock, verbosity_parm_mock])
+        hou.node.parm = parm_func_mock
+
+        handler.set_node_settings(hou.node)
+
+        assert parm_func_mock.call_count == 2
+        alfred_parm_mock.set.assert_called_with(1)
+        verbosity_parm_mock.set.assert_called_with("3")
+        out, _ = capfd.readouterr()
+        assert "include basic logging" not in out
+        assert "Enabled Alfred style progress\nLogging verbosity is set to ''\n" in out
+
+    @pytest.mark.parametrize("driver_node", ["Driver/ifd", "Driver/usdrender"])
+    def test_do_not_set_node_settings_for_none_parm(self, capfd, driver_node):
+        handler = HoudiniHandler()
+
+        hou.node.type().nameWithCategory.return_value = driver_node
+        parm_mock = Mock(name="both_parms", return_value=None)
+        hou.node.parm = parm_mock
+
+        handler.set_node_settings(hou.node)
+
+        out, _ = capfd.readouterr()
+        assert "Enabled Alfred style progress\n" not in out
