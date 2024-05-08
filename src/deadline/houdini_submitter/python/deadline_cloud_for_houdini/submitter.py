@@ -528,13 +528,29 @@ def submit_callback(kwargs):
                 "houdini-version": _get_houdini_version(),
             }
         )
+        farm_id = get_setting("defaults.farm_id")
+        if not farm_id:
+            hou.ui.displayMessage(
+                "Please configure the farm ID in the AWS Deadline Cloud render node (ROP) settings",
+                title="Farm ID Required",
+                severity=hou.severityType.Warning,
+            )
+            return
+
+        queue_id = get_setting("defaults.queue_id")
+        if not queue_id:
+            hou.ui.displayMessage(
+                "Please configure the queue ID in the AWS Deadline Cloud render node (ROP) settings",
+                title="Queue ID Required",
+                severity=hou.severityType.Warning,
+            )
+            return
+
         deadline = api.get_boto3_client("deadline")
 
         job_bundle_dir = create_job_history_bundle_dir("houdini", name)
         _create_job_bundle(node, job_bundle_dir, asset_references)
 
-        farm_id = get_setting("defaults.farm_id")
-        queue_id = get_setting("defaults.queue_id")
         storage_profile_id = get_setting("settings.storage_profile_id")
 
         storage_profile = None

@@ -1,10 +1,49 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+from unittest import mock
+
+import pytest
 
 from .mock_hou import hou_module as hou
 
 from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
     submit_callback,
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_hou_mocks():
+    for each in [d for d in dir(hou) if not d.startswith("__")]:
+        attr = getattr(hou, each)
+        if hasattr(attr, "reset_mock"):
+            attr.reset_mock()
+        else:
+            del attr
+
+
+@pytest.fixture(scope="module", autouse=True)
+def mock_api():
+    """Mocks the AWS Deadline Cloud API"""
+    with mock.patch(
+        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.api"
+    ) as api_mock:
+        yield api_mock
+
+
+@pytest.fixture(scope="function")
+def default_adc_node():
+    """
+    Creates a default AWS Deadline Cloud render node with no input or output files
+    and one input render node
+    """
+    adc_node = hou.node("/Driver/deadline_cloud")
+    adc_node.parm("auto_parse_hip").eval.return_value = True
+    for parm in ["input_filenames", "input_directories", "output_directories"]:
+        adc_node.parm(parm).multiParmInstances.return_value = []
+        adc_node.parm(parm).multiParmInstancesCount.return_value = 0
+    mock_render_node = hou.node("/Driver/render_node")
+    adc_node.inputAncestors.return_value = [mock_render_node]
+    hou.fileReferences.return_value = []
+    return adc_node
 
 
 def test_error_message_for_missing_inputs():
@@ -22,3 +61,39 @@ def test_error_message_for_missing_inputs():
     )
 
     adc_node.parm.assert_not_called()
+
+
+@pytest.mark.parametrize("empty_farm_id", [None, ""])
+def test_error_message_for_missing_farm_id(empty_farm_id, default_adc_node, mock_api):
+    with mock.patch(
+        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.get_setting",
+        side_effect=lambda setting_name: (
+            empty_farm_id if setting_name == "defaults.farm_id" else "test-setting"
+        ),
+    ):
+        submit_callback({"node": default_adc_node})
+
+    hou.ui.displayMessage.assert_called_once_with(
+        "Please configure the farm ID in the AWS Deadline Cloud render node (ROP) settings",
+        title="Farm ID Required",
+        severity=hou.severityType.Warning,
+    )
+    mock_api.get_boto3_client.assert_not_called()
+
+
+@pytest.mark.parametrize("empty_queue_id", [None, ""])
+def test_error_message_for_missing_queue_id(empty_queue_id, default_adc_node, mock_api):
+    with mock.patch(
+        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.get_setting",
+        side_effect=lambda setting_name: (
+            empty_queue_id if setting_name == "defaults.queue_id" else "test-setting"
+        ),
+    ):
+        submit_callback({"node": default_adc_node})
+
+    hou.ui.displayMessage.assert_called_once_with(
+        "Please configure the queue ID in the AWS Deadline Cloud render node (ROP) settings",
+        title="Queue ID Required",
+        severity=hou.severityType.Warning,
+    )
+    mock_api.get_boto3_client.assert_not_called()
