@@ -2,7 +2,7 @@
 
 from unittest import mock
 from .mock_hou import hou_module as hou
-from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
+from deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets import (
     _get_scene_asset_references,
 )
 
@@ -44,7 +44,7 @@ def test_get_scene_asset_references():
     mock_os.path.isfile = lambda path: not path.endswith("/")
 
     with mock.patch(
-        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.os", mock_os
+        "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets.os", mock_os
     ):
         asset_refs = _get_scene_asset_references(node)
 

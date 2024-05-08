@@ -20,85 +20,20 @@ from deadline.job_attachments.upload import S3AssetManager
 from deadline.job_attachments.models import JobAttachmentS3Settings
 
 from .queue_parameters import update_queue_parameters, get_queue_parameter_values_as_openjd
+from ._assets import _get_hip_file, _get_asset_references, _parse_files
+
+# For temporary backwards compatibility
+from ._assets import (
+    _IGNORE_REF_PARMS as IGNORE_REF_PARMS,  # noqa
+    _IGNORE_REF_VALUES as IGNORE_REF_VALUES,  # noqa
+)
 from ._version import version
 
 import hou
 
-IGNORE_REF_VALUES = ("opdef:", "oplib:", "temp:", "op:")
-IGNORE_REF_PARMS = (
-    "taskgraphfile",
-    "pdg_workingdir",
-    "soho_program",
-    "BakeView_img_file_path",
-    "OutputDeepWriter_file",
-    "SettingsOutput_img_file_path",
-    "RS_outputFileNamePrefix",
-    "savetodirectory_directory",
-)
-
-
-def _get_hip_file() -> str:
-    return hou.hipFile.path()
-
 
 def _get_houdini_version() -> str:
     return hou.applicationVersionString()
-
-
-def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
-    # collect input filenames
-    asset_references = AssetReferences()
-    asset_references.input_filenames.add(_get_hip_file())
-
-    for parm, ref in hou.fileReferences():
-        if (
-            (not parm)
-            or (parm.node() == rop_node)
-            or (ref.startswith(IGNORE_REF_VALUES))
-            or (parm.name() in IGNORE_REF_PARMS)
-        ):
-            continue
-
-        path = parm.evalAsString()
-        if os.path.isdir(path):
-            asset_references.input_directories.add(path)
-        if os.path.isfile(path):
-            asset_references.input_filenames.add(path)
-
-    rop_dir_map = {
-        # Mantra/karma
-        "Driver/ifd": "vm_picture",
-        "Driver/karma": "picture",
-        # Husk
-        "Lop/usdrender_rop": _husk_outputs,
-        # Arnold
-        "Driver/arnold": "ar_picture",
-        # Vray
-        "Driver/vray_renderer": "SettingsOutput_img_file_path",
-        "Sop/rop_vrayproxy": "filepath",
-        "Driver/rop_vrayproxy": "filepath",
-        # Renderman
-        "Driver/ris::3.0": _renderman_outputs,
-        # Redshift
-        "Driver/Redshift_ROP": "RS_outputFileNamePrefix",
-        # Geo
-        "Driver/geometry": "sopoutput",
-        "Driver/alembic": "filename",
-        "Sop/filecache": "file",
-    }
-    # collect output dirs for each ROP
-    all_inputs = rop_node.inputAncestors()
-    for node in all_inputs:
-        type_name = node.type().nameWithCategory()
-        out_parm = rop_dir_map.get(type_name, None)
-        if out_parm is not None:
-            if callable(out_parm):
-                computed_dirs = out_parm(node)
-                asset_references.output_directories.update(computed_dirs)
-            else:
-                path = node.parm(out_parm).eval()
-                asset_references.output_directories.add(os.path.dirname(path))
-    return asset_references
 
 
 def _get_wedge_render_node(node: hou.Node):
@@ -288,39 +223,6 @@ def _is_node_locked(rop_path: str) -> bool:
     return False
 
 
-def _renderman_outputs(node: hou.Node) -> set[str]:
-    """Obtain list of outputs from renderman displays with a file device"""
-    output_directories: set[str] = set()
-    displays = node.parm("ri_displays").eval()
-    for index in range(displays):
-        device = node.parm(f"ri_device_{index}").eval()
-        # skip display devices, only collect file devices
-        if device in ("it", "houdini"):
-            continue
-        path = node.parm(f"ri_display_{index}").eval()
-        output_directories.add(os.path.dirname(path))
-    return output_directories
-
-
-def _husk_outputs(node: hou.Node) -> set[str]:
-    """Obtain list of outputs by searching the standard /Render/Products scope
-    of the USD stage input
-    """
-    output_directories: set[str] = set()
-    for n in node.inputs():
-        try:
-            products = n.stage().GetPrimAtPath("/Render/Products")
-        except Exception:
-            # no products found in standard namespace
-            return output_directories
-        for child in products.GetChildren():
-            if child.GetTypeName() == "RenderProduct":
-                product_name_attr = child.GetAttribute("productName")
-                path = product_name_attr.Get(0)
-                output_directories.add(os.path.dirname(path))
-    return output_directories
-
-
 def _unlock_node(rop_path: str) -> bool:
     """Unlock the first locked node in the path lineage"""
     path_parts = rop_path.split("/")
@@ -460,17 +362,6 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     return job_template
 
 
-def _get_asset_references(rop_node: hou.Node) -> AssetReferences:
-    asset_references = AssetReferences()
-    for n in rop_node.parm("input_filenames").multiParmInstances():
-        asset_references.input_filenames.add(n.eval())
-    for n in rop_node.parm("input_directories").multiParmInstances():
-        asset_references.input_directories.add(n.eval())
-    for n in rop_node.parm("output_directories").multiParmInstances():
-        asset_references.output_directories.add(n.eval())
-    return asset_references
-
-
 def _create_job_bundle(
     rop_node: hou.Node, job_bundle_dir: str, asset_references: AssetReferences
 ) -> None:
@@ -483,18 +374,6 @@ def _create_job_bundle(
         deadline_yaml_dump(parameter_values, f, indent=1)
     with open(job_bundle_path / "asset_references.yaml", "w", encoding="utf8") as f:
         deadline_yaml_dump(asset_references.to_dict(), f, indent=1)
-
-
-def _parse_files(node):
-    asset_references = _get_scene_asset_references(node)
-    for ref in ("input_filenames", "input_directories", "output_directories"):
-        p = node.parm(ref)
-        while p.multiParmInstancesCount():
-            p.removeMultiParmInstance(0)
-        paths = sorted(list(getattr(asset_references, ref)))
-        p.set(len(paths))
-        for i, n in enumerate(p.multiParmInstances()):
-            n.set(paths[i])
 
 
 def callback(kwargs):
