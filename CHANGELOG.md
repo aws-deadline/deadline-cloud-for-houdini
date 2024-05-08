@@ -1,3 +1,12 @@
+## 0.6.2 (2024-05-08)
+
+
+
+### Bug Fixes
+* output directory detection (#144) ([`4042fb5`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/4042fb517862c650d206b89072cb80fee3fb7308))
+* pass through log verbosity (#141) ([`24ff283`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/24ff2833e01e4ba85e5bffd255bc6fcaf0644e85))
+* verify Deadline Cloud render node input exists before submitting (#137) ([`4154518`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/415451872c531b3f69849378d716c9c191c07b8c))
+
 ## 0.6.1 (2024-05-01)
 
 
