@@ -30,7 +30,9 @@ def default_adc_node():
 
 @pytest.fixture(scope="function", autouse=True)
 def patch_os_dirname():
-    with mock.patch('deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.os', mock.Mock()):
+    with mock.patch(
+        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.os", mock.Mock()
+    ):
         yield
 
 
