@@ -42,8 +42,6 @@ _OPTIONAL_HOUDINI_INIT_KEYS = {
     "wedge_node",
 }
 
-_HOUDINI_RUN_KEYS = set()
-
 
 def _check_for_exception(func: Callable) -> Callable:
     """
@@ -437,11 +435,6 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
 
         self.validators.run_data.validate(run_data)
         self._is_rendering = True
-
-        for name in _HOUDINI_RUN_KEYS:
-            if name in run_data:
-                self._action_queue.enqueue_action(Action(name, {name: run_data[name]}))
-
         self._action_queue.enqueue_action(
             Action("start_render", {"frame_range": run_data["frame_range"]})
         )
