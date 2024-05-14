@@ -265,8 +265,6 @@ def _unlock_node(rop_path: str) -> bool:
 
 
 def _get_job_template(rop: hou.Node) -> dict[str, Any]:
-    job_name = rop.parm("name").evalAsString()
-    job_description = rop.parm("description").evalAsString()
     separate_steps = rop.parm("separate_steps").eval()
     rop_steps = _get_steps(rop)
     queue_parameter_definitions_json = rop.userData("queue_parameter_definitions")
@@ -382,12 +380,12 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         steps.append(step)
     job_template = {
         "specificationVersion": "jobtemplate-2023-09",
-        "name": job_name,
+        "name": rop.parm("name").evalAsString(),
+        "description": rop.parm("description").evalAsString() or None,
         "parameterDefinitions": parameter_definitions,
         "steps": steps,
     }
-    if job_description:
-        job_template["description"] = job_description
+
     include_adaptor_wheels = rop.parm("include_adaptor_wheels").eval()
     if include_adaptor_wheels:
         adaptor_wheels = rop.parm("adaptor_wheels").evalAsString()
