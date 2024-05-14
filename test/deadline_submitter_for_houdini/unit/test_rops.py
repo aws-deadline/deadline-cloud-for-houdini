@@ -55,4 +55,4 @@ def test_get_rop_steps_simulation():
     assert steps[0]["render_strategy"] == RenderStrategy.SEQUENTIAL
 
     # Reset mock so it doesn't affect other tests
-    node.parm.reset_mock()
+    node.parm = Mock()
