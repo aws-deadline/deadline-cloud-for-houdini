@@ -1,5 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
+from enum import Enum
 import os
 import sys
 import yaml
@@ -34,6 +35,10 @@ import hou
 
 _NONE_SELECTED_TEXT = "<none selected>"
 _REFRESHING_TEXT = "<refreshing>"
+
+class RenderStrategy(Enum):
+    SEQUENTIAL = "SEQUENTIAL"
+    PARALLEL = "PARALLEL"
 
 
 def _get_houdini_version() -> str:
@@ -164,9 +169,21 @@ def _get_rop_steps(rop: hou.Node):
                 continue
             # id this depends on
             deps.append(d)
+
+        node = hou.node(path)
+
         # skip deadline and deadline_cloud rops
-        if hou.node(path).type().name() in ("deadline", "deadline_cloud"):
+        if node.type().name() in ("deadline", "deadline_cloud"):
             continue
+
+        render_strategy = (
+            RenderStrategy.SEQUENTIAL
+            if node.type().nameWithCategory() == "Driver/geometry"
+            and node.parm("initsim")
+            and node.parm("initsim").eval()
+            else RenderStrategy.PARALLEL
+        )
+
         step_dict = {
             "id": _id,
             "name": f"{path}-{_id}",
@@ -175,8 +192,9 @@ def _get_rop_steps(rop: hou.Node):
             "wedgenum": "",
             "wedge_node": "",
             "start": range_ints[0],
-            "stop": range_ints[1],
+            "end": range_ints[1],
             "step": range_ints[2],
+            "render_strategy": render_strategy,
         }
         rop_steps.append(step_dict)
     # expand full dependency names once the list is complete
@@ -267,7 +285,7 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         }
     )
     steps: list[dict[str, Any]] = []
-    ignore_input_nodes = "true"
+    ignore_input_nodes = True
     if not separate_steps:
         # render the node connected to the deadline cloud node
         # and all its input nodes. The opposite of splitting it
@@ -278,36 +296,57 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         # remove dependency info from name
         connected_node["name"] = connected_node["rop"]
         rop_steps = [connected_node]
-        ignore_input_nodes = "false"
+        ignore_input_nodes = False
     for node in rop_steps:
-        # init data
-        init_data_contents = []
-        init_data_contents.append("scene_file: '{{Param.HipFile}}'\n")
-        init_data_contents.append(f"render_node: '{node['rop']}'\n")
-        init_data_contents.append(f"version: {_get_houdini_version()}\n")
-        init_data_contents.append(f"ignore_input_nodes: {ignore_input_nodes}\n")
-        init_data_contents.append(f"wedgenum: '{node['wedgenum']}'\n")
-        init_data_contents.append(f"wedge_node: '{node['wedge_node']}'\n")
+        init_data = {
+            "scene_file": "{{Param.HipFile}}",
+            "render_node": node["rop"],
+            "version": _get_houdini_version(),
+            "ignore_input_nodes": ignore_input_nodes,
+            "wedgenum": node["wedgenum"],
+            "wedge_node": node["wedge_node"],
+        }
         init_data_attachment = {
             "name": "initData",
             "filename": "init-data.yaml",
             "type": "TEXT",
-            "data": "".join(init_data_contents),
+            # Convert to dict to YAML string using the prettier nested object format
+            "data": yaml.dump(init_data, default_flow_style=False),
         }
-        # environments
+
         environments = get_houdini_environments(init_data_attachment)
-        # task run data
-        task_data_contents = []
-        task_data_contents.append(f"render_node: {node['rop']}\n")
-        task_data_contents.append("frame: {{Task.Param.Frame}}\n")
-        task_data_contents.append(f"ignore_input_nodes: {ignore_input_nodes}\n")
-        # step
-        frame_range = "{start}-{stop}:{step}".format(**node)
+
+        task_data_dict = {"render_node": node["rop"], "ignore_input_nodes": ignore_input_nodes}
+
+        if node["render_strategy"] == RenderStrategy.SEQUENTIAL:
+            # Generate a single task that renders the whole frame range
+            parameter_space = None
+            task_data_dict["frame_range"] = {
+                "start": node["start"],
+                "end": node["end"],
+                "step": node["step"],
+            }
+        else:
+            # Generate one task per frame using step parameters
+            range_expression = "{start}-{end}:{step}".format(**node)
+            parameter_space = {
+                "taskParameterDefinitions": [
+                    {"name": "Frame", "range": range_expression, "type": "INT"}
+                ]
+            }
+            task_data_dict["frame_range"] = {
+                "start": "{{Task.Param.Frame}}",
+                "end": "{{Task.Param.Frame}}",
+                "step": 1,
+            }
+
+        task_data = yaml.dump(task_data_dict, default_flow_style=False)
+        # Remove single quotes around the frame parameter so it gets interpreted as a int and not a string
+        task_data = task_data.replace("'{{Task.Param.Frame}}'", "{{Task.Param.Frame}}")
+
         step = {
             "name": node["name"],
-            "parameterSpace": {
-                "taskParameterDefinitions": [{"name": "Frame", "range": frame_range, "type": "INT"}]
-            },
+            "parameterSpace": parameter_space,
             "stepEnvironments": environments,
             "script": {
                 "embeddedFiles": [
@@ -315,7 +354,7 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                         "name": "runData",
                         "filename": "run-data.yaml",
                         "type": "TEXT",
-                        "data": "".join(task_data_contents),
+                        "data": task_data,
                     },
                 ],
                 "actions": {
@@ -336,6 +375,7 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                 },
             },
         }
+
         if "dependency_names" in node:
             deps = [{"dependsOn": d} for d in node["dependency_names"]]
             step["dependencies"] = deps

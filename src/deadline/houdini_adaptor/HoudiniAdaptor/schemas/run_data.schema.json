@@ -1,10 +1,20 @@
 {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
-    "properties": {
-      "frame": { "type": "number" }
-    },
-    "required":[
-      "frame"
-    ]
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "frame": { "type": "number" },
+    "frame_range": { "$ref": "#/$defs/frame_range" }
+  },
+  "oneOf": [{ "required": ["frame"] }, { "required": ["frame_range"] }],
+  "$defs": {
+    "frame_range": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "number" },
+        "end": { "type": "number" },
+        "step": { "type": "number" }
+      },
+      "required": ["start", "end", "step"]
+    }
+  }
 }

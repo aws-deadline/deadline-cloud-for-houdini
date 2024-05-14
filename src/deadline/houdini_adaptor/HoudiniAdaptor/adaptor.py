@@ -42,9 +42,7 @@ _OPTIONAL_HOUDINI_INIT_KEYS = {
     "wedge_node",
 }
 
-_HOUDINI_RUN_KEYS = {
-    "frame",
-}
+_HOUDINI_RUN_KEYS = set()
 
 
 def _check_for_exception(func: Callable) -> Callable:
@@ -430,26 +428,23 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         if not self._houdini_is_running:
             raise HoudiniNotRunningError("Cannot render because Houdini is not running.")
 
-        # frame argument is string type and will fail validation unless we
-        # recast to int
-        # TODO: morgan - Fix this bug
-        run_data["frame"] = int(run_data["frame"])
+        # TODO Eventually remove this code for backwards compability with older submitters. Current
+        # submitters only send frame ranges
+        if "frame" in run_data:
+            # As a old quirk, frame argument is string type.
+            frame = int(run_data.pop("frame"))
+            run_data["frame_range"] = {"start": frame, "end": frame, "step": 1}
+
         self.validators.run_data.validate(run_data)
-        # ERROR: Entrypoint failed:
-        # ERROR: openjd_fail: Error encountered while running adaptor: '1' is not of type 'number'
-        #
-        # Failed validating 'type' in schema['properties']['frame']:
-        #     {'type': 'number'}
-        #
-        # On instance['frame']:
-        #     '1'
         self._is_rendering = True
 
         for name in _HOUDINI_RUN_KEYS:
             if name in run_data:
                 self._action_queue.enqueue_action(Action(name, {name: run_data[name]}))
 
-        self._action_queue.enqueue_action(Action("start_render", {"frame": run_data["frame"]}))
+        self._action_queue.enqueue_action(
+            Action("start_render", {"frame_range": run_data["frame_range"]})
+        )
 
         while self._houdini_is_rendering and not self._has_exception:
             time.sleep(0.1)  # busy wait so that on_cleanup is not called
