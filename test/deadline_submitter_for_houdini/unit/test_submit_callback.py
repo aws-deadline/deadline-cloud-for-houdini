@@ -28,14 +28,6 @@ def default_adc_node():
     return adc_node
 
 
-@pytest.fixture(scope="function", autouse=True)
-def patch_os_dirname():
-    with mock.patch(
-        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.os", mock.Mock()
-    ):
-        yield
-
-
 def test_error_message_for_missing_inputs():
     """Tests that if there is not ancestors to the Deadline Cloud node,
     a message is displayed and the function returns immediately"""
