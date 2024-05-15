@@ -9,16 +9,6 @@ from deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets import
 )
 
 
-@pytest.fixture(autouse=True)
-def reset_hou_mocks():
-    for each in [d for d in dir(hou) if not d.startswith("__")]:
-        attr = getattr(hou, each)
-        if hasattr(attr, "reset_mock"):
-            attr.reset_mock()
-        else:
-            del attr
-
-
 def test_get_scene_asset_references():
     hou.hscript.return_value = (
         "1 [ ] /out/mantra1 \t( 1 5 1 )\n2 [ 1 ] /out/karma1/lopnet/rop_usdrender \t( 1 5 1 )\n",

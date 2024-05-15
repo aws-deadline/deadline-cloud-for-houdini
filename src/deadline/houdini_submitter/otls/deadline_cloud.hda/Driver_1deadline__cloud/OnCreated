@@ -1,16 +1,7 @@
 from botocore.exceptions import CredentialRetrievalError
-from deadline.client.api import get_boto3_client
-from deadline.client.config import get_setting
 
 try:
     node = kwargs['node']
-    deadline = get_boto3_client('deadline')
-    farm_id = get_setting('defaults.farm_id')
-    farm_response = deadline.get_farm(farmId=farm_id)
-    node.parm('farm').set(farm_response['displayName'])
-    queue_id = get_setting('defaults.queue_id')
-    queue_response = deadline.get_queue(farmId=farm_id, queueId=queue_id)
-    node.parm('queue').set(queue_response['displayName'])
     node.hdaModule().update_queue_parameters_callback(kwargs)
 except CredentialRetrievalError:
     print('AWS Deadline Cloud credentials are expired.')
