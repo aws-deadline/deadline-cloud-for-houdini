@@ -36,6 +36,7 @@ import hou
 _NONE_SELECTED_TEXT = "<none selected>"
 _REFRESHING_TEXT = "<refreshing>"
 
+
 class RenderStrategy(Enum):
     SEQUENTIAL = "SEQUENTIAL"
     PARALLEL = "PARALLEL"
@@ -176,14 +177,6 @@ def _get_rop_steps(rop: hou.Node):
         if node.type().name() in ("deadline", "deadline_cloud"):
             continue
 
-        render_strategy = (
-            RenderStrategy.SEQUENTIAL
-            if node.type().nameWithCategory() == "Driver/geometry"
-            and node.parm("initsim")
-            and node.parm("initsim").eval()
-            else RenderStrategy.PARALLEL
-        )
-
         step_dict = {
             "id": _id,
             "name": f"{path}-{_id}",
@@ -194,7 +187,7 @@ def _get_rop_steps(rop: hou.Node):
             "start": range_ints[0],
             "end": range_ints[1],
             "step": range_ints[2],
-            "render_strategy": render_strategy,
+            "render_strategy": _get_render_strategy_for_node(node),
         }
         rop_steps.append(step_dict)
     # expand full dependency names once the list is complete
@@ -204,6 +197,33 @@ def _get_rop_steps(rop: hou.Node):
             names = [id_steps[n]["name"] for n in rop["dependency_ids"]]
             rop["dependency_names"] = names
     return rop_steps
+
+
+# Any changes to this function should be reflected in the user guide.
+def _get_render_strategy_for_node(node: hou.Node) -> RenderStrategy:
+    render_strategy = RenderStrategy.PARALLEL
+
+    if (
+        node.type().nameWithCategory() == "Driver/geometry"
+        and node.parm("initsim")
+        and node.parm("initsim").eval()
+    ):
+        render_strategy = RenderStrategy.SEQUENTIAL
+
+    if node.parm("deadline_cloud_render_strategy"):
+        strategy_string = node.parm("deadline_cloud_render_strategy").evalAsString()
+        if strategy_string.upper() == RenderStrategy.SEQUENTIAL.value:
+            render_strategy = RenderStrategy.SEQUENTIAL
+        elif strategy_string.upper() == RenderStrategy.PARALLEL.value:
+            render_strategy = RenderStrategy.PARALLEL
+        elif strategy_string == "":
+            # Use the submitter's default choice
+            pass
+        else:
+            raise Exception(
+                f'node {node.path()} has an unexpected value "{strategy_string}" for its "deadline_cloud_render_strategy" parameter. Choose either {RenderStrategy.PARALLEL.value} or {RenderStrategy.SEQUENTIAL.value}'
+            )
+    return render_strategy
 
 
 def _get_parameter_values(node: hou.Node) -> dict[str, Any]:

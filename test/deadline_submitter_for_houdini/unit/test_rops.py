@@ -1,8 +1,12 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
+from typing import Optional
 from unittest.mock import Mock, patch
 
+import pytest
+
 from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
+    _get_render_strategy_for_node,
     _get_rop_steps,
     RenderStrategy,
 )
@@ -15,7 +19,10 @@ def test_get_rop_steps(mock_hou):
         "",
     )
     node = mock_hou.node()
+    node.parm.return_value = None
+
     steps = _get_rop_steps(node)
+
     assert len(steps) == 2
     assert steps[0]["id"] == "1"
     assert steps[0]["dependency_ids"] == []
@@ -47,10 +54,67 @@ def test_get_rop_steps_simulation(mock_hou):
     node.type.return_value = Mock()
     node.type.return_value.name.return_value = "geo"
     node.type.return_value.nameWithCategory.return_value = "Driver/geometry"
-    node.parm.return_value.eval.return_value = 1
+
+    def mock_parm(name: str):
+        if name == "initsim":
+            parm = Mock()
+            parm.eval.return_value = 1
+            return parm
+        else:
+            return None
+
+    node.parm = mock_parm
 
     steps = _get_rop_steps(node)
 
     assert len(steps) == 1
     assert steps[0]["id"] == "1"
     assert steps[0]["render_strategy"] == RenderStrategy.SEQUENTIAL
+
+
+@pytest.mark.parametrize(
+    "category,initsim,override,expected_render_strategy",
+    [
+        ("Driver/material", 0, "", RenderStrategy.PARALLEL),
+        ("Driver/geometry", 0, "", RenderStrategy.PARALLEL),
+        ("Driver/geometry", 1, "", RenderStrategy.SEQUENTIAL),
+        ("Driver/geometry", 1, None, RenderStrategy.SEQUENTIAL),
+        ("Driver/geometry", 1, "PARALLEL", RenderStrategy.PARALLEL),
+        ("Driver/material", None, None, RenderStrategy.PARALLEL),
+        ("Driver/material", None, "", RenderStrategy.PARALLEL),
+        ("Driver/material", None, "SEQUENTIAL", RenderStrategy.SEQUENTIAL),
+    ],
+)
+def test_get_render_strategy_for_node(
+    category: str,
+    initsim: Optional[int],
+    override: Optional[Mock],
+    expected_render_strategy: RenderStrategy,
+):
+    node = Mock()
+    node.type.return_value = Mock()
+    node.type.return_value.nameWithCategory.return_value = category
+
+    def mock_parm(name: str):
+        result = Mock()
+        if name == "initsim":
+            result.eval.return_value = initsim
+            result.evalAsString.return_value = str(initsim)
+        elif name == "deadline_cloud_render_strategy" and override:
+            result.eval.return_value = override
+            result.evalAsString.return_value = override
+        else:
+            result = None
+        return result
+
+    node.parm = mock_parm
+
+    assert _get_render_strategy_for_node(node) == expected_render_strategy
+
+
+def test_get_render_strategy_for_node_raises_exception_for_invalid_strategy():
+    node = Mock()
+    node.parm.return_value.evalAsString.return_value = "not a valid strategy"
+
+    with pytest.raises(Exception):
+        _get_render_strategy_for_node(node)
