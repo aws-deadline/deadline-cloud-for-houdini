@@ -426,13 +426,6 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         if not self._houdini_is_running:
             raise HoudiniNotRunningError("Cannot render because Houdini is not running.")
 
-        # TODO Eventually remove this code for backwards compability with older submitters. Current
-        # submitters only send frame ranges
-        if "frame" in run_data:
-            # As a old quirk, frame argument is string type.
-            frame = int(run_data.pop("frame"))
-            run_data["frame_range"] = {"start": frame, "end": frame, "step": 1}
-
         self.validators.run_data.validate(run_data)
         self._is_rendering = True
         self._action_queue.enqueue_action(
