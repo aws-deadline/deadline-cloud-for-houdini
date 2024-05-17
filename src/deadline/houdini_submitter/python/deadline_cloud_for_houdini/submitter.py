@@ -32,6 +32,10 @@ from ._version import version
 import hou
 
 
+_NONE_SELECTED_TEXT = "<none selected>"
+_REFRESHING_TEXT = "<refreshing>"
+
+
 def _get_houdini_version() -> str:
     return hou.applicationVersionString()
 
@@ -595,45 +599,51 @@ def submit_callback(kwargs):
 
 def settings_callback(kwargs):
     node = kwargs["node"]
-    node.parm("farm").set("<refreshing>")
-    node.parm("queue").set("<refreshing>")
+    _show_farm_and_queue_as_refreshing(node)
     DeadlineConfigDialog.configure_settings(parent=hou.qt.mainWindow())
-    deadline = api.get_boto3_client("deadline")
-    farm_id = get_setting("defaults.farm_id")
-    farm_response = deadline.get_farm(farmId=farm_id)
-    node.parm("farm").set(farm_response["displayName"])
-    queue_id = get_setting("defaults.queue_id")
-    queue_response = deadline.get_queue(farmId=farm_id, queueId=queue_id)
-    node.parm("queue").set(queue_response["displayName"])
-    update_queue_parameters(farm_id, queue_id, node)
+    _apply_farm_and_queue_settings(node)
 
 
 def login_callback(kwargs):
     node = kwargs["node"]
-    node.parm("farm").set("<refreshing>")
-    node.parm("queue").set("<refreshing>")
+    _show_farm_and_queue_as_refreshing(node)
     DeadlineLoginDialog.login(parent=hou.qt.mainWindow())
-    deadline = api.get_boto3_client("deadline")
-    farm_id = get_setting("defaults.farm_id")
-    farm_response = deadline.get_farm(farmId=farm_id)
-    node.parm("farm").set(farm_response["displayName"])
-    queue_id = get_setting("defaults.queue_id")
-    queue_response = deadline.get_queue(farmId=farm_id, queueId=queue_id)
-    node.parm("queue").set(queue_response["displayName"])
-    update_queue_parameters(farm_id, queue_id, node)
+    _apply_farm_and_queue_settings(node)
 
 
 def logout_callback(kwargs):
     node = kwargs["node"]
-    node.parm("farm").set("")
-    node.parm("queue").set("")
+    node.parm("farm").set(_NONE_SELECTED_TEXT)
+    node.parm("queue").set(_NONE_SELECTED_TEXT)
     api.logout()
 
 
 def update_queue_parameters_callback(kwargs):
     node = kwargs["node"]
+    _show_farm_and_queue_as_refreshing(node)
+    _apply_farm_and_queue_settings(node)
+
+
+def _show_farm_and_queue_as_refreshing(node):
+    node.parm("farm").set(_REFRESHING_TEXT)
+    node.parm("queue").set(_REFRESHING_TEXT)
+
+
+def _apply_farm_and_queue_settings(node):
     farm_id = get_setting("defaults.farm_id")
+    if not farm_id:
+        node.parm("farm").set(_NONE_SELECTED_TEXT)
+        node.parm("queue").set(_NONE_SELECTED_TEXT)
+        return
+    deadline = api.get_boto3_client("deadline")
+    farm_response = deadline.get_farm(farmId=farm_id)
+    node.parm("farm").set(farm_response["displayName"])
     queue_id = get_setting("defaults.queue_id")
+    if not queue_id:
+        node.parm("queue").set(_NONE_SELECTED_TEXT)
+        return
+    queue_response = deadline.get_queue(farmId=farm_id, queueId=queue_id)
+    node.parm("queue").set(queue_response["displayName"])
     update_queue_parameters(farm_id, queue_id, node)
 
 

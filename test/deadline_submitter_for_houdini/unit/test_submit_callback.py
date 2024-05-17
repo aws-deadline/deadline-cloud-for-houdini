@@ -3,30 +3,12 @@ from unittest import mock
 
 import pytest
 
+from .shared_callback_tests import GET_SETTING_FUNCTION_FULL_PATH, TEST_DEADLINE_NODE_NAME
 from .mock_hou import hou_module as hou
 
 from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
     submit_callback,
 )
-
-
-@pytest.fixture(autouse=True)
-def reset_hou_mocks():
-    for each in [d for d in dir(hou) if not d.startswith("__")]:
-        attr = getattr(hou, each)
-        if hasattr(attr, "reset_mock"):
-            attr.reset_mock()
-        else:
-            del attr
-
-
-@pytest.fixture(scope="module", autouse=True)
-def mock_api():
-    """Mocks the AWS Deadline Cloud API"""
-    with mock.patch(
-        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.api"
-    ) as api_mock:
-        yield api_mock
 
 
 @pytest.fixture(scope="function")
@@ -35,7 +17,7 @@ def default_adc_node():
     Creates a default AWS Deadline Cloud render node with no input or output files
     and one input render node
     """
-    adc_node = hou.node("/Driver/deadline_cloud")
+    adc_node = hou.node(TEST_DEADLINE_NODE_NAME)
     adc_node.parm("auto_parse_hip").eval.return_value = True
     for parm in ["input_filenames", "input_directories", "output_directories"]:
         adc_node.parm(parm).multiParmInstances.return_value = []
@@ -49,7 +31,7 @@ def default_adc_node():
 def test_error_message_for_missing_inputs():
     """Tests that if there is not ancestors to the Deadline Cloud node,
     a message is displayed and the function returns immediately"""
-    adc_node = hou.node("/Driver/deadline_cloud")
+    adc_node = hou.node(TEST_DEADLINE_NODE_NAME)
     adc_node.inputAncestors.return_value = []
 
     submit_callback({"node": adc_node})
@@ -66,7 +48,7 @@ def test_error_message_for_missing_inputs():
 @pytest.mark.parametrize("empty_farm_id", [None, ""])
 def test_error_message_for_missing_farm_id(empty_farm_id, default_adc_node, mock_api):
     with mock.patch(
-        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.get_setting",
+        GET_SETTING_FUNCTION_FULL_PATH,
         side_effect=lambda setting_name: (
             empty_farm_id if setting_name == "defaults.farm_id" else "test-setting"
         ),
@@ -84,7 +66,7 @@ def test_error_message_for_missing_farm_id(empty_farm_id, default_adc_node, mock
 @pytest.mark.parametrize("empty_queue_id", [None, ""])
 def test_error_message_for_missing_queue_id(empty_queue_id, default_adc_node, mock_api):
     with mock.patch(
-        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.get_setting",
+        GET_SETTING_FUNCTION_FULL_PATH,
         side_effect=lambda setting_name: (
             empty_queue_id if setting_name == "defaults.queue_id" else "test-setting"
         ),

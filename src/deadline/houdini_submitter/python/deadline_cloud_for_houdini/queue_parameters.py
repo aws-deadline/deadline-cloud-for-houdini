@@ -382,6 +382,11 @@ def get_queue_parameter_definitions_from_service(farm_id: str, queue_id: str) ->
 
 
 def update_queue_parameters(farm_id: str, queue_id: str, node: hou.Node) -> None:
+    """
+    :farm_id: a valid Deadline Cloud farm ID that the user has access to
+    :queue_id: a valid Deadline Cloud queue ID that the user has access to
+    :node: Deadline Cloud ROP node
+    """
     queue_parameter_definitions = get_queue_parameter_definitions_from_service(farm_id, queue_id)
     queue_parameter_definitions_json = json.dumps(queue_parameter_definitions)
     node.setUserData("queue_parameter_definitions", queue_parameter_definitions_json)
