@@ -309,7 +309,7 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
             "filename": "init-data.yaml",
             "type": "TEXT",
             # Convert to dict to YAML string using the prettier nested object format
-            "data": yaml.dump(init_data, default_flow_style=False),
+            "data": yaml.safe_dump(init_data, default_flow_style=False),
         }
 
         environments = get_houdini_environments(init_data_attachment)
@@ -338,7 +338,7 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                 "step": 1,
             }
 
-        task_data = yaml.dump(task_data_dict, default_flow_style=False)
+        task_data = yaml.safe_dump(task_data_dict, default_flow_style=False)
         # Remove single quotes around the frame parameter so it gets interpreted as a int and not a string
         task_data = task_data.replace("'{{Task.Param.Frame}}'", "{{Task.Param.Frame}}")
 
