@@ -96,16 +96,18 @@ def test_get_render_strategy_for_node(
     node.type.return_value.nameWithCategory.return_value = category
 
     def mock_parm(name: str):
-        result = Mock()
         if name == "initsim":
-            result.eval.return_value = initsim
-            result.evalAsString.return_value = str(initsim)
+            mock = Mock()
+            mock.eval.return_value = initsim
+            mock.evalAsString.return_value = str(initsim)
+            return mock
         elif name == "deadline_cloud_render_strategy" and override:
-            result.eval.return_value = override
-            result.evalAsString.return_value = override
+            mock = Mock()
+            mock.eval.return_value = override
+            mock.evalAsString.return_value = override
+            return mock
         else:
-            result = None
-        return result
+            return None
 
     node.parm = mock_parm
 
