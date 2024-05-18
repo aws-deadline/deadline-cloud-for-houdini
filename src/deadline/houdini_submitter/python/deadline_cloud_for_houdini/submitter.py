@@ -364,7 +364,6 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
 
         step = {
             "name": node["name"],
-            "parameterSpace": parameter_space,
             "stepEnvironments": environments,
             "script": {
                 "embeddedFiles": [
@@ -394,17 +393,24 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
             },
         }
 
+        if parameter_space:
+            step["parameterSpace"] = parameter_space
+
         if "dependency_names" in node:
             deps = [{"dependsOn": d} for d in node["dependency_names"]]
             step["dependencies"] = deps
         steps.append(step)
+
     job_template = {
         "specificationVersion": "jobtemplate-2023-09",
         "name": rop.parm("name").evalAsString(),
-        "description": rop.parm("description").evalAsString() or None,
         "parameterDefinitions": parameter_definitions,
         "steps": steps,
     }
+
+    description = rop.parm("description").evalAsString()
+    if description:
+        job_template["description"] = description
 
     include_adaptor_wheels = rop.parm("include_adaptor_wheels").eval()
     if include_adaptor_wheels:
@@ -421,6 +427,7 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                 if "jobEnvironments" not in job_template:
                     job_template["jobEnvironments"] = []
                 job_template["jobEnvironments"].append(override_environment["environment"])
+
     return job_template
 
 

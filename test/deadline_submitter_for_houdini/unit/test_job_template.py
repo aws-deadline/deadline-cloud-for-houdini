@@ -28,14 +28,19 @@ def mock_parm():
     return mock_implementation
 
 
-@patch(
-    "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_houdini_version",
-    Mock(return_value="19.5.435"),
-)
-@patch(
-    "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_hip_file",
-    Mock(return_value="/path/to/hip.hip"),
-)
+@pytest.fixture(autouse=True)
+def init_mocks():
+    with patch(
+        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_houdini_version",
+        Mock(return_value="19.5.435"),
+    ):
+        with patch(
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_hip_file",
+            Mock(return_value="/path/to/hip.hip"),
+        ):
+            yield
+
+
 @patch("deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_steps")
 def test_job_template(mock_get_steps, mock_parm):
     mock_node = Mock()
@@ -149,14 +154,6 @@ def test_job_template(mock_get_steps, mock_parm):
     }
 
 
-@patch(
-    "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_houdini_version",
-    Mock(return_value="19.5.435"),
-)
-@patch(
-    "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_hip_file",
-    Mock(return_value="/path/to/hip.hip"),
-)
 @patch("deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_steps")
 def test_job_template_sequential_node(mock_get_steps, mock_parm):
     mock_node = Mock()
@@ -180,7 +177,7 @@ def test_job_template_sequential_node(mock_get_steps, mock_parm):
     ]
     template = _get_job_template(mock_node)
 
-    assert template["steps"][0]["parameterSpace"] is None
+    assert "parameterSpace" not in template["steps"][0]
     assert (
         template["steps"][0]["script"]["embeddedFiles"][0]["data"]
         == "frame_range:\n  end: 5\n  start: 1\n  step: 1\nignore_input_nodes: true\nrender_node: /geo\n"
