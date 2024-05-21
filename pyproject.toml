@@ -138,7 +138,7 @@ source =  [
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 48
+fail_under = 60
 
 [tool.semantic_release]
 # Can be removed or set to true once we are v1
