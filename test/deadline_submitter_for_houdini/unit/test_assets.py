@@ -6,7 +6,9 @@ from .mock_hou import hou_module as hou
 from deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets import (
     _get_scene_asset_references,
     _get_output_directories,
+    _parse_files,
 )
+from deadline.client.job_bundle.submission import AssetReferences
 
 
 def test_get_scene_asset_references():
@@ -90,3 +92,79 @@ def test_get_recursive_output_directories(node_type: str, output_parm_name: str)
     node.parm.assert_called_once_with(output_parm_name)
     inner_node.parm.assert_called_with("vm_picture")
     assert out_dirs == {"/test/output/directory/mantra"}
+
+
+@pytest.mark.parametrize(
+    "scene_detected_assets, current_assets, expected_input_filenames, expected_input_directories, expected_output_directories",
+    [
+        (AssetReferences(), AssetReferences(), [], [], []),
+        (
+            AssetReferences(input_filenames={"/users/testuser/input.png"}),
+            AssetReferences(),
+            ["/users/testuser/input.png"],
+            [],
+            [],
+        ),
+        (
+            AssetReferences(
+                input_filenames={"/users/testuser/input.png"},
+                input_directories={"/users/testuser/input"},
+            ),
+            AssetReferences(
+                input_filenames={
+                    "/users/testuser/someotherfile.png",
+                    "/users/testuser/input.png",
+                    "/users/testuser/manuallyaddedfile.jpg",
+                },
+                output_directories={"/user/testuser/render"},
+            ),
+            [
+                "/users/testuser/manuallyaddedfile.jpg",
+                "/users/testuser/someotherfile.png",
+                "/users/testuser/input.png",
+            ],
+            ["/users/testuser/input"],
+            ["/user/testuser/render"],
+        ),
+    ],
+)
+def test_parse_files_manually_added(
+    scene_detected_assets: AssetReferences,
+    current_assets: AssetReferences,
+    expected_input_filenames: list[str],
+    expected_input_directories: list[str],
+    expected_output_directories: list[str],
+) -> None:
+    """
+    Test that parsing the scene for files correctly puts any non-detected files
+    that may have been manually added at the front of the list and keeps them
+    when called.
+    """
+
+    with (
+        mock.patch(
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_scene_asset_references"
+        ) as mock_get_scene_assets,
+        mock.patch(
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_asset_references"
+        ) as mock_get_asset_references,
+        mock.patch(
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._update_paths_parm"
+        ) as mock_update_paths_parm,
+    ):
+        mock_get_scene_assets.return_value = scene_detected_assets
+        mock_get_asset_references.return_value = current_assets
+
+        node = hou.node
+        _parse_files(node)
+
+        mock_get_scene_assets.assert_called_once()
+        mock_get_asset_references.assert_called_once()
+        mock_update_paths_parm.assert_has_calls(
+            [
+                mock.call(node, "input_filenames", expected_input_filenames),
+                mock.call(node, "input_directories", expected_input_directories),
+                mock.call(node, "output_directories", expected_output_directories),
+            ]
+        )
+        assert mock_update_paths_parm.call_count == 3

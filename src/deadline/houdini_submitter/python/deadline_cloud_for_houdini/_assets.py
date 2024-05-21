@@ -33,16 +33,27 @@ def _get_asset_references(rop_node: hou.Node) -> AssetReferences:
     return asset_references
 
 
-def _parse_files(node):
-    asset_references = _get_scene_asset_references(node)
+def _parse_files(node: hou.Node):
+    auto_detected_asset_references = _get_scene_asset_references(node)
+    assets = _get_asset_references(node)
+
     for ref in ("input_filenames", "input_directories", "output_directories"):
-        p = node.parm(ref)
-        while p.multiParmInstancesCount():
-            p.removeMultiParmInstance(0)
-        paths = sorted(list(getattr(asset_references, ref)))
-        p.set(len(paths))
-        for i, n in enumerate(p.multiParmInstances()):
-            n.set(paths[i])
+
+        auto_detected_paths = getattr(auto_detected_asset_references, ref)
+        manual_paths = getattr(assets, ref)
+        manual_paths.difference_update(auto_detected_paths)
+        paths = sorted(list(manual_paths))
+        paths += sorted(list(auto_detected_paths))
+        _update_paths_parm(node, ref, paths)
+
+
+def _update_paths_parm(node: hou.Node, parm_name: str, paths: list[str]):
+    p = node.parm(parm_name)
+    while p.multiParmInstancesCount():
+        p.removeMultiParmInstance(0)
+    p.set(len(paths))
+    for i, n in enumerate(p.multiParmInstances()):
+        n.set(paths[i])
 
 
 def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
