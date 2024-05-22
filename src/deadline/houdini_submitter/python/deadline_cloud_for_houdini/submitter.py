@@ -199,8 +199,9 @@ def _get_rop_steps(rop: hou.Node):
     return rop_steps
 
 
-# Any changes to this function should be reflected in the user guide.
+# .
 def _get_render_strategy_for_node(node: hou.Node) -> RenderStrategy:
+    """Any changes to this function should be reflected in the user guide: /docs/user-guide.md"""
     render_strategy = RenderStrategy.PARALLEL
 
     if (
