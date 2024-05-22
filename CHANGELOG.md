@@ -1,3 +1,11 @@
+## 0.6.3 (2024-05-22)
+
+
+
+### Bug Fixes
+* apply farm ID and queue ID settings correctly (#151) ([`1f7a8f4`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/1f7a8f44bd357223247c928a3da9903d213d221c))
+* improve error messages when farm or queue ID not defined (#148) ([`48ee027`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/48ee027b1e7a2b3a81735a0205ffcd97ac37305e))
+
 ## 0.6.2 (2024-05-08)
 
 
