@@ -30,18 +30,27 @@ def mock_parm():
 
 @pytest.fixture(autouse=True)
 def init_mocks():
-    with patch(
-        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_houdini_version",
-        Mock(return_value="19.5.435"),
-    ):
-        with patch(
+    with (
+        patch(
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_houdini_version",
+            Mock(return_value="19.5.435"),
+        ),
+        patch(
             "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_hip_file",
             Mock(return_value="/path/to/hip.hip"),
-        ):
-            yield
+        ),
+    ):
+        yield
 
 
-@patch("deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_steps")
+@pytest.fixture()
+def mock_get_steps():
+    with patch(
+        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_steps"
+    ) as mock:
+        yield mock
+
+
 def test_job_template(mock_get_steps, mock_parm):
     mock_node = Mock()
     mock_node.userData.return_value = None
@@ -154,7 +163,6 @@ def test_job_template(mock_get_steps, mock_parm):
     }
 
 
-@patch("deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter._get_steps")
 def test_job_template_sequential_node(mock_get_steps, mock_parm):
     mock_node = Mock()
     mock_node.userData.return_value = None
