@@ -2,7 +2,7 @@
 
 ## Parallel vs. Sequential Rendering
 
-For many types of nodes, frames can be rendered independently and in any order. For others like simulations, each frame depends on the result of the previous frame and must be rendered sequentially. The submitter guesses the optimal rendering strategy for each node, but also allows you to override the default.
+For many types of nodes, frames can be rendered independently and in any order. For others like simulations, each frame depends on the result of the previous frame and must be rendered sequentially. The submitter chooses a rendering strategy for each node based on its type, but also allows you to override the default.
 
 For parallel rendering, each frame has its own task, and the tasks will be distributed across availble workers. For sequential rendering, all frames for a node are rendered in a single task running on a single worker.
 
@@ -15,9 +15,11 @@ You can override the render strategy be creating a `deadline_cloud_render_strate
 To add a parameter to a node:
 1. Right click a node in the `out` context, select "Parameters and Channels" then click "Edit Paramter Interface".
 2. Under "Create Parameteres", select "Ordered Menu" and click the right arrow to add it to the "Existing Parameters" list.
-3. Select the new parameter in under "Existing Paramters", then edit its configuration under "Parameter Description":
+3. Select the new parameter under "Existing Paramters", then edit its configuration under "Parameter Description":
+    
     a. Under the "Parameter" tab, set "Name" to `deadline_cloud_render_strategy` and "Label" to "Deadline Cloud Render Strategy"
-    c. Under the Menu tab, add menu items for:
+    
+    b. Under the Menu tab, add menu items for:
 
     | Token      | Label      |
     | ---------- | ---------- |
