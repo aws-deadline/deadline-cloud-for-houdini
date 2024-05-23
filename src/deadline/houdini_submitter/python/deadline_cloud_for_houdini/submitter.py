@@ -82,10 +82,11 @@ def _get_steps(node: hou.Node, separate_steps: int):
         # and all its input nodes. The opposite of splitting it
         # up each node by step
 
-        connected_node = None if not rop_steps else rop_steps[-1]
-        if not connected_node:
+        try:
+            connected_node = rop_steps[-1]
+        except IndexError:
             return []
-        
+
         # remove deps, as only 1 step
         connected_node.pop("dependency_names", None)
         # remove dependency info from name
