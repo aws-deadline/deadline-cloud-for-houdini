@@ -5,7 +5,7 @@ import os
 import sys
 import yaml
 import json
-from typing import Any
+from typing import Any, Dict
 from pathlib import Path
 
 from deadline.client.job_bundle._yaml import deadline_yaml_dump
@@ -319,91 +319,7 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     )
     steps: list[dict[str, Any]] = []
     for node in rop_steps:
-        init_data = {
-            "scene_file": "{{Param.HipFile}}",
-            "render_node": node["rop"],
-            "version": _get_houdini_version(),
-            "ignore_input_nodes": ignore_input_nodes,
-            "wedgenum": node["wedgenum"],
-            "wedge_node": node["wedge_node"],
-        }
-        init_data_attachment = {
-            "name": "initData",
-            "filename": "init-data.yaml",
-            "type": "TEXT",
-            # Convert to dict to YAML string using the prettier nested object format
-            "data": yaml.safe_dump(init_data, default_flow_style=False),
-        }
-
-        environments = get_houdini_environments(init_data_attachment)
-
-        task_data_dict = {"render_node": node["rop"], "ignore_input_nodes": ignore_input_nodes}
-
-        if node["render_strategy"] == RenderStrategy.SEQUENTIAL:
-            # Generate a single task that renders the whole frame range
-            parameter_space = None
-            task_data_dict["frame_range"] = {
-                "start": node["start"],
-                "end": node["end"],
-                "step": node["step"],
-            }
-        else:
-            # Generate one task per frame using step parameters
-            range_expression = "{start}-{end}:{step}".format(**node)
-            parameter_space = {
-                "taskParameterDefinitions": [
-                    {"name": "Frame", "range": range_expression, "type": "INT"}
-                ]
-            }
-            task_data_dict["frame_range"] = {
-                "start": "{{Task.Param.Frame}}",
-                "end": "{{Task.Param.Frame}}",
-                "step": 1,
-            }
-
-        task_data = yaml.safe_dump(task_data_dict, default_flow_style=False)
-        # Remove single quotes around the frame parameter so it gets interpreted as a int and not a string
-        task_data = task_data.replace("'{{Task.Param.Frame}}'", "{{Task.Param.Frame}}")
-
-        step = {
-            "name": node["name"],
-            "stepEnvironments": environments,
-            "script": {
-                "embeddedFiles": [
-                    {
-                        "name": "runData",
-                        "filename": "run-data.yaml",
-                        "type": "TEXT",
-                        "data": task_data,
-                    },
-                ],
-                "actions": {
-                    "onRun": {
-                        "command": "houdini-openjd",
-                        "args": [
-                            "daemon",
-                            "run",
-                            "--connection-file",
-                            "{{ Session.WorkingDirectory }}/connection.json",
-                            "--run-data",
-                            "file://{{ Task.File.runData }}",
-                        ],
-                        "cancelation": {
-                            "mode": "NOTIFY_THEN_TERMINATE",
-                        },
-                    },
-                },
-            },
-        }
-
-        if parameter_space:
-            step["parameterSpace"] = parameter_space
-
-        if "dependency_names" in node:
-            deps = [{"dependsOn": d} for d in node["dependency_names"]]
-            step["dependencies"] = deps
-        steps.append(step)
-
+        steps.append(_get_step_template(node, ignore_input_nodes))
     job_template = {
         "specificationVersion": "jobtemplate-2023-09",
         "name": rop.parm("name").evalAsString(),
@@ -432,6 +348,93 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                 job_template["jobEnvironments"].append(override_environment["environment"])
 
     return job_template
+
+
+def _get_step_template(node: Dict, ignore_input_nodes: bool):
+    init_data = {
+        "scene_file": "{{Param.HipFile}}",
+        "render_node": node["rop"],
+        "version": _get_houdini_version(),
+        "ignore_input_nodes": ignore_input_nodes,
+        "wedgenum": node["wedgenum"],
+        "wedge_node": node["wedge_node"],
+    }
+    init_data_attachment = {
+        "name": "initData",
+        "filename": "init-data.yaml",
+        "type": "TEXT",
+        # Convert to dict to YAML string using the prettier nested object format
+        "data": yaml.safe_dump(init_data, default_flow_style=False),
+    }
+
+    environments = get_houdini_environments(init_data_attachment)
+
+    task_data_dict = {"render_node": node["rop"], "ignore_input_nodes": ignore_input_nodes}
+
+    if node["render_strategy"] == RenderStrategy.SEQUENTIAL:
+        # Generate a single task that renders the whole frame range
+        parameter_space = None
+        task_data_dict["frame_range"] = {
+            "start": node["start"],
+            "end": node["end"],
+            "step": node["step"],
+        }
+    else:
+        # Generate one task per frame using step parameters
+        range_expression = "{start}-{end}:{step}".format(**node)
+        parameter_space = {
+            "taskParameterDefinitions": [
+                {"name": "Frame", "range": range_expression, "type": "INT"}
+            ]
+        }
+        task_data_dict["frame_range"] = {
+            "start": "{{Task.Param.Frame}}",
+            "end": "{{Task.Param.Frame}}",
+            "step": 1,
+        }
+
+    task_data = yaml.safe_dump(task_data_dict, default_flow_style=False)
+    # Remove single quotes around the frame parameter so it gets interpreted as a int and not a string
+    task_data = task_data.replace("'{{Task.Param.Frame}}'", "{{Task.Param.Frame}}")
+
+    step = {
+        "name": node["name"],
+        "stepEnvironments": environments,
+        "script": {
+            "embeddedFiles": [
+                {
+                    "name": "runData",
+                    "filename": "run-data.yaml",
+                    "type": "TEXT",
+                    "data": task_data,
+                },
+            ],
+            "actions": {
+                "onRun": {
+                    "command": "houdini-openjd",
+                    "args": [
+                        "daemon",
+                        "run",
+                        "--connection-file",
+                        "{{ Session.WorkingDirectory }}/connection.json",
+                        "--run-data",
+                        "file://{{ Task.File.runData }}",
+                    ],
+                    "cancelation": {
+                        "mode": "NOTIFY_THEN_TERMINATE",
+                    },
+                },
+            },
+        },
+    }
+
+    if parameter_space:
+        step["parameterSpace"] = parameter_space
+
+    if "dependency_names" in node:
+        deps = [{"dependsOn": d} for d in node["dependency_names"]]
+        step["dependencies"] = deps
+    return step
 
 
 def _create_job_bundle(
