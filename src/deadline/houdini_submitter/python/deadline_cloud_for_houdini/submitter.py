@@ -77,11 +77,15 @@ def _get_steps(node: hou.Node, separate_steps: int):
         # standard network
         rop_steps = _get_rop_steps(node)
 
-    if not separate_steps and len(rop_steps) > 1:
+    if not separate_steps:
         # render the node connected to the deadline cloud node
         # and all its input nodes. The opposite of splitting it
         # up each node by step
-        connected_node = rop_steps[-1]
+
+        connected_node = None if not rop_steps else rop_steps[-1]
+        if not connected_node:
+            return []
+        
         # remove deps, as only 1 step
         connected_node.pop("dependency_names", None)
         # remove dependency info from name
