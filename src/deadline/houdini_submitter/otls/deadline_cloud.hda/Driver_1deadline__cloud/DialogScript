@@ -574,6 +574,7 @@
                 type    string
                 default { "$HIPNAME" }
                 parmtag { "script_callback_language" "python" }
+                help    "The job's name. Shown in the Deadline Monitor."
             }
             parm {
                 name    "description"
@@ -581,6 +582,7 @@
                 type    string
                 default { "" }
                 parmtag { "script_callback_language" "python" }
+                help    "The job's description. Included in the job template."
             }
             parm {
                 name    "priority"
@@ -589,6 +591,7 @@
                 default { "50" }
                 range   { 1 100 }
                 parmtag { "script_callback_language" "python" }
+                help    "The job's scheduling priority. The numerically largest priority is scheduled first. See the AWS Deadline Cloud job scheduling documentation for more details."
             }
             parm {
                 name    "initial_status"
@@ -600,6 +603,7 @@
                     "SUSPENDED" "SUSPENDED"
                 }
                 parmtag { "script_callback_language" "python" }
+                help    "The initial status when the job is created. Jobs that are created with a SUSPENDED status will not run until manually requeued."
             }
             parm {
                 name    "failed_tasks_limit"
@@ -608,6 +612,7 @@
                 default { "20" }
                 range   { 0 200 }
                 parmtag { "script_callback_language" "python" }
+                help    "The number of task failures before the job stops running and is marked as FAILED."
             }
             parm {
                 name    "task_retry_limit"
@@ -616,6 +621,7 @@
                 default { "5" }
                 range   { 0 10 }
                 parmtag { "script_callback_language" "python" }
+                help    "The maximum number of retries for each task."
             }
         }
 
@@ -649,6 +655,7 @@
             type    toggle
             default { "1" }
             parmtag { "script_callback_language" "python" }
+            help    "Split the ROP graph into separate rendering steps for easier monitoring and debugging."
         }
         parm {
             name    "include_adaptor_wheels"
@@ -656,6 +663,7 @@
             type    toggle
             default { "0" }
             parmtag { "script_callback_language" "python" }
+            help    "Adaptor wheels are custom builds of the adaptor that change rendering behavior."
         }
         parm {
             name    "adaptor_wheels"
@@ -664,6 +672,7 @@
             default { "" }
             disablewhen "{ include_adaptor_wheels == 0 }"
             parmtag { "script_callback_language" "python" }
+            help    "The directory for adaptor wheels."
         }
         parm {
              name    "auto_unlock_rops"
@@ -671,20 +680,23 @@
              type    toggle
              default { "0" }
              parmtag { "script_callback_language" "python" }
+             help    "A locked ROP will use existing outputs and won't re-render. It will also block dependencies from re-rendering. Select this option to automatically unlock dependency ROPs."
          }
          parm {
              name    "auto_parse_hip"
-             label   "Automatically parse Hip references"
+             label   "Automatically parse scene (.hip) references"
              type    toggle
              default { "0" }
              parmtag { "script_callback_language" "python" }
+             help    "Automatically discover and attach the job's input and output file names and directories based on the ROP graph during job submission."
          }
          parm {
              name    "auto_save_hip"
-             label   "Automatically save Hip"
+             label   "Automatically save scene (.hip) file"
              type    toggle
              default { "0" }
              parmtag { "script_callback_language" "python" }
+             help    "Automatically save the scene (.hip) file to $HIP when submitting a job."
          }
     }
 
@@ -699,6 +711,7 @@
             default { "0" }
             parmtag { "script_callback" "hou.phm().callback(kwargs)" }
             parmtag { "script_callback_language" "python" }
+            help    "Discover and attach the job's input and output file names and directories based on the current ROP graph."
         }
         multiscroll {
             name    "input_filenames"
@@ -710,6 +723,7 @@
                 type    file
                 default { "" }
                 parmtag { "script_callback_language" "python" }
+                help    "Files that will be uploaded as inputs during job submission."
             }
         }
 
@@ -723,6 +737,7 @@
                 type    directory
                 default { "" }
                 parmtag { "script_callback_language" "python" }
+                help    "Directories from which all files will be uploaded as inputs during job submission."
             }
         }
 
@@ -736,6 +751,7 @@
                 type    directory
                 default { "" }
                 parmtag { "script_callback_language" "python" }
+                help    "Directories that will contain output files when the job is run. This controls what the worker will upload after rendering."
             }
         }
 
@@ -749,6 +765,7 @@
         default { "0" }
         parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }
+        help    "Log in to AWS Deadline Cloud and authenticate for job submission."
     }
     parm {
         name    "logout"
@@ -758,6 +775,7 @@
         default { "0" }
         parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }
+        help    "Log out of AWS Deadline Cloud."
     }
     parm {
         name    "settings"
@@ -767,6 +785,7 @@
         default { "0" }
         parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }
+        help    "Update the AWS Deadline Cloud workstation configuration shared by all tools."
     }
     parm {
         name    "labelparm"
@@ -784,6 +803,7 @@
         default { "0" }
         parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }
+        help    "Save the current job bundle to disk. Useful for debugging generated jobs without submitting them to AWS Deadline Cloud."
     }
     parm {
         name    "submit"
@@ -792,5 +812,6 @@
         default { "0" }
         parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }
+        help    "Submit the job to AWS Deadline Cloud."
     }
 }
