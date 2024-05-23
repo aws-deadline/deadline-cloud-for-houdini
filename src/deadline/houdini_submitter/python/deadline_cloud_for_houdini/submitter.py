@@ -77,7 +77,7 @@ def _get_steps(node: hou.Node, separate_steps: int):
         # standard network
         rop_steps = _get_rop_steps(node)
 
-    if not separate_steps:
+    if not separate_steps and len(rop_steps) > 1:
         # render the node connected to the deadline cloud node
         # and all its input nodes. The opposite of splitting it
         # up each node by step
