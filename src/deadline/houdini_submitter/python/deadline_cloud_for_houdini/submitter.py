@@ -63,7 +63,7 @@ def _get_wedge_render_node(node: hou.Node):
     return rendernode
 
 
-def _get_steps(node: hou.Node):
+def _get_steps(node: hou.Node, separate_steps: int):
     """Convert a network of ROP nodes into a list of steps
 
     Return a list of wedged steps if all the inputs terminate in a valid wedge
@@ -72,10 +72,23 @@ def _get_steps(node: hou.Node):
     wedged_steps = _get_wedge_steps(node)
     if wedged_steps is not None:
         # valid wedged network detected
-        return wedged_steps
+        rop_steps = wedged_steps
     else:
         # standard network
-        return _get_rop_steps(node)
+        rop_steps = _get_rop_steps(node)
+
+    if not separate_steps:
+        # render the node connected to the deadline cloud node
+        # and all its input nodes. The opposite of splitting it
+        # up each node by step
+        connected_node = rop_steps[-1]
+        # remove deps, as only 1 step
+        connected_node.pop("dependency_names", None)
+        # remove dependency info from name
+        connected_node["name"] = connected_node["rop"]
+        rop_steps = [connected_node]
+
+    return rop_steps
 
 
 def _get_wedge_steps(rop: hou.Node):
@@ -287,7 +300,8 @@ def _unlock_node(rop_path: str) -> bool:
 
 def _get_job_template(rop: hou.Node) -> dict[str, Any]:
     separate_steps = rop.parm("separate_steps").eval()
-    rop_steps = _get_steps(rop)
+    rop_steps = _get_steps(rop, separate_steps)
+    ignore_input_nodes = bool(separate_steps)
     queue_parameter_definitions_json = rop.userData("queue_parameter_definitions")
     parameter_definitions: list[dict[str, Any]] = (
         json.loads(queue_parameter_definitions_json)
@@ -304,18 +318,6 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         }
     )
     steps: list[dict[str, Any]] = []
-    ignore_input_nodes = True
-    if not separate_steps:
-        # render the node connected to the deadline cloud node
-        # and all its input nodes. The opposite of splitting it
-        # up each node by step
-        connected_node = rop_steps[-1]
-        # remove deps, as only 1 step
-        connected_node.pop("dependency_names", None)
-        # remove dependency info from name
-        connected_node["name"] = connected_node["rop"]
-        rop_steps = [connected_node]
-        ignore_input_nodes = False
     for node in rop_steps:
         init_data = {
             "scene_file": "{{Param.HipFile}}",
