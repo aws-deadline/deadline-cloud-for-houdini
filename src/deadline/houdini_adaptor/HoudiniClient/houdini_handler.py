@@ -26,7 +26,6 @@ class HoudiniHandler:
         self.action_dict = {
             "scene_file": self.set_scene_file,
             "render_node": self.set_render_node,
-            "frame": self.set_frame,
             "ignore_input_nodes": self.set_ignore_input_nodes,
             "wedge_node": self.set_wedge_node,
             "wedgenum": self.set_wedge_num,
@@ -90,7 +89,7 @@ class HoudiniHandler:
 
     def start_render(self, data: dict) -> None:
         """
-        Uses active node and calls hou's render, currently hardcoded to rendering a single frame
+        Uses active node and calls hou's render
 
         Args:
             data (dict):
@@ -122,14 +121,17 @@ class HoudiniHandler:
             else:
                 raise ValueError(f"WEDGENUM out of range: {wedgenum}")
 
-        increment = 1
         self.node.parm("trange").set(1)
-        frame = self.render_kwargs["frame"]
-        frame_range = (frame, frame, increment)
+
         interleave = hou.renderMethod.RopByRop
+
+        start = data["frame_range"]["start"]
+        end = data["frame_range"]["end"]
+        step = data["frame_range"]["step"]
+
         self.node.render(
             verbose=True,
-            frame_range=frame_range,
+            frame_range=(start, end, step),
             ignore_inputs=self.render_kwargs["ignore_input_nodes"],
             method=interleave,
         )
@@ -184,16 +186,6 @@ class HoudiniHandler:
         if wedgenum is not None:
             print(f"wedgenum {wedgenum}")
             self.wedgenum = wedgenum
-
-    def set_frame(self, data: dict) -> None:
-        """
-        Sets the frame to render
-
-        Args:
-            data (dict):
-
-        """
-        self.render_kwargs["frame"] = int(data.get("frame", ""))
 
     def set_scene_file(self, data: dict) -> None:
         """

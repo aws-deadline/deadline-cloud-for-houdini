@@ -29,7 +29,6 @@ class TestHoudiniHandler:
         assert list(handler.action_dict.keys()) == [
             "scene_file",
             "render_node",
-            "frame",
             "ignore_input_nodes",
             "wedge_node",
             "wedgenum",
@@ -54,9 +53,9 @@ class TestHoudiniHandler:
         handler.node = hou.node
         hou.node.type().nameWithCategory.return_value = "Driver/other"
         hou.renderMethod.RopByRop = None
-        handler.start_render({})
+        handler.start_render({"frame_range": {"start": 1, "end": 5, "step": 2}})
         hou.node.render.assert_called_once_with(
-            verbose=True, frame_range=(1, 1, 1), ignore_inputs=True, method=None
+            verbose=True, frame_range=(1, 5, 2), ignore_inputs=True, method=None
         )
 
     def test_set_ignore_input_nodes(self) -> None:
@@ -75,13 +74,6 @@ class TestHoudiniHandler:
         handler.set_render_node(data)
         assert handler.node
         assert handler.node == "test"
-
-    def test_set_frame(self) -> None:
-        handler = HoudiniHandler()
-        assert "frame" not in handler.render_kwargs.keys()
-        data = {"frame": 1}
-        handler.set_frame(data)
-        assert handler.render_kwargs["frame"] == 1
 
     def test_set_scene_file_not_found(self, capfd) -> None:
         handler = HoudiniHandler()
