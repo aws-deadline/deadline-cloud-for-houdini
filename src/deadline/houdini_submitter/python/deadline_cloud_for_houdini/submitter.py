@@ -235,9 +235,6 @@ def _get_render_strategy_for_node(node: hou.Node) -> RenderStrategy:
             render_strategy = RenderStrategy.SEQUENTIAL
         elif strategy_string.upper() == RenderStrategy.PARALLEL.value:
             render_strategy = RenderStrategy.PARALLEL
-        elif strategy_string == "":
-            # Use the submitter's default choice
-            pass
         else:
             raise ValueError(
                 f'The node "{node.path()}" has an unexpected value "{strategy_string}" for its "deadline_cloud_render_strategy" parameter. Ensure the value is {RenderStrategy.PARALLEL.value} or {RenderStrategy.SEQUENTIAL.value}'

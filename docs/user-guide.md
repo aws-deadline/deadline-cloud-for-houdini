@@ -23,8 +23,7 @@ To add a parameter to a node:
 
     | Token      | Label      |
     | ---------- | ---------- |
-    | (empty)    | Default    |
     | SEQUENTIAL | Sequential |
     | PARALLEL   | Parallel   |
 4. Click Accept.
-5. Now in the parameter editor for your node, you'll find the new "Deadline Cloud Render Strategy" menu. Select an option to override the default submitter behavior.
+5. Now in the parameter editor for your node, you'll find the new "Deadline Cloud Render Strategy" menu which specifies the submitter behavior.
