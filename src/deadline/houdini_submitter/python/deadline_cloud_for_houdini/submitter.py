@@ -239,8 +239,8 @@ def _get_render_strategy_for_node(node: hou.Node) -> RenderStrategy:
             # Use the submitter's default choice
             pass
         else:
-            raise Exception(
-                f'node {node.path()} has an unexpected value "{strategy_string}" for its "deadline_cloud_render_strategy" parameter. Choose either {RenderStrategy.PARALLEL.value} or {RenderStrategy.SEQUENTIAL.value}'
+            raise ValueError(
+                f'The node "{node.path()}" has an unexpected value "{strategy_string}" for its "deadline_cloud_render_strategy" parameter. Ensure the value is {RenderStrategy.PARALLEL.value} or {RenderStrategy.SEQUENTIAL.value}'
             )
     return render_strategy
 
