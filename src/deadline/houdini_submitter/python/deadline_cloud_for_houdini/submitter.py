@@ -652,6 +652,14 @@ def submit_callback(kwargs):
             session=queue_role_session,
         )
 
+        api.get_deadline_cloud_library_telemetry_client().record_event(
+            event_type="com.amazon.rum.deadline.submission",
+            event_details={
+                "submitter_name": "Houdini",
+            },
+            from_gui=True,
+        )
+
         job_progress_dialog = SubmitJobProgressDialog(parent=hou.qt.mainWindow())
         job_progress_dialog.start_submission(
             farm_id,
@@ -664,6 +672,11 @@ def submit_callback(kwargs):
             auto_accept=str2bool(get_setting("settings.auto_accept")),
         )
     except Exception as exc:
+        api.get_deadline_cloud_library_telemetry_client().record_error(
+            event_details={"exception_scope": "submit_callback"},
+            exception_type=str(type(exc)),
+            from_gui=True,
+        )
         print(str(exc))
         hou.ui.displayMessage(
             str(exc), title="Houdini Job Submission", severity=hou.severityType.Warning
