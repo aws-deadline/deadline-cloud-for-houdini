@@ -23,31 +23,88 @@ def _get_hip_file() -> str:
 
 
 def _get_asset_references(rop_node: hou.Node) -> AssetReferences:
+    """
+    Get the current paths stored in the parms backing the UI and return them as
+    an AssetReferences object
+    """
     asset_references = AssetReferences()
-    for n in rop_node.parm("input_filenames").multiParmInstances():
-        asset_references.input_filenames.add(n.eval())
-    for n in rop_node.parm("input_directories").multiParmInstances():
-        asset_references.input_directories.add(n.eval())
-    for n in rop_node.parm("output_directories").multiParmInstances():
-        asset_references.output_directories.add(n.eval())
+
+    asset_references.input_filenames.update(
+        [n.eval() for n in rop_node.parm("input_filenames").multiParmInstances()]
+    )
+    asset_references.input_directories.update(
+        [n.eval() for n in rop_node.parm("input_directories").multiParmInstances()]
+    )
+    asset_references.output_directories.update(
+        [n.eval() for n in rop_node.parm("output_directories").multiParmInstances()]
+    )
+
     return asset_references
 
 
+def _get_saved_auto_detected_asset_references(rop_node: hou.Node) -> AssetReferences:
+    """
+    Get all of the paths saved in the hidden auto_* parms on the node and return
+    them as an AssetReferences object.
+    """
+    saved_auto_refs = AssetReferences()
+    saved_auto_refs.input_filenames.update(
+        [n.eval() for n in rop_node.parm("auto_input_filenames").multiParmInstances()]
+    )
+    saved_auto_refs.input_directories.update(
+        [n.eval() for n in rop_node.parm("auto_input_directories").multiParmInstances()]
+    )
+    saved_auto_refs.output_directories.update(
+        [n.eval() for n in rop_node.parm("auto_output_directories").multiParmInstances()]
+    )
+
+    return saved_auto_refs
+
+
 def _parse_files(node: hou.Node):
-    auto_detected_asset_references = _get_scene_asset_references(node)
-    assets = _get_asset_references(node)
+    """
+    Generate the lists of input filenames, input directories and output directories
+    based on the detected paths in the scene, any previously saved values and the
+    current values in the UI. Then update the UI with the new lists of paths.
+    """
+    display_asset_refs = _get_asset_references(node)
+    auto_asset_refs = _get_scene_asset_references(node)
+    prev_auto_asset_refs = _get_saved_auto_detected_asset_references(node)
 
-    for ref in ("input_filenames", "input_directories", "output_directories"):
+    # Remove all previous and current auto detected assets from the lists currently
+    # displayed in the UI to determine which ones have been manually added
+    display_asset_refs.input_filenames.difference_update(auto_asset_refs.input_filenames)
+    display_asset_refs.input_filenames.difference_update(prev_auto_asset_refs.input_filenames)
+    display_asset_refs.input_directories.difference_update(auto_asset_refs.input_directories)
+    display_asset_refs.input_directories.difference_update(prev_auto_asset_refs.input_directories)
+    display_asset_refs.output_directories.difference_update(auto_asset_refs.output_directories)
+    display_asset_refs.output_directories.difference_update(prev_auto_asset_refs.output_directories)
 
-        auto_detected_paths = getattr(auto_detected_asset_references, ref)
-        manual_paths = getattr(assets, ref)
-        manual_paths.difference_update(auto_detected_paths)
-        paths = sorted(list(manual_paths))
-        paths += sorted(list(auto_detected_paths))
-        _update_paths_parm(node, ref, paths)
+    manual_input_filenames = sorted(list(display_asset_refs.input_filenames))
+    manual_input_directories = sorted(list(display_asset_refs.input_directories))
+    manual_output_directories = sorted(list(display_asset_refs.output_directories))
+
+    auto_detected_input_filenames = sorted(list(auto_asset_refs.input_filenames))
+    auto_detected_input_directories = sorted(list(auto_asset_refs.input_directories))
+    auto_detected_output_directories = sorted(list(auto_asset_refs.output_directories))
+
+    new_display_input_filenames = manual_input_filenames + auto_detected_input_filenames
+    new_display_input_directories = manual_input_directories + auto_detected_input_directories
+    new_display_output_directories = manual_output_directories + auto_detected_output_directories
+
+    _update_paths_parm(node, "input_filenames", new_display_input_filenames)
+    _update_paths_parm(node, "input_directories", new_display_input_directories)
+    _update_paths_parm(node, "output_directories", new_display_output_directories)
+    _update_paths_parm(node, "auto_input_filenames", auto_detected_input_filenames)
+    _update_paths_parm(node, "auto_input_directories", auto_detected_input_directories)
+    _update_paths_parm(node, "auto_output_directories", auto_detected_output_directories)
 
 
 def _update_paths_parm(node: hou.Node, parm_name: str, paths: list[str]):
+    """
+    Clear the existing path multiparm parm_name and rebuild it based on the list
+    of paths passed in.
+    """
     p = node.parm(parm_name)
     while p.multiParmInstancesCount():
         p.removeMultiParmInstance(0)

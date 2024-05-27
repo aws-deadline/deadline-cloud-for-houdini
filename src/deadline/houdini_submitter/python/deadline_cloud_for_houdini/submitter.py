@@ -1,10 +1,11 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
+from enum import Enum
 import os
 import sys
 import yaml
 import json
-from typing import Any
+from typing import Any, Dict
 from pathlib import Path
 
 from deadline.client.job_bundle._yaml import deadline_yaml_dump
@@ -36,6 +37,11 @@ _NONE_SELECTED_TEXT = "<none selected>"
 _REFRESHING_TEXT = "<refreshing>"
 
 
+class RenderStrategy(Enum):
+    SEQUENTIAL = "SEQUENTIAL"
+    PARALLEL = "PARALLEL"
+
+
 def _get_houdini_version() -> str:
     return hou.applicationVersionString()
 
@@ -57,7 +63,7 @@ def _get_wedge_render_node(node: hou.Node):
     return rendernode
 
 
-def _get_steps(node: hou.Node):
+def _get_steps(node: hou.Node, separate_steps: int):
     """Convert a network of ROP nodes into a list of steps
 
     Return a list of wedged steps if all the inputs terminate in a valid wedge
@@ -66,10 +72,28 @@ def _get_steps(node: hou.Node):
     wedged_steps = _get_wedge_steps(node)
     if wedged_steps is not None:
         # valid wedged network detected
-        return wedged_steps
+        rop_steps = wedged_steps
     else:
         # standard network
-        return _get_rop_steps(node)
+        rop_steps = _get_rop_steps(node)
+
+    if not separate_steps:
+        # render the node connected to the deadline cloud node
+        # and all its input nodes. The opposite of splitting it
+        # up each node by step
+
+        try:
+            connected_node = rop_steps[-1]
+        except IndexError:
+            return []
+
+        # remove deps, as only 1 step
+        connected_node.pop("dependency_names", None)
+        # remove dependency info from name
+        connected_node["name"] = connected_node["rop"]
+        rop_steps = [connected_node]
+
+    return rop_steps
 
 
 def _get_wedge_steps(rop: hou.Node):
@@ -164,9 +188,13 @@ def _get_rop_steps(rop: hou.Node):
                 continue
             # id this depends on
             deps.append(d)
+
+        node = hou.node(path)
+
         # skip deadline and deadline_cloud rops
-        if hou.node(path).type().name() in ("deadline", "deadline_cloud"):
+        if node.type().name() in ("deadline", "deadline_cloud"):
             continue
+
         step_dict = {
             "id": _id,
             "name": f"{path}-{_id}",
@@ -175,8 +203,9 @@ def _get_rop_steps(rop: hou.Node):
             "wedgenum": "",
             "wedge_node": "",
             "start": range_ints[0],
-            "stop": range_ints[1],
+            "end": range_ints[1],
             "step": range_ints[2],
+            "render_strategy": _get_render_strategy_for_node(node),
         }
         rop_steps.append(step_dict)
     # expand full dependency names once the list is complete
@@ -186,6 +215,31 @@ def _get_rop_steps(rop: hou.Node):
             names = [id_steps[n]["name"] for n in rop["dependency_ids"]]
             rop["dependency_names"] = names
     return rop_steps
+
+
+# .
+def _get_render_strategy_for_node(node: hou.Node) -> RenderStrategy:
+    """Any changes to this function should be reflected in the user guide: /docs/user-guide.md"""
+    render_strategy = RenderStrategy.PARALLEL
+
+    if (
+        node.type().nameWithCategory() == "Driver/geometry"
+        and node.parm("initsim")
+        and node.parm("initsim").eval()
+    ):
+        render_strategy = RenderStrategy.SEQUENTIAL
+
+    if node.parm("deadline_cloud_render_strategy"):
+        strategy_string = node.parm("deadline_cloud_render_strategy").evalAsString()
+        if strategy_string.upper() == RenderStrategy.SEQUENTIAL.value:
+            render_strategy = RenderStrategy.SEQUENTIAL
+        elif strategy_string.upper() == RenderStrategy.PARALLEL.value:
+            render_strategy = RenderStrategy.PARALLEL
+        else:
+            raise ValueError(
+                f'The node "{node.path()}" has an unexpected value "{strategy_string}" for its "deadline_cloud_render_strategy" parameter. Ensure the value is {RenderStrategy.PARALLEL.value} or {RenderStrategy.SEQUENTIAL.value}'
+            )
+    return render_strategy
 
 
 def _get_parameter_values(node: hou.Node) -> dict[str, Any]:
@@ -247,10 +301,9 @@ def _unlock_node(rop_path: str) -> bool:
 
 
 def _get_job_template(rop: hou.Node) -> dict[str, Any]:
-    job_name = rop.parm("name").evalAsString()
-    job_description = rop.parm("description").evalAsString()
     separate_steps = rop.parm("separate_steps").eval()
-    rop_steps = _get_steps(rop)
+    rop_steps = _get_steps(rop, separate_steps)
+    ignore_input_nodes = bool(separate_steps)
     queue_parameter_definitions_json = rop.userData("queue_parameter_definitions")
     parameter_definitions: list[dict[str, Any]] = (
         json.loads(queue_parameter_definitions_json)
@@ -267,87 +320,19 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
         }
     )
     steps: list[dict[str, Any]] = []
-    ignore_input_nodes = "true"
-    if not separate_steps:
-        # render the node connected to the deadline cloud node
-        # and all its input nodes. The opposite of splitting it
-        # up each node by step
-        connected_node = rop_steps[-1]
-        # remove deps, as only 1 step
-        connected_node.pop("dependency_names", None)
-        # remove dependency info from name
-        connected_node["name"] = connected_node["rop"]
-        rop_steps = [connected_node]
-        ignore_input_nodes = "false"
     for node in rop_steps:
-        # init data
-        init_data_contents = []
-        init_data_contents.append("scene_file: '{{Param.HipFile}}'\n")
-        init_data_contents.append(f"render_node: '{node['rop']}'\n")
-        init_data_contents.append(f"version: {_get_houdini_version()}\n")
-        init_data_contents.append(f"ignore_input_nodes: {ignore_input_nodes}\n")
-        init_data_contents.append(f"wedgenum: '{node['wedgenum']}'\n")
-        init_data_contents.append(f"wedge_node: '{node['wedge_node']}'\n")
-        init_data_attachment = {
-            "name": "initData",
-            "filename": "init-data.yaml",
-            "type": "TEXT",
-            "data": "".join(init_data_contents),
-        }
-        # environments
-        environments = get_houdini_environments(init_data_attachment)
-        # task run data
-        task_data_contents = []
-        task_data_contents.append(f"render_node: {node['rop']}\n")
-        task_data_contents.append("frame: {{Task.Param.Frame}}\n")
-        task_data_contents.append(f"ignore_input_nodes: {ignore_input_nodes}\n")
-        # step
-        frame_range = "{start}-{stop}:{step}".format(**node)
-        step = {
-            "name": node["name"],
-            "parameterSpace": {
-                "taskParameterDefinitions": [{"name": "Frame", "range": frame_range, "type": "INT"}]
-            },
-            "stepEnvironments": environments,
-            "script": {
-                "embeddedFiles": [
-                    {
-                        "name": "runData",
-                        "filename": "run-data.yaml",
-                        "type": "TEXT",
-                        "data": "".join(task_data_contents),
-                    },
-                ],
-                "actions": {
-                    "onRun": {
-                        "command": "houdini-openjd",
-                        "args": [
-                            "daemon",
-                            "run",
-                            "--connection-file",
-                            "{{ Session.WorkingDirectory }}/connection.json",
-                            "--run-data",
-                            "file://{{ Task.File.runData }}",
-                        ],
-                        "cancelation": {
-                            "mode": "NOTIFY_THEN_TERMINATE",
-                        },
-                    },
-                },
-            },
-        }
-        if "dependency_names" in node:
-            deps = [{"dependsOn": d} for d in node["dependency_names"]]
-            step["dependencies"] = deps
-        steps.append(step)
+        steps.append(_get_step_template(node, ignore_input_nodes))
     job_template = {
         "specificationVersion": "jobtemplate-2023-09",
-        "name": job_name,
+        "name": rop.parm("name").evalAsString(),
         "parameterDefinitions": parameter_definitions,
         "steps": steps,
     }
-    if job_description:
-        job_template["description"] = job_description
+
+    description = rop.parm("description").evalAsString()
+    if description:
+        job_template["description"] = description
+
     include_adaptor_wheels = rop.parm("include_adaptor_wheels").eval()
     if include_adaptor_wheels:
         adaptor_wheels = rop.parm("adaptor_wheels").evalAsString()
@@ -363,7 +348,95 @@ def _get_job_template(rop: hou.Node) -> dict[str, Any]:
                 if "jobEnvironments" not in job_template:
                     job_template["jobEnvironments"] = []
                 job_template["jobEnvironments"].append(override_environment["environment"])
+
     return job_template
+
+
+def _get_step_template(node: Dict, ignore_input_nodes: bool):
+    init_data = {
+        "scene_file": "{{Param.HipFile}}",
+        "render_node": node["rop"],
+        "version": _get_houdini_version(),
+        "ignore_input_nodes": ignore_input_nodes,
+        "wedgenum": node["wedgenum"],
+        "wedge_node": node["wedge_node"],
+    }
+    init_data_attachment = {
+        "name": "initData",
+        "filename": "init-data.yaml",
+        "type": "TEXT",
+        # Convert to dict to YAML string using the prettier nested object format
+        "data": yaml.safe_dump(init_data, default_flow_style=False),
+    }
+
+    environments = get_houdini_environments(init_data_attachment)
+
+    task_data_dict = {"render_node": node["rop"], "ignore_input_nodes": ignore_input_nodes}
+
+    if node["render_strategy"] == RenderStrategy.SEQUENTIAL:
+        # Generate a single task that renders the whole frame range
+        parameter_space = None
+        task_data_dict["frame_range"] = {
+            "start": node["start"],
+            "end": node["end"],
+            "step": node["step"],
+        }
+    else:
+        # Generate one task per frame using step parameters
+        range_expression = "{start}-{end}:{step}".format(**node)
+        parameter_space = {
+            "taskParameterDefinitions": [
+                {"name": "Frame", "range": range_expression, "type": "INT"}
+            ]
+        }
+        task_data_dict["frame_range"] = {
+            "start": "{{Task.Param.Frame}}",
+            "end": "{{Task.Param.Frame}}",
+            "step": 1,
+        }
+
+    task_data = yaml.safe_dump(task_data_dict, default_flow_style=False)
+    # Remove single quotes around the frame parameter so it gets interpreted as a int and not a string
+    task_data = task_data.replace("'{{Task.Param.Frame}}'", "{{Task.Param.Frame}}")
+
+    step = {
+        "name": node["name"],
+        "stepEnvironments": environments,
+        "script": {
+            "embeddedFiles": [
+                {
+                    "name": "runData",
+                    "filename": "run-data.yaml",
+                    "type": "TEXT",
+                    "data": task_data,
+                },
+            ],
+            "actions": {
+                "onRun": {
+                    "command": "houdini-openjd",
+                    "args": [
+                        "daemon",
+                        "run",
+                        "--connection-file",
+                        "{{ Session.WorkingDirectory }}/connection.json",
+                        "--run-data",
+                        "file://{{ Task.File.runData }}",
+                    ],
+                    "cancelation": {
+                        "mode": "NOTIFY_THEN_TERMINATE",
+                    },
+                },
+            },
+        },
+    }
+
+    if parameter_space:
+        step["parameterSpace"] = parameter_space
+
+    if "dependency_names" in node:
+        deps = [{"dependsOn": d} for d in node["dependency_names"]]
+        step["dependencies"] = deps
+    return step
 
 
 def _create_job_bundle(
@@ -579,6 +652,14 @@ def submit_callback(kwargs):
             session=queue_role_session,
         )
 
+        api.get_deadline_cloud_library_telemetry_client().record_event(
+            event_type="com.amazon.rum.deadline.submission",
+            event_details={
+                "submitter_name": "Houdini",
+            },
+            from_gui=True,
+        )
+
         job_progress_dialog = SubmitJobProgressDialog(parent=hou.qt.mainWindow())
         job_progress_dialog.start_submission(
             farm_id,
@@ -591,6 +672,11 @@ def submit_callback(kwargs):
             auto_accept=str2bool(get_setting("settings.auto_accept")),
         )
     except Exception as exc:
+        api.get_deadline_cloud_library_telemetry_client().record_error(
+            event_details={"exception_scope": "submit_callback"},
+            exception_type=str(type(exc)),
+            from_gui=True,
+        )
         print(str(exc))
         hou.ui.displayMessage(
             str(exc), title="Houdini Job Submission", severity=hou.severityType.Warning
