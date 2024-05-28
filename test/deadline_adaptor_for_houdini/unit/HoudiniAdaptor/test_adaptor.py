@@ -42,7 +42,7 @@ def run_data() -> dict:
     Returns:
         dict: A run_data dictionary
     """
-    return {"frame": 1}
+    return {"frame_range": {"start": 1, "end": 5, "step": 2}}
 
 
 @pytest.fixture(autouse=True)
