@@ -755,6 +755,47 @@
             }
         }
 
+        multiparm {
+            name    "auto_input_filenames"
+            label   "Auto Detected Input Filenames"
+            invisible
+
+            parm {
+                name    "auto_input_filename#"
+                label   "Auto Detected Input Filename"
+                type    file
+                default { "" }
+                invisible
+            }
+        }
+
+        multiparm {
+            name    "auto_input_directories"
+            label   "Auto Detected Input Directories"
+            invisible
+
+            parm {
+                name    "auto_input_directory#"
+                label   "Auto Detected Input Directory"
+                type    directory
+                default { "" }
+                invisible
+            }
+        }
+
+        multiparm {
+            name    "auto_output_directories"
+            label   "Auto Detected Output Directories"
+            invisible
+
+            parm {
+                name    "auto_output_directory#"
+                label   "Auto Detected Output Directory"
+                type    directory
+                default { "" }
+                invisible
+            }
+        }
     }
 
     parm {
