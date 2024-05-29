@@ -1,3 +1,15 @@
+## 0.7.0 (2024-05-29)
+
+### BREAKING CHANGES
+* run simulations sequentially (#149) ([`084553c`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/084553c5ab74921e6a33715540066ebeca4ac8f4))
+
+### Features
+* add help text for various fields (#156) ([`a9154b9`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/a9154b9d19a358b9bed47f52e757a74c91eadd00))
+
+### Bug Fixes
+* parse files no longer removes manually added attachments (#153) ([`a0c0988`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/a0c0988b2e9321edf92e4559aa9df7ed08682e6e))
+* add missing submission telemetry event (#158) ([`f1ec97d`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/f1ec97d16312fbb950308ae3b5d0a88b4e98b36e))
+
 ## 0.6.3 (2024-05-22)
 
 
