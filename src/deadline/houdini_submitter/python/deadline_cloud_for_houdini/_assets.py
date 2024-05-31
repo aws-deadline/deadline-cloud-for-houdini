@@ -1,5 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+import glob
 import os
+import re
 
 from deadline.client.job_bundle.submission import AssetReferences
 
@@ -22,6 +24,50 @@ def _get_hip_file() -> str:
     return hou.hipFile.path()
 
 
+def _houdini_time_vars_to_glob(path: str) -> str:
+    """
+    Given a path, replace any houdini time-based variables or expressions with globs
+    to capture complete file sequences for job attachments. If there is no time-based
+    parameterization, then the original string is returned.
+
+    These are the useful timebased variables that can be included in files.
+    ref: https://www.sidefx.com/docs/houdini/render/expressions.html
+    """
+    time_based_variable_patterns: tuple = (
+        "(`.*`)",  # an expression, like python!
+        "(\$FF)",  # current fractional frame number
+        "(\${FF})",
+        "(\$F\d*)",  # current frame number, only variable with digits that follow
+        "(\${F\d*})",
+        "(\$T)",  # current time
+        "(\${T})",
+        "(\$SF)",  # current simulation timestep number
+        "(\${SF})",
+        "(\$ST)",  # current simulation time
+        "(\${ST})",
+    )
+    time_var_pattern = "|".join(time_based_variable_patterns)
+
+    return re.sub(time_var_pattern, "*", path)
+
+
+def _get_evaluated_glob_path(parm, globbed_path: str) -> str:
+    """Given a parm that contains a path, temporarily set it to a globbed path
+    and perform an evaluation to remove all other variables, return the value
+    and ensure that we put the original value back.
+
+    Rationale: Houdini does not appear to provide a way to evaluate an arbitary
+    string, only as a Parm. Thus, we can use this function to put a value into
+    a parm to then evaluate.
+    """
+    orig_path = parm.unexpandedString()
+    try:
+        parm.set(globbed_path)
+        return parm.eval()
+    finally:
+        parm.set(orig_path)
+
+
 def _get_asset_references(rop_node: hou.Node) -> AssetReferences:
     """
     Get the current paths stored in the parms backing the UI and return them as
@@ -29,9 +75,24 @@ def _get_asset_references(rop_node: hou.Node) -> AssetReferences:
     """
     asset_references = AssetReferences()
 
-    asset_references.input_filenames.update(
-        [n.eval() for n in rop_node.parm("input_filenames").multiParmInstances()]
-    )
+    for n in rop_node.parm("input_filenames").multiParmInstances():
+        filepath = n.unexpandedString()
+        filepath_glob = _houdini_time_vars_to_glob(filepath)
+        if filepath == filepath_glob:
+            asset_references.input_filenames.add(n.eval())
+            continue
+
+        evaluated_glob = _get_evaluated_glob_path(parm=n, globbed_path=filepath_glob)
+        # This is a work-around to avoid evaluating the offsets for
+        # scene introspection. It's possible that this will capture
+        # extra files since a glob will not enforce numbers, but
+        # handles well-defined file path patterns
+        for file in glob.iglob(evaluated_glob):
+            asset_references.input_filenames.add(file)
+
+    # Before we start properly evaluating directory paths, we should filter globbed
+    # results by the pattern the variables expects to avoid an explosion of
+    # of included input files
     asset_references.input_directories.update(
         [n.eval() for n in rop_node.parm("input_directories").multiParmInstances()]
     )
@@ -49,13 +110,16 @@ def _get_saved_auto_detected_asset_references(rop_node: hou.Node) -> AssetRefere
     """
     saved_auto_refs = AssetReferences()
     saved_auto_refs.input_filenames.update(
-        [n.eval() for n in rop_node.parm("auto_input_filenames").multiParmInstances()]
+        [n.unexpandedString() for n in rop_node.parm("auto_input_filenames").multiParmInstances()]
     )
     saved_auto_refs.input_directories.update(
-        [n.eval() for n in rop_node.parm("auto_input_directories").multiParmInstances()]
+        [n.unexpandedString() for n in rop_node.parm("auto_input_directories").multiParmInstances()]
     )
     saved_auto_refs.output_directories.update(
-        [n.eval() for n in rop_node.parm("auto_output_directories").multiParmInstances()]
+        [
+            n.unexpandedString()
+            for n in rop_node.parm("auto_output_directories").multiParmInstances()
+        ]
     )
 
     return saved_auto_refs
@@ -128,10 +192,14 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
             continue
 
         path = parm.evalAsString()
+        # Check the evaluated version to ensure _something_ exists, but add
+        # the unexpanded version to evaluate afterwards. Allows us to limit
+        # files with parameters, such as $F, to one entry instead of possibly
+        # hundreds/thousands
         if os.path.isdir(path):
-            asset_references.input_directories.add(path)
+            asset_references.input_directories.add(parm.unexpandedString())
         if os.path.isfile(path):
-            asset_references.input_filenames.add(path)
+            asset_references.input_filenames.add(parm.unexpandedString())
 
     all_inputs = rop_node.inputAncestors()
     for node in all_inputs:
