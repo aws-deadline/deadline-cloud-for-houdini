@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import chain
 import os
 from typing import Generator
 from unittest.mock import Mock, PropertyMock, call, patch
@@ -584,15 +585,17 @@ class TestHoudiniAdaptor_on_cleanup:
         init_data: dict,
     ) -> None:
         # GIVEN
-        ERROR_CALLBACK_INDEX = 2
+        ERROR_CALLBACK_INDEX = 3
         init_data["strict_error_checking"] = True
         adaptor = HoudiniAdaptor(init_data)
         regex_callbacks = adaptor._get_regex_callbacks()
-        error_regex = regex_callbacks[ERROR_CALLBACK_INDEX].regex_list[0]
-        print(error_regex.search(stdout))
-        if match := error_regex.search(stdout):
-            # WHEN
-            adaptor._handle_error(match)
+        for error_regex in regex_callbacks[ERROR_CALLBACK_INDEX].regex_list:
+            if match := error_regex.search(stdout):
+                # WHEN
+                adaptor._handle_error(match)
+                break
+        else:
+            assert False
 
         # THEN
         assert match
@@ -615,7 +618,7 @@ class TestHoudiniAdaptor_on_cleanup:
         init_data: dict,
     ) -> None:
         # GIVEN
-        ERROR_CALLBACK_INDEX = 2
+        ERROR_CALLBACK_INDEX = 3
         init_data["strict_error_checking"] = True
         adaptor = HoudiniAdaptor(init_data)
         regex_callbacks = adaptor._get_regex_callbacks()
@@ -627,6 +630,25 @@ class TestHoudiniAdaptor_on_cleanup:
 
         # THEN
         assert not match
+
+    def test_handle_hython_license_error(self, init_data: dict):
+        """Tests that the _handle_license_error method reports an error properly"""
+        # GIVEN
+        stdout = "No licenses could be found to run this application."
+        adaptor = HoudiniAdaptor(init_data)
+        regex_callbacks = adaptor._get_regex_callbacks()
+        for error_regex in chain(*[callback.regex_list for callback in regex_callbacks]):
+            if match := error_regex.search(stdout):
+                # WHEN
+                adaptor._handle_license_error(match)
+                break
+        else:
+            assert False
+
+        # THEN
+        assert match
+        assert isinstance(adaptor._exc_info, RuntimeError)
+        assert str(adaptor._exc_info) == f"Houdini encountered a license error: {stdout}"
 
     def test_handle_version(self, init_data: dict):
         """Tests that the _handle_houdini_version method reports the version correctly"""
