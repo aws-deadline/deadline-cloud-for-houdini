@@ -1,3 +1,10 @@
+## 0.7.1 (2024-06-19)
+
+
+### Features
+* capture files with time-based variables for job attachments (#162) ([`55d1a6b`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/55d1a6b9b991f4f648e1eaf135b3f15ea55e514f))
+
+
 ## 0.7.0 (2024-05-29)
 
 ### BREAKING CHANGES
