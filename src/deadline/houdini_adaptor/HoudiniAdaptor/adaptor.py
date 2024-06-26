@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import shutil
 import sys
 import threading
 import time
@@ -200,26 +199,29 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         if not self._regex_callbacks:
             callback_list = []
 
-            _houdini_license_error = "RuntimeError: Error encountered when initializing Houdini"
-
             completed_regexes = [re.compile(".*Finished Rendering.*")]
             progress_regexes = [re.compile(".*ALF_PROGRESS ([0-9]+)%.*")]
-            error_regexes = [re.compile(".*Error: .*|.*\\[Error\\].*", re.IGNORECASE)]
+            license_regexes = [
+                # generic runtime error
+                re.compile(
+                    "RuntimeError: Error encountered when initializing Houdini", re.IGNORECASE
+                ),
+                # hython did not receive a license
+                re.compile("No licenses could be found to run this application.", re.IGNORECASE),
+            ]
+            error_regexes = [
+                re.compile(".*Error: .*|.*\\[Error\\].*", re.IGNORECASE),
+            ]
             version_regexes = [
                 re.compile("HoudiniClient: Houdini Version ([0-9]+.[0-9]+)(.[0-9]+)?")
             ]
 
             callback_list.append(RegexCallback(completed_regexes, self._handle_complete))
             callback_list.append(RegexCallback(progress_regexes, self._handle_progress))
+            callback_list.append(RegexCallback(license_regexes, self._handle_license_error))
             if self.init_data.get("strict_error_checking", False):
                 callback_list.append(RegexCallback(error_regexes, self._handle_error))
 
-            callback_list.append(
-                RegexCallback(
-                    [re.compile(_houdini_license_error)],
-                    self._handle_license_error,
-                )
-            )
             callback_list.append(RegexCallback(version_regexes, self._handle_houdini_version))
 
             self._regex_callbacks = callback_list
@@ -255,6 +257,15 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         progress = int(percent)
         self.update_status(progress=progress)
 
+    def _handle_license_error(self, match: re.Match) -> None:
+        """
+        Callback for stdout that indicates a license error.
+        Args:
+            match (re.Match): The match object from the regex pattern that was matched in the
+                              message
+        """
+        self._exc_info = RuntimeError(f"Houdini encountered a license error: {match.group(0)}")
+
     def _handle_error(self, match: re.Match) -> None:
         """
         Callback for stdout that indicates an error or warning.
@@ -266,23 +277,6 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             RuntimeError: Always raises a runtime error to halt the adaptor.
         """
         self._exc_info = RuntimeError(f"Houdini Encountered an Error: {match.group(0)}")
-
-    def _handle_license_error(self, match: re.Match) -> None:
-        """
-        Callback for stdout that indicates an license error.
-        Args:
-            match (re.Match): The match object from the regex pattern that was matched the message
-
-        Raises:
-            RuntimeError: Always raises a runtime error to halt the adaptor.
-        """
-        shutil_usage = shutil.disk_usage(os.getcwd())
-        self._exc_info = RuntimeError(
-            f"{match.group(0)}\n"
-            "This error is typically associated with a licensing error"
-            " when using Houdini. Check your licensing configuration.\n"
-            f"Free disc space: {shutil_usage.free//1024//1024}M\n"
-        )
 
     def _handle_houdini_version(self, match: re.Match) -> None:
         """
