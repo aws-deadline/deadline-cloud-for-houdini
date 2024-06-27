@@ -1,3 +1,10 @@
+## 0.7.2 (2024-06-27)
+
+
+
+### Bug Fixes
+* fail when mantra license error is seen (#164) ([`6012e2b`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/6012e2b2859abf9f08db702022e571e7d9a35d36))
+
 ## 0.7.1 (2024-06-19)
 
 
