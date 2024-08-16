@@ -5,6 +5,6 @@ pipgrip == 0.*
 pytest == 8.*
 pytest-cov == 5.*
 pytest-xdist == 3.*
-ruff == 0.5.*
+ruff == 0.6.*
 twine == 5.*
 types-pyyaml == 6.*
