@@ -26,9 +26,7 @@ class HoudiniVersion:
 
     VERSION_REGEX = re.compile(r"^([0-9]+)\.([0-9]+)(?:\.([0-9]+))?")
 
-    PYTHON_VERSIONS = {
-        "19.5": "3.9",
-    }
+    PYTHON_VERSIONS = {"19.5": "3.9", "20.0": "3.10", "20.5": "3.11"}
 
     def __init__(self, arg_version: Optional[str] = None):
         version = self._get_houdini_version(arg_version)
