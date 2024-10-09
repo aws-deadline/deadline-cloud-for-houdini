@@ -44,6 +44,10 @@ After installation it can then be used as a command line tool:
 ```sh
 $ houdini-openjd --help
 ```
+
+## Frequently Asked Questions
+See our [FAQ](https://github.com/aws-deadline/deadline-cloud-for-houdini/blob/release/docs/FAQ.md) for a list of frequently asked questions.
+
 ## Versioning
 
 This package's version follows [Semantic Versioning 2.0](https://semver.org/), but is still considered to be in its 
