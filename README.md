@@ -16,7 +16,7 @@ AWS Deadline Cloud for Houdini is a python package that allows users to create [
 
 This library requires:
 
-1. Houdini 19.5
+1. Houdini 19.5, 20.0 or 20.5
 1. Python 3.9 or higher; and
 1. Linux, MacOS, or Windows operating system.
 
