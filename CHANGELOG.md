@@ -1,3 +1,10 @@
+## 0.7.3 (2024-10-11)
+
+
+### Features
+* add 20.0 and 20.5 dev installation (#173) ([`81a9d73`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/81a9d7385f7f80a04919db2ec359a8490377f8d2))
+
+
 ## 0.7.2 (2024-06-27)
 
 
