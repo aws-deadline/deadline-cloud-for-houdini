@@ -1,48 +1,37 @@
 # Development documentation
 
+This documentation provides guidance on developer workflows for working with the code in this repository.
+
+Table of Contents:
+
+* [The Development Loop](#the-development-loop)
+* [Submitter Development Workflow](#submitter-development-workflow)
+* [Application Interface Adaptor Development Workflow](#application-interface-adaptor-development-workflow)
+
 This package has two active branches:
 
 - `mainline` -- For active development. This branch is not intended to be consumed by other packages. Any commit to this branch may break APIs, dependencies, and so on, and thus break any consumer without notice.
 - `release` -- The official release of the package intended for consumers. Any breaking releases will be accompanied with an increase to this package's interface version.
 
-## Build / Test / Release
 
-### Build the package
+## The Development Loop
 
-```bash
-hatch build
-```
+We have configured [hatch](https://github.com/pypa/hatch) commands to support a standard development loop. You can run the following
+from any directory of this repository:
 
-### Run tests
+* `hatch build` - To build the installable Python wheel and sdist packages into the `dist/` directory.
+* `hatch run test` - To run the PyTest unit tests found in the `test/unit` directory. See [Testing](#testing).
+* `hatch run all:test` - To run the PyTest unit tests against all available supported versions of Python.
+* `hatch run lint` - To check that the package's formatting adheres to our standards.
+* `hatch run fmt` - To automatically reformat all code to adhere to our formatting standards.
+* `hatch shell` - Enter a shell environment that will have Python set up to import your development version of this package.
+* `hatch env prune` - Delete all of your isolated workspace [environments](https://hatch.pypa.io/1.12/environment/)
+   for this package.
+* `hatch run install` - A development version of the Deadline Cloud node is then available in `/out` by pressing TAB, typing `deadline`, and adding it to the network.
 
-```bash
-hatch run test
-```
-
-### Run linting
-
-```bash
-hatch run lint
-```
-
-### Run formatting
-
-```bash
-hatch run fmt
-```
-
-## Run tests for all supported Python versions
-
-```bash
-hatch run all:test
-```
-
-## Use development Submitter in Houdini
-
-```bash
-hatch run install
-```
-A development version of the Deadline Cloud node is then available in `/out` by pressing TAB, typing `deadline`, and adding it to the network.
+Note: Hatch uses [environments](https://hatch.pypa.io/1.12/environment/) to isolate the Python development workspace
+for this package from your system or virtual environment Python. If your build/test run is not making sense, then
+sometimes pruning (`hatch env prune`) all of these environments for the package can fix the issue.
 
 ## Submitter Development Workflow
 
