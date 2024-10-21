@@ -18,18 +18,6 @@ See [DEVELOPMENT.md](https://github.com/aws-deadline/deadline-cloud-for-houdini/
 - Have you run the unit tests?
 *delete text ending here*
 
-### Did you run the "Job Bundle Output Tests"? If not, why not? If so, paste the test results here.
-
-*delete text starting here*
-[Placeholder] See the "Integration Tests" subsection of the
-[Running Submitter Tests](https://github.com/aws-deadline/deadline-cloud-for-houdini/blob/mainline/DEVELOPMENT.md#running-submitter-tests)
-section of DEVELOPMENT.md for information on these tests.
-
-```
-Required: paste the contents of job_bundle_output_tests/test-job-bundle-results.txt here
-```
-*delete text ending here*
-
 ### Was this change documented?
 
 *delete text starting here*
