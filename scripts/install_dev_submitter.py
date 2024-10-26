@@ -159,6 +159,7 @@ def install_submitter_package(houdini_version_arg: Optional[str], local_deps: li
     packages_path.mkdir(parents=True, exist_ok=True)
     submitter_package_path = packages_path / "deadline_submitter_for_houdini.json"
 
+    print(f"Installing Houdini plugin to: {submitter_package_path}")
     with open(submitter_package_path, "w", encoding="utf-8") as f:
         json.dump(submitter_package, f, indent=4)
 

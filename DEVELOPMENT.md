@@ -61,6 +61,18 @@ This workflow creates a "houdini package", a JSON file which tells Houdini where
 
 5. (Optional) To edit the deadline_cloud hda, go to Assets > Asset Manager. Under Operator Type Libraries > Current HIP File, you will find "Driver/deadline_cloud". Right click, select Type Properties. From the Parameter tab you can modify the parameter interface, as you hit Apply you will see that the "DialogScript" file in the hda source files has been updated.
 
+## How to use the Houdini Submitter
+
+1. After installing the houdini submitter, the Deadline Cloud panel is available as an output node. Goto the `Network View` panel, select the `out` Output network. Right click, and type in `Deadline` to reveal the `Deadline` node. Drag the deadline node into the output network and connect it to the renderer. Connect the render node's output to the `Deadline Cloud` node for association.
+
+Select the `Deadline Cloud` node to reveal the Deadline Job Submission panel. Users can either "Save Bundle" for later submission to `Deadline Cloud`, or `Submit` to immediately submit the render to the farm. 
+
+Also, please review the `Job Attachments` panel if all required scene assets are populated. To update the set of assets, click `Parse Files` to refresh.
+
+For more information about Houdini Plugins, please refer to Houdini's [Reference](https://www.sidefx.com/docs/houdini/ref/plugins.html) and on Render Nodes (ROPs) [Reference](https://www.sidefx.com/docs/houdini/nodes/out/index.html).
+
+For more information about `Network View` in Houdini, please refer to Houdini's [Documentation](https://www.sidefx.com/docs/houdini/network/navigate.html) and [QuickStart](https://www.sidefx.com/tutorials/network-view/).
+
 ## Application Interface Adaptor Development Workflow
 
 You can work on the adaptor alongside your submitter development workflow using a Deadline Cloud farm that uses a service-managed fleet. You'll need to perform the following steps to substitute your build of the adaptor for the one in the service.
