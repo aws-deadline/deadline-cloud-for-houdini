@@ -265,17 +265,43 @@ def _husk_outputs(node: hou.Node) -> set[str]:
     of the USD stage input
     """
     output_directories: set[str] = set()
+
     for n in node.inputs():
         try:
             products = n.stage().GetPrimAtPath("/Render/Products")
+            # GetPrimAtPath returns an invalid null Prim object
+            # if a Prim doesn't exist at the specified path
+            if not products.IsValid():
+                continue
         except Exception:
             # no products found in standard namespace
-            return output_directories
+            continue
+
         for child in products.GetChildren():
             if child.GetTypeName() == "RenderProduct":
                 product_name_attr = child.GetAttribute("productName")
                 path = product_name_attr.Get(0)
                 output_directories.add(os.path.dirname(path))
+    return output_directories
+
+
+def _usd_render_outputs(node: hou.Node) -> set[str]:
+    """Obtain list of outputs by checking in priority order for:
+    1) The override output image value
+    2) The input nodes to the node set by the LOP Path
+    3) The input nodes to the current USD Render ROP
+    """
+    output_directories: set[str] = set()
+
+    if override_path := node.parm("outputimage").eval():
+        output_directories.add(os.path.dirname(override_path))
+    elif (lop_path_node := hou.node(node.parm("loppath").evalAsNodePath())) and not node.parm(
+        "loppath"
+    ).isDisabled():
+        output_directories.update(_husk_outputs(lop_path_node))
+    else:
+        output_directories.update(_husk_outputs(node))
+
     return output_directories
 
 
@@ -291,7 +317,6 @@ _NODE_DIR_MAP = {
     "Sop/filecache::2.0": "file",  # File Cache v2
     "Driver/filmboxfbx": "sopoutput",  # Filmbox FBX
     "Driver/geometry": "sopoutput",  # Geometry
-    "Lop/usdrender_rop": _husk_outputs,  # Husk
     "Driver/karma": "picture",  # Karma
     "Driver/ifd": "vm_picture",  # Mantra
     "Driver/opengl": "picture",  # OpenGL
@@ -299,6 +324,8 @@ _NODE_DIR_MAP = {
     "Driver/Redshift_ROP": "RS_outputFileNamePrefix",  # Redshift
     "Sop/rop_alembic": "filename",  # ROP Alembic Output
     "Dop/rop_dop": "dopoutput",  # ROP Output Driver
+    "Driver/usdrender": _usd_render_outputs,  # USD Render ROP
+    "Lop/usdrender_rop": _usd_render_outputs,  # USD Render LOP ROP
     "Driver/vray_renderer": "SettingsOutput_img_file_path",  # Vray
     "Sop/rop_vrayproxy": "filepath",  # Vray
     "Driver/rop_vrayproxy": "filepath",  # Vray
