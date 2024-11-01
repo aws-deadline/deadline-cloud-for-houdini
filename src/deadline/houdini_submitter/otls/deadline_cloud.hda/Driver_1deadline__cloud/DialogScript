@@ -560,6 +560,20 @@
         label   "Render with Take"
         export  none
     }
+    parm {
+        name    "soho_program"
+        label   "SOHO program"
+        type    string
+        invisible
+        default { "deadline_cloud_soho.py" }
+    }
+    parm {
+        name    "soho_outputmode"
+        label   "SOHO output mode"
+        type    integer
+        invisible
+        default { "2" }
+    }
     group {
         name    "job_settings"
         label   "Shared Job Settings"
