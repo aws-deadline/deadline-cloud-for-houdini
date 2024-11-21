@@ -1,3 +1,13 @@
+## 0.7.4 (2024-11-21)
+
+
+### Features
+* installer component support for Houdini 20.0 and 20.5 (#192) ([`244bc71`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/244bc7130999f38e5d408b0e845939411b09d2a4))
+
+### Bug Fixes
+* detect ROP USD Render output directories (#190) ([`fbeb81d`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/fbeb81df89944f6164d58835fb72cee37a3019b4))
+* add deadline cloud soho script (#189) ([`f88974f`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/f88974ff8b79fced74c145f53821b1542f75092e))
+
 ## 0.7.3 (2024-10-11)
 
 
