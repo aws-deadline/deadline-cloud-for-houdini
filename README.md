@@ -28,13 +28,13 @@ This library requires:
 
 ## Versioning
 
-This package's version follows [Semantic Versioning 2.0](https://semver.org/), but is still considered to be in its 
+This package's version follows [Semantic Versioning 2.0](https://semver.org/), but is still considered to be in its
 initial development, thus backwards incompatible versions are denoted by minor version bumps. To help illustrate how
 versions will increment during this initial development stage, they are described below:
 
-1. The MAJOR version is currently 0, indicating initial development. 
-2. The MINOR version is currently incremented when backwards incompatible changes are introduced to the public API. 
-3. The PATCH version is currently incremented when bug fixes or backwards compatible changes are introduced to the public API. 
+1. The MAJOR version is currently 0, indicating initial development.
+2. The MINOR version is currently incremented when backwards incompatible changes are introduced to the public API.
+3. The PATCH version is currently incremented when bug fixes or backwards compatible changes are introduced to the public API.
 
 ## Getting Started
 
@@ -66,10 +66,12 @@ The Houdini Adaptor implements the [OpenJD][openjd-adaptor-runtime] interface th
 
 To install, test and use a custom Houdini Adaptor, refer to [DEVELOPMENT.md](DEVELOPMENT.md) section `Application Interface Adaptor Development Workflow`
 
-Jobs on Deadline Cloud created by the submitter use a released version of this adaptor by default. 
+Jobs on Deadline Cloud created by the submitter use a released version of this adaptor by default, and require that both the installed adaptor and the Hython executable be available on the PATH of the user that will be running your jobs.
+
+Or you can set the `HYTHON_EXECUTABLE` to point to the Hython executable.
 
 If you are using the [default Queue Environment](default-queue-environment), or an equivalent, to run your jobs, then the released build of this adaptor will be
-automatically made available to your job. Otherwise, you will need to install the adaptor. 
+automatically made available to your job. Otherwise, you will need to install the adaptor.
 
 The release build of the Houdini adaptor can be installed by the standard python packaging mechanisms:
 ```sh
@@ -90,7 +92,7 @@ You will need to ensure that the version of Houdini that you want to run is avai
 AWS Deadline Cloud's [Service Managed Fleets](service-managed-fleets) to run jobs;
 hosts do not have any rendering applications pre-installed. The standard way of accomplishing this is described
 [in the service documentation](https://docs.aws.amazon.com/deadline-cloud/latest/developerguide/provide-applications.html).
-You can find a list of the versions of Houdini that are available by default 
+You can find a list of the versions of Houdini that are available by default
 [in the user guide](https://docs.aws.amazon.com/deadline-cloud/latest/userguide/create-queue-environment.html#conda-queue-environment)
 if you are using the default Conda queue enivonment in your setup.
 
@@ -106,11 +108,11 @@ submitter plug-in then you can use the [Deadline Cloud application](deadline-clo
 
 ## Security
 
-We take all security reports seriously. When we receive such reports, we will 
-investigate and subsequently address any potential vulnerabilities as quickly 
-as possible. If you discover a potential security issue in this project, please 
+We take all security reports seriously. When we receive such reports, we will
+investigate and subsequently address any potential vulnerabilities as quickly
+as possible. If you discover a potential security issue in this project, please
 notify AWS/Amazon Security via our [vulnerability reporting page](http://aws.amazon.com/security/vulnerability-reporting/)
-or directly via email to [AWS Security](aws-security@amazon.com). Please do not 
+or directly via email to [AWS Security](aws-security@amazon.com). Please do not
 create a public GitHub issue in this project.
 
 ## Telemetry
