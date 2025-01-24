@@ -1,3 +1,12 @@
+## 0.7.5 (2025-01-13)
+
+
+### Features
+* **adaptor**: Add HYTHON_EXECUTABLE environment variable  (#202) ([`aed5d1c`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/aed5d1c69f16f2c061831f9f9323090eff676b58))
+
+### Bug Fixes
+* **installer**: fix installer system installs (#203) ([`bd591cd`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/bd591cd32af8b86c7222c9c4fe98af360d182a93))
+
 ## 0.7.4 (2024-11-21)
 
 

@@ -317,7 +317,7 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         Raises:
             FileNotFoundError: If the houdini_client.py file or the scene file could not be found.
         """
-        hython_exe = "hython"
+        hython_exe = os.environ.get("HYTHON_EXECUTABLE", "hython")
         regexhandler = RegexHandler(self._get_regex_callbacks())
 
         # Add the openjd namespace directory to PYTHONPATH, so that adaptor_runtime_client
