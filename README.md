@@ -17,24 +17,15 @@ ability to run Houdini efficiently on your render farm.
 [openjd-adaptor-runtime-lifecycle]: https://github.com/OpenJobDescription/openjd-adaptor-runtime-for-python/blob/release/README.md#adaptor-lifecycle
 [service-managed-fleets]: https://docs.aws.amazon.com/deadline-cloud/latest/userguide/smf-manage.html
 [default-queue-environment]: https://docs.aws.amazon.com/deadline-cloud/latest/userguide/create-queue-environment.html#conda-queue-environment
+[deadline-cloud-monitor]: https://docs.aws.amazon.com/deadline-cloud/latest/userguide/monitor-onboarding.html
 
 ## Compatibility
 
 This library requires:
 
-1. Houdini 19.5, 20.0 or 20.5
+1. Houdini 19.5, 20.0, or 20.5
 1. Python 3.9 or higher; and
 1. Linux, Windows, or a macOS operating system.
-
-## Versioning
-
-This package's version follows [Semantic Versioning 2.0](https://semver.org/), but is still considered to be in its
-initial development, thus backwards incompatible versions are denoted by minor version bumps. To help illustrate how
-versions will increment during this initial development stage, they are described below:
-
-1. The MAJOR version is currently 0, indicating initial development.
-2. The MINOR version is currently incremented when backwards incompatible changes are introduced to the public API.
-3. The PATCH version is currently incremented when bug fixes or backwards compatible changes are introduced to the public API.
 
 ## Getting Started
 
@@ -47,17 +38,44 @@ Before submitting any large, complex, or otherwise compute-heavy Houdini render 
 set up, we strongly recommend that you construct a simple test scene that can be rendered quickly and submit renders of that
 scene to your farm to ensure that your setup is correctly functioning.
 
-### Houdini Submitter Plug-in
+## Submitter
 
-This package provides a Houdini ROP node that creates jobs for AWS Deadline Cloud using the [AWS Deadline Cloud client library][deadline-cloud-client]. Based on the loaded scene it determines the files required, allows the user to specify render options, and builds an [OpenJD template][openjd] that defines the workflow.
+This package provides a Houdini render output node (ROP) that creates jobs for AWS Deadline Cloud using the [AWS Deadline Cloud client library][deadline-cloud-client]. Based on the loaded scene it determines the files required, allows the user to specify render options, and builds an [OpenJD template][openjd] that defines the workflow.
 
-To install the submitter plug-in, refer to [DEVELOPMENT.md](DEVELOPMENT.md) section `Submitter Development Workflow`. Also refer to Deadline Cloud's [documentation](https://docs.aws.amazon.com/deadline-cloud/latest/userguide/submitter.html) on how to launch and use the Houdini submitter after installation.
+There are two installation options:
+1. Windows or Linux: Install the submitter using the official Deadline Cloud submitter installer for Windows or Linux
+2. Windows, Mac, or Linux: Manually install the submitter
+
+For most setups, you will also need to install the [Deadline Cloud monitor][deadline-cloud-monitor].
 
 [Houdini Render nodes (ROP)]: https://www.sidefx.com/docs/houdini/nodes/out/index.html
 [deadline-cloud-monitor-setup]: https://docs.aws.amazon.com/deadline-cloud/latest/userguide/submitter.html#install-deadline-cloud-monitor
 [aws-cli-credentials]: https://docs.aws.amazon.com/cli/v1/userguide/cli-chap-authentication.html
 
-### Houdini Adaptor
+### Install the submitter using the official Deadline Cloud submitter installer
+
+The [official Deadline Cloud submitter installer][deadline-cloud-submitter] for Windows and Linux include the Houdini submitter. After installing, you can use the submitter in the Houdini.
+
+### Manually installing the submitter
+
+Manual installation is supported on Windows, Mac, and Linux.
+
+To install the submitter plug-in, refer to [DEVELOPMENT.md](DEVELOPMENT.md) section `Submitter Development Workflow`. Also refer to Deadline Cloud's [documentation](https://docs.aws.amazon.com/deadline-cloud/latest/userguide/submitter.html) on how to launch and use the Houdini submitter after installation.
+
+### Using the Submitter
+
+To use the Houdini submitter:
+1. Open Houdini.
+2. In the network editor (usually in the bottom right side of Houdini), select the `/out` network.
+3. Press tab, and enter `deadline`.
+4. Select the Deadline Cloud option and click within the `/out` network to create the node.
+5. Connect the output of the last render output node (ROP) (for example, Karma, Mantra, or compositing) in your existing `/out` network to the input of the Deadline Cloud node.
+6. Click the Deadline Cloud node.
+7. Enter any job settings in the node editor (usually in the top right side of Houdini).
+8. Go to the bottom right of the node editor and click "Submit".
+9. The Deadline Cloud submission will automatically parse the connected `/out` network tree and submit each node as a step in the job, maintaining the dependency tree.
+
+### Adaptor
 
 The Houdini Adaptor implements the [OpenJD][openjd-adaptor-runtime] interface that allows render workloads to launch Houdini and feed it commands. This gives the following benefits:
 * a standardized render application interface,
@@ -112,7 +130,7 @@ We take all security reports seriously. When we receive such reports, we will
 investigate and subsequently address any potential vulnerabilities as quickly
 as possible. If you discover a potential security issue in this project, please
 notify AWS/Amazon Security via our [vulnerability reporting page](http://aws.amazon.com/security/vulnerability-reporting/)
-or directly via email to [AWS Security](aws-security@amazon.com). Please do not
+or directly via email to [AWS Security](mailto:aws-security@amazon.com). Please do not
 create a public GitHub issue in this project.
 
 ## Telemetry
