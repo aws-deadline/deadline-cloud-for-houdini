@@ -13,16 +13,6 @@ This package has two active branches:
 - `mainline` -- For active development. This branch is not intended to be consumed by other packages. Any commit to this branch may break APIs, dependencies, and so on, and thus break any consumer without notice.
 - `release` -- The official release of the package intended for consumers. Any breaking releases will be accompanied with an increase to this package's interface version.
 
-## Versioning
-
-This package's version follows [Semantic Versioning 2.0](https://semver.org/), but is still considered to be in its
-initial development, thus backwards incompatible versions are denoted by minor version bumps. To help illustrate how
-versions will increment during this initial development stage, they are described below:
-
-1. The MAJOR version is currently 0, indicating initial development.
-2. The MINOR version is currently incremented when backwards incompatible changes are introduced to the public API.
-3. The PATCH version is currently incremented when bug fixes or backwards compatible changes are introduced to the public API.
-
 ## The Development Loop
 
 We have configured [hatch](https://github.com/pypa/hatch) commands to support a standard development loop. You can run the following
