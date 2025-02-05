@@ -46,7 +46,7 @@ There are two installation options:
 1. Windows or Linux: Install the submitter using the official Deadline Cloud submitter installer for Windows or Linux
 2. Windows, Mac, or Linux: Manually install the submitter
 
-For most setups, you will also need to install the [Deadline Cloud monitor][deadline-cloud-monitor].
+For most setups, you will also want to install the [Deadline Cloud monitor][deadline-cloud-monitor].
 
 [Houdini Render nodes (ROP)]: https://www.sidefx.com/docs/houdini/nodes/out/index.html
 [deadline-cloud-monitor-setup]: https://docs.aws.amazon.com/deadline-cloud/latest/userguide/submitter.html#install-deadline-cloud-monitor
@@ -60,20 +60,21 @@ The [official Deadline Cloud submitter installer][deadline-cloud-submitter] for 
 
 Manual installation is supported on Windows, Mac, and Linux.
 
-To install the submitter plug-in, refer to [DEVELOPMENT.md](DEVELOPMENT.md) section `Submitter Development Workflow`. Also refer to Deadline Cloud's [documentation](https://docs.aws.amazon.com/deadline-cloud/latest/userguide/submitter.html) on how to launch and use the Houdini submitter after installation.
+To install the submitter plug-in, refer to [DEVELOPMENT.md](DEVELOPMENT.md) section `Submitter Development Workflow`.
 
 ### Using the Submitter
 
 To use the Houdini submitter:
 1. Open Houdini.
-2. In the network editor (usually in the bottom right side of Houdini), select the `/out` network.
+2. In the Network Editor, usually in the lower right side of Houdini, select the `/out` network.
 3. Press tab, and enter `deadline`.
-4. Select the Deadline Cloud option and click within the `/out` network to create the node.
+4. Select the Deadline Cloud option and place it within the `/out` network to create the node.
 5. Connect the output of the last render output node (ROP) (for example, Karma, Mantra, or compositing) in your existing `/out` network to the input of the Deadline Cloud node.
-6. Click the Deadline Cloud node.
-7. Enter any job settings in the node editor (usually in the top right side of Houdini).
-8. Go to the bottom right of the node editor and click "Submit".
-9. The Deadline Cloud submission will automatically parse the connected `/out` network tree and submit each node as a step in the job, maintaining the dependency tree.
+6. Choose the Deadline Cloud node.
+7. Enter any job settings in the node editor, usually in the upper right side of Houdini.
+8. In the bottom right of the node editor, choose "Submit".
+
+The Deadline Cloud submission will automatically parse the connected `/out` network tree and submit each node as a step in the job maintaining the dependency tree.
 
 ### Adaptor
 
