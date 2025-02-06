@@ -49,10 +49,6 @@ There are two installation options:
 
 For most setups, you will also want to install the [Deadline Cloud monitor][deadline-cloud-monitor].
 
-[Houdini Render nodes (ROP)]: https://www.sidefx.com/docs/houdini/nodes/out/index.html
-[deadline-cloud-monitor-setup]: https://docs.aws.amazon.com/deadline-cloud/latest/userguide/submitter.html#install-deadline-cloud-monitor
-[aws-cli-credentials]: https://docs.aws.amazon.com/cli/v1/userguide/cli-chap-authentication.html
-
 ### Using the Submitter
 
 To use the Houdini submitter:
@@ -65,7 +61,7 @@ To use the Houdini submitter:
 7. Enter any job settings in the node editor, usually in the upper right side of Houdini.
 8. In the bottom right of the node editor, choose "Submit".
 
-The Deadline Cloud submission will automatically parse the connected `/out` network tree and submit each node as a step in the job maintaining the dependency tree.
+The Deadline Cloud submission will automatically parse the connected `/out` network tree and submit each node as a step in the job maintaining the dependency tree. Using non-default render networks other than `/out` is also supported.
 
 ### Adaptor
 
