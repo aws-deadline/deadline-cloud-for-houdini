@@ -45,19 +45,13 @@ This package provides a Houdini render output node (ROP) that creates jobs for A
 
 There are two installation options:
 1. Windows or Linux: the [official Deadline Cloud submitter installer][deadline-cloud-submitter]
-2. Windows, Mac, or Linux: manual installation
+2. Windows, Mac, or Linux: manual installation following the `Submitter Development Workflow` in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 For most setups, you will also want to install the [Deadline Cloud monitor][deadline-cloud-monitor].
 
 [Houdini Render nodes (ROP)]: https://www.sidefx.com/docs/houdini/nodes/out/index.html
 [deadline-cloud-monitor-setup]: https://docs.aws.amazon.com/deadline-cloud/latest/userguide/submitter.html#install-deadline-cloud-monitor
 [aws-cli-credentials]: https://docs.aws.amazon.com/cli/v1/userguide/cli-chap-authentication.html
-
-### Manually installing the submitter
-
-Manual installation is supported on Windows, Mac, and Linux.
-
-To install the submitter plug-in, refer to [DEVELOPMENT.md](DEVELOPMENT.md) section `Submitter Development Workflow`.
 
 ### Using the Submitter
 
