@@ -13,6 +13,7 @@ This package has two active branches:
 - `mainline` -- For active development. This branch is not intended to be consumed by other packages. Any commit to this branch may break APIs, dependencies, and so on, and thus break any consumer without notice.
 - `release` -- The official release of the package intended for consumers. Any breaking releases will be accompanied with an increase to this package's interface version.
 
+
 ## The Development Loop
 
 We have configured [hatch](https://github.com/pypa/hatch) commands to support a standard development loop. You can run the following
