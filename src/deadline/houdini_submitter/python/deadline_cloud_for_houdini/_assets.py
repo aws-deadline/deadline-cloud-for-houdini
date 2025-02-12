@@ -182,6 +182,9 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
     asset_references = AssetReferences()
     asset_references.input_filenames.add(_get_hip_file())
 
+    # collect references that we could not evaluate so we can surface these later.
+    failed = []
+
     for parm, ref in hou.fileReferences():
         if (
             (not parm)
@@ -196,10 +199,21 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
         # the unexpanded version to evaluate afterwards. Allows us to limit
         # files with parameters, such as $F, to one entry instead of possibly
         # hundreds/thousands
-        if os.path.isdir(path):
-            asset_references.input_directories.add(parm.unexpandedString())
-        if os.path.isfile(path):
-            asset_references.input_filenames.add(parm.unexpandedString())
+        try:
+            if os.path.isdir(path):
+                asset_references.input_directories.add(parm.unexpandedString())
+            if os.path.isfile(path):
+                asset_references.input_filenames.add(parm.unexpandedString())
+        except hou.OperationFailed as e:
+            print(e)
+            failed.append((parm, ref))
+            continue
+
+    if failed:
+        print("Failed to evaluate the following references:")
+        for parm, ref in failed:
+            print(f"({parm.name()}, {parm.node()}):{parm} -> {ref}")
+        print("You may need to manually add them to the job attachments.")
 
     all_inputs = rop_node.inputAncestors()
     for node in all_inputs:
