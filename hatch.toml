@@ -22,7 +22,7 @@ lint = [
 install = "python {root}/scripts/install_dev_submitter.py {args:}"
 
 [[envs.all.matrix]]
-python = ["3.9", "3.10", "3.11"]
+python = ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
 [envs.default.env-vars]
 SKIP_BOOTSTRAP_TEST_RESOURCES="True"
