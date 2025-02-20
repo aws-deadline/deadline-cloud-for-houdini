@@ -125,6 +125,10 @@ looponfailroots = [
 filterwarnings = [
     "ignore::DeprecationWarning"
 ]
+markers = [
+  "submitter: mark a test as using the submitter.",
+  "adaptor: mark a test as using the adaptor.",
+]
 
 [tool.coverage.run]
 source_pkgs = [ "deadline/houdini_adaptor", "deadline/houdini_submitter" ]
