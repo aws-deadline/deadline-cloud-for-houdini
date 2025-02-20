@@ -22,6 +22,7 @@ from any directory of this repository:
 * `hatch build` - To build the installable Python wheel and sdist packages into the `dist/` directory.
 * `hatch run test` - To run the PyTest unit tests found in the `test/unit` directory. See [Testing](#testing).
 * `hatch run all:test` - To run the PyTest unit tests against all available supported versions of Python.
+* `hatch run integ:test` - To run the PyTest integration tests in the `test/integ` directory. See [Testing](#testing).
 * `hatch run lint` - To check that the package's formatting adheres to our standards.
 * `hatch run fmt` - To automatically reformat all code to adhere to our formatting standards.
 * `hatch shell` - Enter a shell environment that will have Python set up to import your development version of this package.
@@ -97,3 +98,39 @@ You can work on the adaptor alongside your submitter development workflow using 
    ```
 
 3. Open the Houdini integrated submitter, and in the Job-Specific Settings tab, enable the option 'Include Adaptor Wheels'. Add the "wheels" folder. Then submit your test job.
+
+## Testing
+
+### Unit Tests
+Unit tests are located in the `test/unit` directory. To run them:
+```
+hatch run test
+```
+
+You can also run the unit tests against all of the plugin's supported Python versions:
+```
+hatch run all:test
+```
+
+### Integration Tests
+Integration tests are located in the `test/unit` directory. Individual test cases are subdirectories in `test/integ/test_scripts`; each one has a scene script (`.py`) and an expected job bundle corresponding to that scene.
+
+To run integration tests:
+1. Log out of any Deadline Cloud Monitor profiles with `deadline auth logout`.
+   * Running the integration tests while logged in may result to queue parameters being written to the test job template, which will fail the tests.
+2. Configure your Houdini licensing.
+3. Install the dev submitter for the major and minor version of Houdini you want to test against: `hatch run install --houdini-version <MAJOR>.<MINOR>`
+3. Set the environment variable `HYTHON_EXECUTABLE` to the location of `hython` in your Houdini installation. For example:
+   * On Linux: `export HYTHON_EXECUTABLE='/opt/hfs20.5.487/bin/hython'`
+   * On Windows (powershell): `$Env:HYTHON_EXECUTABLE='C:\Program Files\Side Effects Software\Houdini 20.5.487\bin\hython.exe'`
+4. Set the environment variable `HOUDINI_VERSION` to the version of Houdini you want to test against. For example:
+   * On Linux: `export HOUDINI_VERSION='20.5.487'`
+   * On Windows (powershell): `$Env:HOUDINI_VERSION='20.5.487'`
+5. Run `hatch run integ:test`.
+   * To only run submitter tests, run `hatch run integ:test_submitters`. This runs tests with the `@pytest.mark.submitter` decorator.
+   * To only run adaptor tests, run `hatch run integ:test_adaptors`. This runs tests with the `@pytest.mark.adaptor` decorator.
+
+We provide a Python script that can set up and run integration tests for multiple Houdini versions consecutively. It takes a JSON string of versions and their executable locations as an argument:
+```sh
+$ python scripts/run_integ_tests.py "{\"19.5.805\": \"C:\\Program Files\\Side Effects Software\\Houdini 19.5.805\\bin\\hython.exe\", \"20.0.896\": \"C:\\Program Files\\Side Effects Software\\Houdini 20.0.896\\bin\\hython.exe\"}"
+```
