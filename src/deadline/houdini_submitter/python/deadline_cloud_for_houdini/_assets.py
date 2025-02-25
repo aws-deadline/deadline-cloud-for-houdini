@@ -68,10 +68,10 @@ def _get_evaluated_glob_path(parm, globbed_path: str) -> str:
         parm.set(orig_path)
 
 
-def _get_asset_references(rop_node: hou.Node) -> AssetReferences:
+def _get_evaluated_asset_references(rop_node: hou.Node) -> AssetReferences:
     """
     Get the current paths stored in the parms backing the UI and return them as
-    an AssetReferences object
+    an AssetReferences object with any Houdini tokens evaluated
     """
     asset_references = AssetReferences()
 
@@ -103,10 +103,29 @@ def _get_asset_references(rop_node: hou.Node) -> AssetReferences:
     return asset_references
 
 
+def _get_unevaluated_asset_references(rop_node: hou.Node) -> AssetReferences:
+    """
+    Get the current paths stored in the parms backing the UI and return them as
+    an AssetReferences object without evaluating any Houdini tokens
+    """
+    asset_references = AssetReferences()
+    asset_references.input_filenames.update(
+        [n.unexpandedString() for n in rop_node.parm("input_filenames").multiParmInstances()]
+    )
+    asset_references.input_directories.update(
+        [n.unexpandedString() for n in rop_node.parm("input_directories").multiParmInstances()]
+    )
+    asset_references.output_directories.update(
+        [n.unexpandedString() for n in rop_node.parm("output_directories").multiParmInstances()]
+    )
+
+    return asset_references
+
+
 def _get_saved_auto_detected_asset_references(rop_node: hou.Node) -> AssetReferences:
     """
     Get all of the paths saved in the hidden auto_* parms on the node and return
-    them as an AssetReferences object.
+    them as an AssetReferences object in their unevaluated forms.
     """
     saved_auto_refs = AssetReferences()
     saved_auto_refs.input_filenames.update(
@@ -131,7 +150,7 @@ def _parse_files(node: hou.Node):
     based on the detected paths in the scene, any previously saved values and the
     current values in the UI. Then update the UI with the new lists of paths.
     """
-    display_asset_refs = _get_asset_references(node)
+    display_asset_refs = _get_unevaluated_asset_references(node)
     auto_asset_refs = _get_scene_asset_references(node)
     prev_auto_asset_refs = _get_saved_auto_detected_asset_references(node)
 
