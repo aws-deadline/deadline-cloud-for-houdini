@@ -182,7 +182,9 @@ if __name__ == "__main__":
         "--cpu-arch",
         help="Architecture for python's native deps, should match Houdini's target archicture",
         type=str,
-        default=platform.machine() if platform.machine() in cpu_arch_choices else None,
+        default=(
+            platform.machine().lower() if platform.machine().lower() in cpu_arch_choices else None
+        ),
         choices=cpu_arch_choices,
     )
     parser.add_argument(
