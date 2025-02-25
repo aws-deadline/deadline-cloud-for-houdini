@@ -7,7 +7,7 @@ from pytest import param
 
 from .mock_hou import hou_module as hou
 from deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets import (
-    _get_asset_references,
+    _get_evaluated_asset_references,
     _get_scene_asset_references,
     _get_output_directories,
     _houdini_time_vars_to_glob,
@@ -185,8 +185,8 @@ def test_parse_files_manually_added(
             "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_scene_asset_references"
         ) as mock_get_scene_assets,
         mock.patch(
-            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_asset_references"
-        ) as mock_get_asset_references,
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_unevaluated_asset_references"
+        ) as mock_get_unevaluated_asset_references,
         mock.patch(
             "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._update_paths_parm"
         ) as mock_update_paths_parm,
@@ -195,14 +195,14 @@ def test_parse_files_manually_added(
         ) as mock_get_saved_auto_asset_references,
     ):
         mock_get_scene_assets.return_value = auto_detected_assets
-        mock_get_asset_references.return_value = current_assets
+        mock_get_unevaluated_asset_references.return_value = current_assets
         mock_get_saved_auto_asset_references.return_value = prev_auto_detected_assets
 
         node = hou.node
         _parse_files(node)
 
         mock_get_scene_assets.assert_called_once()
-        mock_get_asset_references.assert_called_once()
+        mock_get_unevaluated_asset_references.assert_called_once()
         mock_get_saved_auto_asset_references.assert_called_once()
         mock_update_paths_parm.assert_has_calls(
             [
@@ -417,7 +417,7 @@ def test_filenames_with_frames(tmpdir, pattern: str, filenames: list[str]):
     node.parm.side_effect = input_filenames_override
 
     # WHEN
-    result_refs = _get_asset_references(node)
+    result_refs = _get_evaluated_asset_references(node)
 
     # THEN
     assert result_refs.input_filenames == filesystem
@@ -464,7 +464,7 @@ def test_dirs_with_time_variable(tmpdir):
     node.parm.side_effect = input_filenames_override
 
     # WHEN
-    result_refs = _get_asset_references(node)
+    result_refs = _get_evaluated_asset_references(node)
 
     # THEN
     assert filesystem != matched_filesystem
