@@ -21,7 +21,7 @@ from deadline.job_attachments.upload import S3AssetManager
 from deadline.job_attachments.models import JobAttachmentS3Settings
 
 from .queue_parameters import update_queue_parameters, get_queue_parameter_values_as_openjd
-from ._assets import _get_hip_file, _get_asset_references, _parse_files
+from ._assets import _get_hip_file, _get_evaluated_asset_references, _parse_files
 
 # For temporary backwards compatibility
 from ._assets import (
@@ -467,7 +467,7 @@ def parse_files_callback(kwargs):
 def save_bundle_callback(kwargs):
     node = kwargs["node"]
     name = node.parm("name").evalAsString()
-    asset_references = _get_asset_references(node)
+    asset_references = _get_evaluated_asset_references(node)
     try:
         job_bundle_dir = create_job_history_bundle_dir("houdini", name)
         _create_job_bundle(node, job_bundle_dir, asset_references)
@@ -502,7 +502,7 @@ def submit_callback(kwargs):
     name = node.parm("name").evalAsString()
     # TODO: Populate from queue environment so that parameters can be overridden.
     queue_parameters: list[JobParameter] = []
-    asset_references = _get_asset_references(node)
+    asset_references = _get_evaluated_asset_references(node)
 
     # check for locked rops, Karma for example
     locked_rops = []
