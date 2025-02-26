@@ -32,18 +32,16 @@ def test_get_scene_asset_references():
 
     dir_parm = mock.Mock()
     dir_parm.node.return_value = None
-    dir_parm.unexpandedString.return_value = "/path/assets/"
-    dir_parm.evalAsString.return_value = "/path/assets/"
+    dir_parm.evalAsString.return_value = "/some_expanded_path/assets/"
 
     file_parm = mock.Mock()
     file_parm.node.return_value = None
-    file_parm.unexpandedString.return_value = "/path/asset.png"
-    file_parm.evalAsString.return_value = "/path/asset.png"
+    file_parm.evalAsString.return_value = "/some_expanded_path/image.png"
 
     hou.fileReferences.return_value = (
         # These references should be resolved and added as job attachments
-        (dir_parm, "$HIP/houdini19.5/"),
-        (file_parm, "$HIP/houdini19.5/otls/Deadline-Cloud.hda"),
+        (dir_parm, "$HIP/assets/"),
+        (file_parm, "$HIP/image.png"),
         # These references should all be skipped based on their reference prefix
         (mock_parm, "opdef:$OS.rat"),
         (mock_parm, "oplib:$OS.rat"),
@@ -59,8 +57,8 @@ def test_get_scene_asset_references():
     ):
         asset_refs = _get_scene_asset_references(node)
 
-    assert asset_refs.input_filenames == {"/path/asset.png", "/some/path/test.hip"}
-    assert asset_refs.input_directories == {"/path/assets/"}
+    assert asset_refs.input_filenames == {"$HIP/image.png", "/some/path/test.hip"}
+    assert asset_refs.input_directories == {"$HIP/assets/"}
     assert asset_refs.output_directories == set()
 
 

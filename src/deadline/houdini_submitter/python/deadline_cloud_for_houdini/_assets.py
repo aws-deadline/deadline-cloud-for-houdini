@@ -201,9 +201,6 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
     asset_references = AssetReferences()
     asset_references.input_filenames.add(_get_hip_file())
 
-    # collect references that we could not evaluate so we can surface these later.
-    failure_messages: dict[str, list[tuple[hou.Parm, str]]] = {}
-
     for parm, ref in hou.fileReferences():
         if (
             (not parm)
@@ -217,34 +214,13 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
         # Check the evaluated version to ensure _something_ exists, but add
         # the unexpanded version to evaluate afterwards. Allows us to limit
         # files with parameters, such as $F, to one entry instead of possibly
-        # hundreds/thousands
-        try:
-            if os.path.isdir(path):
-                asset_references.input_directories.add(parm.unexpandedString())
-            if os.path.isfile(path):
-                asset_references.input_filenames.add(parm.unexpandedString())
-        except hou.OperationFailed as e:
-            if str(e.instanceMessage()) in failure_messages:
-                failure_messages[str(e.instanceMessage())].append((parm, ref))
-            else:
-                failure_messages[str(e.instanceMessage())] = [(parm, ref)]
-            continue
-
-    if failure_messages:
-        failed_references_msg = "Several errors were encountered while collecting file references to include as assets. You may need to manually add them as job attachments."
-        failed_references_details = ""
-        for error_instance in failure_messages:
-            failed_references_details += f"{error_instance}:\n"
-            for parm, ref in failure_messages[error_instance]:
-                failed_references_details += f"\t({parm.name()}, {parm.node()}): {parm} -> {ref}\n"
-
-        hou.ui.displayMessage(
-            failed_references_msg,
-            title="Houdini Asset Parsing",
-            severity=hou.severityType.Warning,
-            details=failed_references_details,
-            details_expanded=True,
-        )
+        # hundreds/thousands. hou.fileReferences() already returns the refs as
+        # the equivalent of calling parm.unexpandedString()
+        # https://www.sidefx.com/docs/houdini/hom/hou/fileReferences.html
+        if os.path.isdir(path):
+            asset_references.input_directories.add(ref)
+        if os.path.isfile(path):
+            asset_references.input_filenames.add(ref)
 
     all_inputs = rop_node.inputAncestors()
     for node in all_inputs:
