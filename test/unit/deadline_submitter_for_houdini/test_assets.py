@@ -7,7 +7,7 @@ from pytest import param
 
 from .mock_hou import hou_module as hou
 from deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets import (
-    _get_asset_references,
+    _get_evaluated_asset_references,
     _get_scene_asset_references,
     _get_output_directories,
     _houdini_time_vars_to_glob,
@@ -32,18 +32,16 @@ def test_get_scene_asset_references():
 
     dir_parm = mock.Mock()
     dir_parm.node.return_value = None
-    dir_parm.unexpandedString.return_value = "/path/assets/"
-    dir_parm.evalAsString.return_value = "/path/assets/"
+    dir_parm.evalAsString.return_value = "/some_expanded_path/assets/"
 
     file_parm = mock.Mock()
     file_parm.node.return_value = None
-    file_parm.unexpandedString.return_value = "/path/asset.png"
-    file_parm.evalAsString.return_value = "/path/asset.png"
+    file_parm.evalAsString.return_value = "/some_expanded_path/image.png"
 
     hou.fileReferences.return_value = (
         # These references should be resolved and added as job attachments
-        (dir_parm, "$HIP/houdini19.5/"),
-        (file_parm, "$HIP/houdini19.5/otls/Deadline-Cloud.hda"),
+        (dir_parm, "$HIP/assets/"),
+        (file_parm, "$HIP/image.png"),
         # These references should all be skipped based on their reference prefix
         (mock_parm, "opdef:$OS.rat"),
         (mock_parm, "oplib:$OS.rat"),
@@ -59,8 +57,8 @@ def test_get_scene_asset_references():
     ):
         asset_refs = _get_scene_asset_references(node)
 
-    assert asset_refs.input_filenames == {"/path/asset.png", "/some/path/test.hip"}
-    assert asset_refs.input_directories == {"/path/assets/"}
+    assert asset_refs.input_filenames == {"$HIP/image.png", "/some/path/test.hip"}
+    assert asset_refs.input_directories == {"$HIP/assets/"}
     assert asset_refs.output_directories == set()
 
 
@@ -185,8 +183,8 @@ def test_parse_files_manually_added(
             "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_scene_asset_references"
         ) as mock_get_scene_assets,
         mock.patch(
-            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_asset_references"
-        ) as mock_get_asset_references,
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_unevaluated_asset_references"
+        ) as mock_get_unevaluated_asset_references,
         mock.patch(
             "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._update_paths_parm"
         ) as mock_update_paths_parm,
@@ -195,14 +193,14 @@ def test_parse_files_manually_added(
         ) as mock_get_saved_auto_asset_references,
     ):
         mock_get_scene_assets.return_value = auto_detected_assets
-        mock_get_asset_references.return_value = current_assets
+        mock_get_unevaluated_asset_references.return_value = current_assets
         mock_get_saved_auto_asset_references.return_value = prev_auto_detected_assets
 
         node = hou.node
         _parse_files(node)
 
         mock_get_scene_assets.assert_called_once()
-        mock_get_asset_references.assert_called_once()
+        mock_get_unevaluated_asset_references.assert_called_once()
         mock_get_saved_auto_asset_references.assert_called_once()
         mock_update_paths_parm.assert_has_calls(
             [
@@ -417,7 +415,7 @@ def test_filenames_with_frames(tmpdir, pattern: str, filenames: list[str]):
     node.parm.side_effect = input_filenames_override
 
     # WHEN
-    result_refs = _get_asset_references(node)
+    result_refs = _get_evaluated_asset_references(node)
 
     # THEN
     assert result_refs.input_filenames == filesystem
@@ -464,7 +462,7 @@ def test_dirs_with_time_variable(tmpdir):
     node.parm.side_effect = input_filenames_override
 
     # WHEN
-    result_refs = _get_asset_references(node)
+    result_refs = _get_evaluated_asset_references(node)
 
     # THEN
     assert filesystem != matched_filesystem
