@@ -83,7 +83,8 @@ packages = [
 check_untyped_defs = true
 show_error_codes = true
 pretty = true
-# Tell mypy that there's a namspace package src/deadline
+ignore_missing_imports = true
+# Tell mypy that there's a namespace package at src/deadline
 namespace_packages = true
 explicit_package_bases = true
 mypy_path = "src"

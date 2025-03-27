@@ -99,6 +99,20 @@ You can work on the adaptor alongside your submitter development workflow using 
 
 3. Open the Houdini integrated submitter, and in the Job-Specific Settings tab, enable the option 'Include Adaptor Wheels'. Add the "wheels" folder. Then submit your test job.
 
+## Build the Installer
+
+If necessary, you can build a standalone installer for the Houdini submitter from the source XML in this repository.
+
+1. Build the package with `hatch run build`.
+
+2. Build the installer with `hatch`. Omit `--platform` to use the platform of your machine.
+```bash
+hatch run installer:build-installer --local-dev --platform <PLATFORM> [--install-builder-location <LOCATION> --output-dir <DIR>]
+
+# To see the full list of arguments:
+# hatch run installer:build-installer -h
+```
+
 ## Testing
 
 ### Unit Tests
@@ -133,4 +147,12 @@ To run integration tests:
 We provide a Python script that can set up and run integration tests for multiple Houdini versions consecutively. It takes a JSON string of versions and their executable locations as an argument:
 ```sh
 $ python scripts/run_integ_tests.py "{\"19.5.805\": \"C:\\Program Files\\Side Effects Software\\Houdini 19.5.805\\bin\\hython.exe\", \"20.0.896\": \"C:\\Program Files\\Side Effects Software\\Houdini 20.0.896\\bin\\hython.exe\"}"
+```
+
+### Installer Tests
+Installer tests are located in the `test/installer` directory. These tests assume that a built installer corresponding to your platform exists in the repository root.
+
+To run the tests:
+```bash
+hatch run test-installer
 ```

@@ -7,6 +7,7 @@ pre-install-commands = [
 [envs.default.scripts]
 sync = "pip install -r requirements-testing.txt"
 test = "pytest {args:test/unit}"
+test-installer = "pytest --no-cov {args:test/installer} -vvv"
 typing = "mypy {args:src test}"
 style = [
   "ruff check {args:.}",
@@ -33,6 +34,9 @@ build = "hatch build"
 
 [envs.codebuild.env-vars]
 SKIP_BOOTSTRAP_TEST_RESOURCES="True"
+
+[envs.installer.scripts]
+build-installer = "python {root}/scripts/build_installer_cli.py --installer-source-path {root}/installer/DeadlineCloudForHoudiniSubmitter.xml {args:}"
 
 [envs.integ]
 pre-install-commands = [

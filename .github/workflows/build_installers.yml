@@ -1,0 +1,42 @@
+name: "Build Installers"
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        required: true
+        default: Linux
+        type: choice
+        options:
+        - Linux
+        - Windows
+        - MacOS
+      ref_type:
+        required: true
+        default: tags
+        type: choice
+        options:
+        - tags
+        - heads
+      ref:
+        required: true
+        type: string
+        default: mainline
+      environment:
+        required: true
+        type: choice
+        options:
+        - mainline
+
+jobs:
+  BuildInstaller:
+    if: (github.repository == 'aws-deadline/deadline-cloud-for-houdini')
+    name: Build Installer
+    uses: aws-deadline/.github/.github/workflows/reusable_build_installers.yml@mainline
+    secrets: inherit
+    with:
+      environment: ${{inputs.environment}}
+      ref_type: ${{inputs.ref_type}}
+      ref: ${{inputs.ref}}
+      oses: "['${{inputs.os}}']"
+      project_name: "deadline-cloud-for-houdini"
