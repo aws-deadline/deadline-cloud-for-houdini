@@ -211,7 +211,8 @@
             <value>Deadline Cloud for Houdini 19.5-20.5
 - Compatible with Houdini 19.5-20.5
 - Install the integrated Houdini submitter files to the installation directory.
-- Register the plug-in package file with Houdini by setting HOUDINI_PACKAGE_DIR</value>
+- Copy the plug-in package file to the Houdini packages directory for each version.
+- Register the plug-in package file with Houdini by setting HOUDINI_PACKAGE_DIR on Windows.</value>
         </stringParameter>
     </parameterList>
     <postInstallationActionList>

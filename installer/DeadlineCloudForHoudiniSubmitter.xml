@@ -37,35 +37,6 @@
                 <stringParameter name="value"/>
             </parameterList>
         </actionDefinition>
-        <actionDefinition name="fnAddLinuxEnvironmentVariable">
-            <parameterList>
-                <stringParameter name="name"/>
-                <stringParameter name="value"/>
-                <stringParameter name="scope" default="user"/>
-            </parameterList>
-            <actionList>
-                <if>
-                    <conditionRuleList>
-                        <platformTest type="linux"/>
-                        <compareText logic="equals" text="${scope}" value="system"/>
-                    </conditionRuleList>
-                    <actionList>
-                        <!-- InstallBuilder's system-wide Linux implementation does not work (it always writes to the user
-                        environment files like ~/.bashrc and ~/.bash_profile, even as root).
-                        Instead, we cache all environment variables in a global variable, and in the post-installation
-                        steps, we generate a file in /etc/profile.d/ that will get sourced on login. -->
-                        <globalVariables names="_fnAddEnvironmentVariable_list"/>
-                        <setInstallerVariable name="_fnAddEnvironmentVariable_list">
-                            <value>${_fnAddEnvironmentVariable_list}export ${name}=${value}&#xA;</value>
-                        </setInstallerVariable>
-                    </actionList>
-                    <elseActionList>
-                        <!-- Pass through to InstallBuilder implementation -->
-                        <addEnvironmentVariable name="${name}" value="${value}" scope="${scope}"/>
-                    </elseActionList>
-                </if>
-            </actionList>
-        </actionDefinition>
         <actionDefinition name="fnAddPathEnvironmentVariable">
             <!-- Adds a PATH-like environment variable with options to add to the end or beginning of the PATH -->
             <parameterList>
@@ -106,29 +77,7 @@
                         </setInstallerVariable>
                     </elseActionList>
                 </if>
-                <fnAddLinuxEnvironmentVariable name="${name}" value="${new_value}" scope="${scope}"/>
-            </actionList>
-        </actionDefinition>
-        <actionDefinition name="fnAddDirectoryToLinuxPath">
-            <!-- This just exists to handle the system-wide Linux implementation (see fnAddLinuxEnvironmentVariable) -->
-            <parameterList>
-                <stringParameter name="insertAt" default="end"/>
-                <stringParameter name="path"/>
-                <stringParameter name="scope" default="system"/>
-            </parameterList>
-            <actionList>
-                <if>
-                    <conditionRuleList>
-                        <platformTest type="linux"/>
-                        <compareText logic="equals" text="${scope}" value="system"/>
-                    </conditionRuleList>
-                    <actionList>
-                        <fnAddLinuxEnvironmentVariable name="PATH" value="$PATH:${path}" scope="${scope}"/>
-                    </actionList>
-                    <elseActionList>
-                        <addDirectoryToPath insertAt="${insertAt}" path="${path}" scope="${scope}"/>
-                    </elseActionList>
-                </if>
+                <addEnvironmentVariable name="${name}" value="${new_value}" scope="${scope}"/>
             </actionList>
         </actionDefinition>
     </functionDefinitionList>
