@@ -2,8 +2,6 @@
 """Script to create platform-specific Deadline Client installers using InstallBuilder."""
 
 import os
-import platform
-import subprocess
 import sys
 import shutil
 import tempfile
@@ -12,7 +10,9 @@ from typing import Optional
 from pathlib import Path
 
 from common import EvaluationBuildError, run
-from find_installbuilder import InstallBuilderSelection
+from find_installbuilder import InstallBuilderSelection, get_builder_exe_name
+
+from deps_bundle import build_deps_bundle
 
 # This is derived from <installerFilename> in installer/DeadlineCloudClient.xml
 # See "Supported Platforms" table in https://releases.installbuilder.com/installbuilder/docs/installbuilder-userguide.html
@@ -50,17 +50,12 @@ def setup_install_builder(
 
     install_builder_path = selection.resolve_install_builder_installation(workdir)
 
-    if platform.system() == "Windows":
-        binary_name = "builder.exe"
-    else:
-        binary_name = "builder"
-
     if (
         not install_builder_path.is_dir()
-        or not (install_builder_path / "bin" / binary_name).is_file()
+        or not (install_builder_path / "bin" / get_builder_exe_name()).is_file()
     ):
         raise FileNotFoundError(
-            f"InstallBuilder path '{install_builder_path}' must be a directory containing 'bin/{binary_name}'."
+            f"InstallBuilder path '{install_builder_path}' must be a directory containing 'bin/{get_builder_exe_name()}'."
         )
 
     if license_file_path is not None:
@@ -98,20 +93,7 @@ def build_installer(
     else:
         raise ValueError(f"Unknown platform '{installer_platform}'")
 
-    try:
-        if platform.system() == "Windows":
-            # `shell=True` is necessary here to run on Windows.
-            # Please see the security considerations of this flag if editing the script or its invocation:
-            # https://docs.python.org/3/library/subprocess.html#security-considerations
-            deps_bundle_output = subprocess.run(
-                "depsBundle.sh", check=True, shell=True, capture_output=True
-            )
-        else:
-            deps_bundle_output = subprocess.run("./depsBundle.sh", check=True, capture_output=True)
-        print(deps_bundle_output.stdout.decode("utf-8"))
-    except subprocess.CalledProcessError as e:
-        print(f"Error when bundling dependencies: {e.stdout.decode('utf-8')}")
-        raise
+    build_deps_bundle()
 
     install_builder_cli = install_builder_location / "bin" / "builder"
     out_dir = workdir / "out"
@@ -192,7 +174,7 @@ def main(
                 f"Found:\n\t{os.linesep.join([str(i) for i in installer_dir.iterdir()])}"
             )
 
-        output_path = installer_filename
+        output_path = Path(installer_filename)
         if output_dir:
             output_dir.mkdir(exist_ok=True)
             output_path = output_dir / output_path

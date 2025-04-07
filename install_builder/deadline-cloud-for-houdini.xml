@@ -165,7 +165,6 @@
                 <platformTest type="windows" />
             </conditionRuleList>
             <actionList>
-                <setInstallerVariable name="houdini_deps_platform" value="windows" />
                 <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/Documents/houdini" />
             </actionList>
         </if>
@@ -174,7 +173,6 @@
                 <platformTest type="linux" />
             </conditionRuleList>
             <actionList>
-                <setInstallerVariable name="houdini_deps_platform" value="linux" />
                 <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/houdini" />
             </actionList>
         </if>
@@ -183,8 +181,7 @@
                 <platformTest type="osx" />
             </conditionRuleList>
             <actionList>
-                <setInstallerVariable name="houdini_deps_platform" value="macos" />
-                <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/houdini" />
+                <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/Library/Preferences/houdini/" />
             </actionList>
         </if>
         <!--To prevent conflicts we delete any copies of our package file in the old install locations-->
@@ -218,7 +215,7 @@
     <postInstallationActionList>
         <unzip>
             <destinationDirectory>${houdini_installdir}/python</destinationDirectory>
-            <zipFile>${installdir}/tmp/houdini_deps/dependency_bundle/deadline_cloud_for_houdini_submitter-deps-${houdini_deps_platform}.zip</zipFile>
+            <zipFile>${installdir}/tmp/houdini_deps/dependency_bundle/deadline_cloud_for_houdini_submitter-deps.zip</zipFile>
         </unzip>
         <deleteFile path="${installdir}/tmp/houdini_deps"/>
     </postInstallationActionList>
