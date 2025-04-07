@@ -8,6 +8,7 @@
     <enableRollback>1</enableRollback>
     <enableTimestamp>1</enableTimestamp>
     <allowComponentSelection>1</allowComponentSelection>
+    <osxApplicationBundleIdentifier>com.amazonaws.deadline.clientinstaller.houdini</osxApplicationBundleIdentifier>
 
     <!-- Images and icons -->
     <logoImage>logoImage.png</logoImage>
