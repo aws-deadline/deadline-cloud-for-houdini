@@ -35,7 +35,7 @@
                     <type>exact</type>
                     <encoding>utf-8</encoding>
                     <substitutionList>
-                        <substitution pattern="INSTALL_DIR_PLACEHOLDER" value="${houdini_installdir}" />
+                        <substitution pattern="INSTALL_DIR_PLACEHOLDER" value="${houdini_installdir.unix}" />
                     </substitutionList>
                 </substitute>
                 <fnAddPathEnvironmentVariable>
