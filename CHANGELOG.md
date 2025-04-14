@@ -6,6 +6,7 @@
 * job attachments tab showing unevaluated and evaluated entries for same file (#234) ([`8582f6e`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/8582f6e2269ac70aad8a773dce63cf7c979d99b0))
 * **submitter**: do not stop finding job attachment files if a node's filename parm could not be evaluated (#225) ([`cfe4425`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/cfe442535a6e9e09f707393ef816aaeb4a712003))
 
+
 ## 0.7.5 (2025-01-13)
 
 
