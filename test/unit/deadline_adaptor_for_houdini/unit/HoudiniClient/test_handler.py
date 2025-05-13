@@ -82,11 +82,14 @@ class TestHoudiniHandler:
             # test file not found
             handler.set_scene_file(data)
 
+    @patch(
+        "deadline.houdini_adaptor.HoudiniClient.houdini_handler.HoudiniHandler._perform_path_mapping"
+    )
     def test_set_scene_file_loads(self, capfd) -> None:
         handler = HoudiniHandler()
         data = {"scene_file": "/not/a/real/scene.hip"}
         with patch(
-            "deadline.houdini_adaptor.HoudiniClient.houdini_handler.os.path.isfile"
+            "deadline.houdini_adaptor.HoudiniClient.houdini_handler.os.path.isfile",
         ) as mock_isfile:
             mock_isfile.return_value = True
             # test file loads
