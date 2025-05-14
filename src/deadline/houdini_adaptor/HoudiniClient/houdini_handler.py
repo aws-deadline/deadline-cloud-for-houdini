@@ -36,34 +36,28 @@ class HoudiniHandler:
         self.wedge = None
         self.wegenum = None
 
-    def _perform_path_mapping(self) -> None:
+    def _path_map_envs(self) -> None:
         """
         Applies the contents of HOUDINI_PATHMAP to global variables
-        in case they are not automatically re-mapped.
+        that are not automatically re-mapped.
         """
 
-        # Use the HScript command `setenv` to retrieve all global variables as a tuple:
-        # [0] all environment variables in one string, each with the format "KEY\t= VAL\n"
-        # [1] any errors from running the command
-        # https://www.sidefx.com/docs/houdini/commands/setenv.html
-        set_envs, err = hou.hscript("setenv")
+        # We know that $JOB and $POSE are not pathmapped automatically,
+        # because they don't change when a scene file moves:
+        # https://www.sidefx.com/docs/houdini/basics/project.html#tips-and-notes
+        envs_to_remap: list[str] = ["JOB", "POSE"]
 
-        # Early return on errors in case they are benign
-        if err:
-            print(f"Error retrieving Houdini environment variables: {err}")
-            return
-
-        for line in set_envs.split("\n"):
-            if line.strip():
-                key, val = line.split("\t= ", 1)
-                # Use the `pathmap` command to apply HOUDINI_PATHMAP to each variable
-                # in case it missed mapping.
-                # `-t` (test) applies the path mapping rules to the given path
-                # `-c` (compact) prints out just the re-mapped path (with a newline we must strip)
-                mapped_path, err = hou.hscript(f"pathmap -t '{val}' -c")
-                if not err and mapped_path:
-                    hou.putenv(key, mapped_path.strip())
-                    print(f"Set {key} to {mapped_path.strip()}")
+        for env in envs_to_remap:
+            print(f"Mapping {env} ({hou.getenv(env)})")
+            # Use the `pathmap` command to apply HOUDINI_PATHMAP to each variable
+            # in case it missed mapping.
+            # `-t` (test) applies the path mapping rules to the given path
+            # `-c` (compact) prints out just the re-mapped path (with a newline we must strip)
+            # https://www.sidefx.com/docs/houdini/commands/pathmap.html
+            mapped_path, err = hou.hscript(f"pathmap -t '{hou.getenv(env)}' -c")
+            if not err and mapped_path:
+                hou.putenv(env, mapped_path.strip())
+                print(f"Set {env} to {mapped_path.strip()}")
 
         # Reload the env variables
         hou.hscript("varchange")
@@ -236,6 +230,5 @@ class HoudiniHandler:
             hou.hipFile.load(scene_path)
         except hou.LoadWarning as e:
             print(e)
-            return
 
-        self._perform_path_mapping()
+        self._path_map_envs()

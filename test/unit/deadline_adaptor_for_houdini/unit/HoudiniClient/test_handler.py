@@ -82,10 +82,8 @@ class TestHoudiniHandler:
             # test file not found
             handler.set_scene_file(data)
 
-    @patch(
-        "deadline.houdini_adaptor.HoudiniClient.houdini_handler.HoudiniHandler._perform_path_mapping"
-    )
-    def test_set_scene_file_loads(self, capfd) -> None:
+    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_handler.HoudiniHandler._path_map_envs")
+    def test_set_scene_file_loads(self, patch_pathmap, capfd) -> None:
         handler = HoudiniHandler()
         data = {"scene_file": "/not/a/real/scene.hip"}
         with patch(
@@ -96,7 +94,8 @@ class TestHoudiniHandler:
             handler.set_scene_file(data)
             hou.hipFile.load.assert_called_once()
 
-    def test_set_scene_file_raise_exception(self, capfd) -> None:
+    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_handler.HoudiniHandler._path_map_envs")
+    def test_set_scene_file_raise_exception(self, patch_pathmap, capfd) -> None:
         handler = HoudiniHandler()
         data = {"scene_file": "/not/a/real/scene.hip"}
         with patch(
