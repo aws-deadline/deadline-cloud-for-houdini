@@ -1,6 +1,7 @@
+<!-- Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved. -->
 <componentGroup>
     <name>deadline_cloud_for_houdini</name>
-    <description>Deadline Cloud for Houdini 19.5-20.5</description>
+    <description>Deadline Cloud for Houdini</description>
     <detailedDescription>Houdini plugin for submitting jobs to AWS Deadline Cloud. Compatible with Houdini 19.5-20.5</detailedDescription>
     <canBeEdited>1</canBeEdited>
     <selected>0</selected>
@@ -13,7 +14,7 @@
             <platforms>all</platforms>
             <distributionFileList>
                 <distributionDirectory allowWildcards="1">
-                    <origin>components/deadline-cloud-for-houdini/src/deadline/houdini_submitter/*</origin>
+                    <origin>../src/deadline/houdini_submitter/*</origin>
                 </distributionDirectory>
             </distributionFileList>
         </folder>
@@ -24,7 +25,7 @@
             <platforms>all</platforms>
             <distributionFileList>
                 <distributionDirectory allowWildcards="1">
-                    <origin>components/deadline-cloud-for-houdini/packages/*</origin>
+                    <origin>../packages/*</origin>
                 </distributionDirectory>
             </distributionFileList>
             <actionList>
@@ -34,7 +35,7 @@
                     <type>exact</type>
                     <encoding>utf-8</encoding>
                     <substitutionList>
-                        <substitution pattern="INSTALL_DIR_PLACEHOLDER" value="${installdir.unix}" />
+                        <substitution pattern="INSTALL_DIR_PLACEHOLDER" value="${houdini_installdir.unix}" />
                     </substitutionList>
                 </substitute>
                 <fnAddPathEnvironmentVariable>
@@ -43,6 +44,9 @@
                     <value>${houdini_packagedir}</value>
                     <scope>${installscope}</scope>
                     <insertAt>end</insertAt>
+                    <ruleList>
+                        <platformTest type="windows"/>
+                    </ruleList>
                 </fnAddPathEnvironmentVariable>
             </actionList>
         </folder>
@@ -53,23 +57,114 @@
             <platforms>all</platforms>
             <distributionFileList>
                 <distributionDirectory allowWildcards="1">
-                    <origin>components/deadline-cloud-for-houdini/dependency_bundle</origin>
+                    <origin>../dependency_bundle</origin>
                 </distributionDirectory>
             </distributionFileList>
         </folder>
     </folderList>
+    <functionDefinitionList>
+        <actionDefinition name="fnCopyHoudiniPackageFile">
+            <parameterList>
+                <stringParameter name="destinationDir"/>
+            </parameterList>
+            <actionList>
+                <createDirectory>
+                    <path>${destinationDir}</path>
+                    <ruleList>
+                        <fileExists path="${destinationDir}" negate="1"/>
+                    </ruleList>
+                </createDirectory>
+                <copyFile origin="${houdini_packagedir}/${deadline_package_file_name}" destination="${destinationDir}/${deadline_package_file_name}"/>
+                <addFilesToUninstaller files="${destinationDir}/${deadline_package_file_name}"/>
+            </actionList>
+        </actionDefinition>
+    </functionDefinitionList>
+    <componentList>
+        <component>
+            <name>houdini_19_5</name>
+            <description>Houdini 19.5</description>
+            <selected>0</selected>
+            <parameterList>
+                <directoryParameter>
+                    <name>houdini_19_5_packagedir</name>
+                    <description>Houdini 19.5 Packages Directory</description>
+                    <explanation>Enter the path to the Houdini 19.5 packages directory. For easiest installation, Houdini should be installed before installing Deadline Cloud for Houdini.</explanation>
+                    <default>${houdini_user_pref_dir_default}19.5/packages</default>
+                    <allowEmptyValue>0</allowEmptyValue>
+                    <ask>yes</ask>
+                    <cliOptionName>houdini-19-5-package-dir</cliOptionName>
+                    <cliOptionText>Path to the Houdini 19.5 packages directory. When the installer is run, if the HOUDINI_USER_PREF_DIR environment variable is set, this directory will default to the packages subdirectory at that path.</cliOptionText>
+                    <mustBeWritable>yes</mustBeWritable>
+                </directoryParameter>
+            </parameterList>
+            <postInstallationActionList>
+                <fnCopyHoudiniPackageFile destinationDir="${houdini_19_5_packagedir}" />
+            </postInstallationActionList>
+        </component>
+        <component>
+            <name>houdini_20_0</name>
+            <description>Houdini 20.0</description>
+            <selected>0</selected>
+            <parameterList>
+                <directoryParameter>
+                    <name>houdini_20_0_packagedir</name>
+                    <description>Houdini 20.0 Packages Directory</description>
+                    <explanation>Enter the path to the Houdini 20.0 packages directory. For easiest installation, Houdini should be installed before installing Deadline Cloud for Houdini.</explanation>
+                    <default>${houdini_user_pref_dir_default}20.0/packages</default>
+                    <allowEmptyValue>0</allowEmptyValue>
+                    <ask>yes</ask>
+                    <cliOptionName>houdini-20-0-package-dir</cliOptionName>
+                    <cliOptionText>Path to the Houdini 20.0 packages directory. When the installer is run, if the HOUDINI_USER_PREF_DIR environment variable is set, this directory will default to the packages subdirectory at that path.</cliOptionText>
+                    <mustBeWritable>yes</mustBeWritable>
+                </directoryParameter>
+            </parameterList>
+            <postInstallationActionList>
+                <fnCopyHoudiniPackageFile destinationDir="${houdini_20_0_packagedir}" />
+            </postInstallationActionList>
+        </component>
+        <component>
+            <name>houdini_20_5</name>
+            <description>Houdini 20.5</description>
+            <selected>0</selected>
+            <parameterList>
+                <directoryParameter>
+                    <name>houdini_20_5_packagedir</name>
+                    <description>Houdini 20.5 Packages Directory</description>
+                    <explanation>Enter the path to the Houdini 20.5 packages directory. For easiest installation, Houdini should be installed before installing Deadline Cloud for Houdini.</explanation>
+                    <default>${houdini_user_pref_dir_default}20.5/packages</default>
+                    <allowEmptyValue>0</allowEmptyValue>
+                    <ask>yes</ask>
+                    <cliOptionName>houdini-20-5-package-dir</cliOptionName>
+                    <cliOptionText>Path to the Houdini 20.5 packages directory. When the installer is run, if the HOUDINI_USER_PREF_DIR environment variable is set, this directory will default to the packages subdirectory at that path.</cliOptionText>
+                    <mustBeWritable>yes</mustBeWritable>
+                </directoryParameter>
+            </parameterList>
+            <postInstallationActionList>
+                <fnCopyHoudiniPackageFile destinationDir="${houdini_20_5_packagedir}" />
+            </postInstallationActionList>
+        </component>
+    </componentList>
     <initializationActionList>
         <setInstallerVariable name="all_components" value="${all_components} deadline_cloud_for_houdini" />
-    </initializationActionList>
-    <readyToInstallActionList>
-        <setInstallerVariable name="houdini_installdir" value="${installdir}/Submitters/Houdini" />
-        <setInstallerVariable name="houdini_packagedir" value="${houdini_installdir}/deadline_package" />
+        <if>
+            <conditionRuleList>
+                <compareText>
+                    <text>${env(HOUDINI_USER_PREF_DIR)}</text>
+                    <logic>does_not_equal</logic>
+                    <value></value>
+                </compareText>
+            </conditionRuleList>
+            <actionList>
+                <setInstallerVariable name="houdini_19_5_packagedir" value="${env(HOUDINI_USER_PREF_DIR)}/packages"/>
+                <setInstallerVariable name="houdini_20_0_packagedir" value="${env(HOUDINI_USER_PREF_DIR)}/packages"/>
+                <setInstallerVariable name="houdini_20_5_packagedir" value="${env(HOUDINI_USER_PREF_DIR)}/packages"/>
+            </actionList>
+        </if>
         <if>
             <conditionRuleList>
                 <platformTest type="windows" />
             </conditionRuleList>
             <actionList>
-                <setInstallerVariable name="houdini_deps_platform" value="windows" />
                 <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/Documents/houdini" />
             </actionList>
         </if>
@@ -78,7 +173,6 @@
                 <platformTest type="linux" />
             </conditionRuleList>
             <actionList>
-                <setInstallerVariable name="houdini_deps_platform" value="linux" />
                 <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/houdini" />
             </actionList>
         </if>
@@ -87,27 +181,41 @@
                 <platformTest type="osx" />
             </conditionRuleList>
             <actionList>
-                <setInstallerVariable name="houdini_deps_platform" value="macos" />
-                <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/houdini" />
+                <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/Library/Preferences/houdini/" />
             </actionList>
         </if>
         <!--To prevent conflicts we delete any copies of our package file in the old install locations-->
         <deleteFile path="${houdini_user_pref_dir_default}19.5/packages/deadline_submitter_for_houdini.json" />
         <deleteFile path="${houdini_user_pref_dir_default}20.0/packages/deadline_submitter_for_houdini.json" />
         <deleteFile path="${houdini_user_pref_dir_default}20.5/packages/deadline_submitter_for_houdini.json" />
+    </initializationActionList>
+    <readyToInstallActionList>
+        <if>
+            <conditionRuleList>
+                <isTrue value="${individual_install}"/>
+            </conditionRuleList>
+            <actionList>
+                <setInstallerVariable name="houdini_installdir" value="${installdir}"/>
+            </actionList>
+            <elseActionList>
+                <setInstallerVariable name="houdini_installdir" value="${installdir}/Submitters/Houdini"/>
+            </elseActionList>
+        </if>
+        <setInstallerVariable name="houdini_packagedir" value="${houdini_installdir}/deadline_package" />
     </readyToInstallActionList>
     <parameterList>
         <stringParameter name="deadline_cloud_for_houdini_summary" ask="0" cliOptionShow="0">
             <value>Deadline Cloud for Houdini 19.5-20.5
 - Compatible with Houdini 19.5-20.5
 - Install the integrated Houdini submitter files to the installation directory.
-- Register the plug-in package file with Houdini by setting HOUDINI_PACKAGE_DIR</value>
+- Copy the plug-in package file to the Houdini packages directory for each version.
+- Register the plug-in package file with Houdini by setting HOUDINI_PACKAGE_DIR on Windows.</value>
         </stringParameter>
     </parameterList>
     <postInstallationActionList>
         <unzip>
             <destinationDirectory>${houdini_installdir}/python</destinationDirectory>
-            <zipFile>${installdir}/tmp/houdini_deps/dependency_bundle/deadline_cloud_for_houdini_submitter-deps-${houdini_deps_platform}.zip</zipFile>
+            <zipFile>${installdir}/tmp/houdini_deps/dependency_bundle/deadline_cloud_for_houdini_submitter-deps.zip</zipFile>
         </unzip>
         <deleteFile path="${installdir}/tmp/houdini_deps"/>
     </postInstallationActionList>

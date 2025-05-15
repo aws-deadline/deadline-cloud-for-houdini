@@ -344,6 +344,7 @@ _NODE_DIR_MAP = {
     "Driver/ris::3.0": _renderman_outputs,  # Renderman
     "Driver/Redshift_ROP": "RS_outputFileNamePrefix",  # Redshift
     "Sop/rop_alembic": "filename",  # ROP Alembic Output
+    "Sop/rop_geometry": "sopoutput",  # ROP Geometry Output
     "Dop/rop_dop": "dopoutput",  # ROP Output Driver
     "Driver/usdrender": _usd_render_outputs,  # USD Render ROP
     "Lop/usdrender_rop": _usd_render_outputs,  # USD Render LOP ROP

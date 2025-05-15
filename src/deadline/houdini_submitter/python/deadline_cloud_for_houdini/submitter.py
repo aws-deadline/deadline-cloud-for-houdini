@@ -223,7 +223,7 @@ def _get_render_strategy_for_node(node: hou.Node) -> RenderStrategy:
     render_strategy = RenderStrategy.PARALLEL
 
     if (
-        node.type().nameWithCategory() == "Driver/geometry"
+        node.type().nameWithCategory() in ["Driver/geometry", "Sop/rop_geometry"]
         and node.parm("initsim")
         and node.parm("initsim").eval()
     ):

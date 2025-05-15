@@ -18,6 +18,10 @@ See [DEVELOPMENT.md](https://github.com/aws-deadline/deadline-cloud-for-houdini/
 - Have you run the unit tests?
 *delete text ending here*
 
+#### Please run the integration tests and paste the results below.
+
+#### #### If `installer/` was modified or a file was added/removed from `src/`, then update the installer tests and post the test results below.
+
 ### Was this change documented?
 
 *delete text starting here*

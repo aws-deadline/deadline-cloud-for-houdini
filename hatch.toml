@@ -1,11 +1,13 @@
 [envs.default]
 pre-install-commands = [
-  "pip install -r requirements-testing.txt"
+  "pip install -r requirements-testing.txt",
+  "pip install -r requirements-integ-testing.txt"
 ]
 
 [envs.default.scripts]
 sync = "pip install -r requirements-testing.txt"
-test = "pytest {args:test}"
+test = "pytest {args:test/unit}"
+test-installer = "pytest --no-cov {args:test/installer} -vvv"
 typing = "mypy {args:src test}"
 style = [
   "ruff check {args:.}",
@@ -33,8 +35,19 @@ build = "hatch build"
 [envs.codebuild.env-vars]
 SKIP_BOOTSTRAP_TEST_RESOURCES="True"
 
+[envs.installer.scripts]
+build-installer = "python {root}/scripts/build_installer_cli.py --installer-source-path {root}/installer/DeadlineCloudForHoudiniSubmitter.xml {args:}"
+
+[envs.integ]
+pre-install-commands = [
+  "pip install -r requirements-integ-testing.txt",
+  "pip install -r requirements-testing.txt"
+]
+
 [envs.integ.scripts]
-test = "pytest --no-cov {args:test/*/integ}"
+test = "pytest --no-cov {args:test/integ} -vvv --numprocesses=1"
+test_submitters = "pytest --no-cov {args:test/integ} -vvv --numprocesses=1 -m submitter"
+test_adaptors = "pytest --no-cov {args:test/integ} -vvv --numprocesses=1 -m adaptor"
 
 [envs.e2e.scripts]
 test = "pytest --no-cov {args:test/*/e2e}"

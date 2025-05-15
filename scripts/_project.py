@@ -69,9 +69,9 @@ def get_git_root() -> Path:
     return Path(__file__).parents[1].resolve()
 
 
-def get_pip_platform(system_platform: str, cpu_arch: CPUArch) -> str:
+def get_pip_platform(system_platform: str, cpu_arch: CPUArch = CPUArch.X86_64) -> str:
     if system_platform == "Windows":
-        if cpu_arch is CPUArch.AMD64:
+        if cpu_arch in [CPUArch.AMD64, CPUArch.X86_64]:
             return "win_amd64"
         if cpu_arch is CPUArch.ARM64:
             return "win_arm64"
