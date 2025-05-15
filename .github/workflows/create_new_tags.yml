@@ -1,0 +1,13 @@
+name: "Create new Tag"
+
+on:
+  push:
+    branches:
+      - mainline
+    paths:
+      - CHANGELOG.md
+
+jobs:
+    create-new-tag:
+        uses: aws-deadline/.github/.github/workflows/reusable_create_new_tag.yml@mainline
+        secrets: inherit

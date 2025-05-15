@@ -1,26 +1,67 @@
 name: "Release: Publish"
-run-name: "Release: ${{ github.event.head_commit.message }}"
+run-name: "Release: ${{ inputs.tag }}"
 
 on:
-  push:
-    branches:
-      - mainline
-    paths:
-      - CHANGELOG.md
-
-concurrency:
-  group: release
+  workflow_dispatch:
+      inputs:
+          tag:
+              required: true
+              type: string
 
 jobs:
-  Publish:
-    name: Publish Release
+  CheckForRelease:
+    runs-on: ubuntu-latest
+    name: CheckForRelease
+    outputs:
+      isReleased: ${{steps.checkrelease.outputs.isReleased}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with: 
+          ref: ${{inputs.tag}}
+          fetch-depth: 0
+      - id: checkrelease
+        shell: bash
+        run: |
+          if gh release view "${{inputs.tag}}" &> /dev/null; then
+            echo "isReleased=true" >> $GITHUB_OUTPUT
+          else
+            echo "isReleased=false" >> $GITHUB_OUTPUT
+          fi
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  prerelease:
+      needs: CheckForRelease
+      if: needs.CheckForRelease.outputs.isReleased == 'false'
+      uses: aws-deadline/.github/.github/workflows/reusable_prerelease.yml@mainline
+      secrets: inherit
+      with:
+          installer_oses: "['Linux', 'Windows', 'MacOS']"
+          tag: ${{inputs.tag}}
+  release:
+      needs: prerelease
+      uses: aws-deadline/.github/.github/workflows/reusable_release.yml@mainline
+      secrets: inherit
+      with:
+          tag: ${{inputs.tag}}
+  IsCondaReady:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: release
     permissions:
       id-token: write
-      contents: write
-    uses: aws-deadline/.github/.github/workflows/reusable_publish_v2.yml@mainline
-    with:
-      installer_oses: "['Linux', 'Windows', 'MacOS']"
-    secrets: inherit
+    name: “Is the Conda Package available in all ProdWaves and have you ran any required manual tests?”
+    steps:
+      - run: |
+         :
+  Publish:
+      needs: IsCondaReady
+      uses: aws-deadline/.github/.github/workflows/reusable_publish_python.yml@mainline
+      secrets: inherit
+      with:
+          tag: ${{inputs.tag}}
+
   # PyPI does not support reusable workflows yet
   # # See https://github.com/pypi/warehouse/issues/11096
   PublishToPyPI:
@@ -33,7 +74,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.Publish.outputs.tag }}
+          ref: ${{ inputs.tag }}    
           fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
