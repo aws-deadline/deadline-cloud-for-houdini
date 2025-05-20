@@ -8,6 +8,7 @@ import re
 import sys
 import threading
 import time
+from pathlib import Path
 from functools import wraps
 from typing import Callable
 
@@ -19,6 +20,7 @@ from openjd.adaptor_runtime.process import LoggingSubprocess
 from openjd.adaptor_runtime.app_handlers import RegexCallback, RegexHandler
 from openjd.adaptor_runtime.application_ipc import ActionsQueue, AdaptorServer
 from openjd.adaptor_runtime_client import Action
+from openjd.adaptor_runtime._utils import secure_open
 
 from .._version import version as adaptor_version
 
@@ -337,12 +339,9 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         else:
             os.environ["PYTHONPATH"] = python_path_addition
 
-        # If there are path mapping rules, set the houdini environment variable to enable them
-        houdini_pathmap = self._get_houdini_pathmap()
-        if houdini_pathmap:
-            os.environ["HOUDINI_PATHMAP"] = houdini_pathmap
-
-        _logger.info("Setting HOUDINI_PATHMAP to: {}".format(houdini_pathmap))
+        # Set any path mapping rules
+        self._set_houdini_pathmap()
+        self._set_redshift_pathmap()
 
         houdini_client_path = self._get_houdini_client_path()
 
@@ -352,24 +351,104 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             stderr_handler=regexhandler,
         )
 
-    def _get_houdini_pathmap(self) -> str:
+    def _set_houdini_pathmap(self) -> None:
         """Builds a dict of source to destination strings from the path mapping rules
-
-        The string representation of the dict can then be used to set HOUDINI_PATHMAP
-
-        Returns:
-            str: The value to set HOUDINI_PATHMAP to
+        and sets HOUDINI_PATHMAP to the string representation of the dict.
         """
-        path_mapping_rules: dict[str, str] = {}
+        if not self.path_mapping_rules:
+            return
 
-        for rule in self._path_mapping_rules:
-            path_mapping_rules[rule.source_path.replace("\\", "/")] = rule.destination_path.replace(
-                "\\", "/"
+        houdini_mapping_rules: dict[str, str] = {}
+
+        for rule in self.path_mapping_rules:
+            houdini_mapping_rules[rule.source_path.replace("\\", "/")] = (
+                rule.destination_path.replace("\\", "/")
             )
 
-        if path_mapping_rules:
-            return str(path_mapping_rules)
-        return ""
+        _logger.info(f"Setting HOUDINI_PATHMAP to: {str(houdini_mapping_rules)}")
+        os.environ["HOUDINI_PATHMAP"] = str(houdini_mapping_rules)
+
+    def _set_redshift_pathmap(self) -> None:
+        """Builds a dict of source to destination strings from the path mapping rules
+        and writes them to a temporary file to point Redshift to for path mapping.
+
+        This is sometimes needed when using Redshift proxy files which contain both relative
+        and absolute paths to any external file references. If the proxy file is moved and
+        the relative paths are no longer correct, then the absolute paths will need to
+        be mapped using REDSHIFT_PATHOVERRIDE_FILE.
+
+        https://help.maxon.net/r3d/houdini/en-us/Content/html/Intro+to+Proxies.html
+        """
+
+        if not self.path_mapping_rules:
+            return
+
+        # Redshift expects double quoted space delimited "source" "destination" pairs
+        # example: "C:/Users/AUser/Directory" "/sessions/session-abcd/"
+        # https://help.maxon.net/r3d/houdini/en-us/Content/html/Redshift+Environment+Variables.html
+        redshift_rules = " ".join(
+            [
+                '"{source}" "{dest}"'.format(
+                    source=rule.source_path.replace("\\", "/"),
+                    dest=rule.destination_path.replace("\\", "/"),
+                )
+                for rule in self.path_mapping_rules
+            ]
+        )
+
+        # Collect any additional rules if REDSHIFT_PATHOVERRIDE_FILE is already set
+        if existing_rule_file_path := os.getenv("REDSHIFT_PATHOVERRIDE_FILE"):
+            _logger.info(
+                f"Found existing REDSHIFT_PATHOVERRIDE_FILE environment variable: {existing_rule_file_path}"
+            )
+            try:
+                with secure_open(
+                    existing_rule_file_path, open_mode="r", encoding="utf-8"
+                ) as existing_rule_file:
+                    redshift_rules += " " + " ".join(existing_rule_file.read().splitlines())
+            except FileNotFoundError as e:
+                _logger.warning(
+                    f"The file pointed to by the REDSHIFT_PATHOVERRIDE_FILE environment variable does not exist at {existing_rule_file_path} : {str(e)}"
+                )
+            except PermissionError as e:
+                _logger.warning(
+                    f"Missing permissions to read the REDSHIFT_PATHOVERRIDE_FILE at {existing_rule_file_path}: {str(e)}"
+                )
+            except Exception as e:
+                _logger.warning(
+                    f"Error reading the REDSHIFT_PATHOVERRIDE_FILE at {existing_rule_file_path}: {str(e)}"
+                )
+
+        # Collect any additional rules if REDSHIFT_PATHOVERRIDE_STRING is already set
+        # and REDSHIFT_PATHOVERRIDE_FILE was not already set, Redshift by default
+        # will take only the file if both it and the string are set.
+        if not existing_rule_file_path and (
+            existing_rule_str := os.getenv("REDSHIFT_PATHOVERRIDE_STRING")
+        ):
+            _logger.info(f"Found existing REDSHIFT_PATHOVERRIDE_STRING: {existing_rule_str}")
+            redshift_rules += " " + existing_rule_str
+
+        # Write all rules to a new temp override file and point to it
+        # It was tested and verified that all of the rules can be on a single line
+        # in the file.
+        new_pathmap_file_path = Path(os.getcwd(), "redshift_pathmap_override.txt")
+        try:
+            with secure_open(
+                new_pathmap_file_path, open_mode="w", encoding="utf-8"
+            ) as new_pathmap_file:
+                new_pathmap_file.writelines(redshift_rules)
+                _logger.info(
+                    f"Setting REDSHIFT_PATHOVERRIDE_FILE path to: {str(new_pathmap_file_path)} with the rules {redshift_rules}"
+                )
+                os.environ["REDSHIFT_PATHOVERRIDE_FILE"] = str(new_pathmap_file_path)
+        except PermissionError as e:
+            _logger.warning(
+                f"Redshift path mapping rules not set due to missing permissions to write the REDSHIFT_PATHOVERRIDE_FILE at {new_pathmap_file_path}: {str(e)}"
+            )
+        except Exception as e:
+            _logger.warning(
+                f"Redshift path mapping rules not set due to an error writing the REDSHIFT_PATHOVERRIDE_FILE at {new_pathmap_file_path}: {str(e)}"
+            )
 
     def on_start(self) -> None:
         """
