@@ -81,6 +81,35 @@
                 <addEnvironmentVariable name="${name}" value="${new_value}" scope="${scope}"/>
             </actionList>
         </actionDefinition>
+        <actionDefinition name="fnRemovePathFromEnvironmentVariable">
+            <parameterList>
+                <stringParameter name="name"/>
+                <stringParameter name="value"/>
+                <stringParameter name="scope" default="user"/>
+            </parameterList>
+            <actionList>
+                <logMessage text="Comparing '${env(${name})}' and ${value}"/>
+                <if>
+                    <conditionRuleEvaluationLogic>and</conditionRuleEvaluationLogic>
+                    <conditionRuleList>
+                        <!-- <regExMatch text="${env(${name}).escape_backslashes}" logic="matches" pattern="(?:[;:]|^)${value.escape_backslashes}(?:[;:]|$)"/> -->
+                        <compareText text="${env(${name})}" logic="equals" value="${value}"/>
+                    </conditionRuleList>
+                    <actionList>
+                        <deleteEnvironmentVariable name="${name}" scope="${scope}"/>
+                    </actionList>
+                    <elseActionList>
+                        <setInstallerVariableFromRegEx>
+                            <name>new_value</name>
+                            <pattern>(?:[;:]|^)${value.escape_backslashes}(?:[;:]|$)</pattern>
+                            <substitution>${platform_env_path_sep}</substitution>
+                            <text>${env(${name})}</text>
+                        </setInstallerVariableFromRegEx>
+                        <addEnvironmentVariable name="${name}" value="${new_value}" scope="${scope}"/>
+                    </elseActionList>
+                </if>
+            </actionList>
+        </actionDefinition>
     </functionDefinitionList>
 
     <componentList>
@@ -189,6 +218,17 @@
             </ruleList>
         </actionGroup>
         <deleteFile path="${installdir}/installer_version.txt"/>
+        <if>
+            <conditionRuleList>
+                <platformTest type="windows"/>
+            </conditionRuleList>
+            <actionList>
+                <setInstallerVariable name="platform_env_path_sep" value=";"/>
+            </actionList>
+            <elseActionList>
+                <setInstallerVariable name="platform_env_path_sep" value=":"/>
+            </elseActionList>
+        </if>
     </preUninstallationActionList>
     <width>550</width>
 </project>
