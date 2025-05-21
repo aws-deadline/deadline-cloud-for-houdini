@@ -201,7 +201,7 @@
                 <setInstallerVariable name="houdini_installdir" value="${installdir}/Submitters/Houdini"/>
             </elseActionList>
         </if>
-        <setInstallerVariable name="houdini_packagedir" value="${houdini_installdir}/deadline_package" />
+        <setInstallerVariable name="houdini_packagedir" value="${houdini_installdir}/deadline_package" persist="1" />
     </readyToInstallActionList>
     <parameterList>
         <stringParameter name="deadline_cloud_for_houdini_summary" ask="0" cliOptionShow="0">
@@ -219,4 +219,12 @@
         </unzip>
         <deleteFile path="${installdir}/tmp"/>
     </postInstallationActionList>
+    <postUninstallationActionList>
+        <fnRemovePathFromEnvironmentVariable name="HOUDINI_PACKAGE_DIR" value="${houdini_packagedir}" scope="${installscope}">
+            <progressText>Unsetting HOUDINI_PACKAGE_DIR</progressText>
+            <ruleList>
+                <platformTest type="windows"/>
+            </ruleList>
+        </fnRemovePathFromEnvironmentVariable>
+    </postUninstallationActionList>
 </componentGroup>
