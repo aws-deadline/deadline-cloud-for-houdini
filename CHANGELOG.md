@@ -5,7 +5,7 @@
 * add Redshift pathmapping support (#261) ([`79a7531`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/79a753170dea011b4ce71549af84b581e01a67b0))
 
 ### Bug Fixes
-* Add manual path mapping for environment variables (#259) ([`ea16801`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/ea16801e1ccc4faf183d20b5fe8746a15aea259d))
+* `Path not available` errors due to Environment Variables not being pathmapped(#259) ([`ea16801`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/ea16801e1ccc4faf183d20b5fe8746a15aea259d))
 * ROP geometry nodes not being evaluated (#257) ([`cd02e83`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/cd02e83cf4bf686cd2474c395fae76972ac6bb14))
 
 ## 0.7.6 (2025-04-14)
