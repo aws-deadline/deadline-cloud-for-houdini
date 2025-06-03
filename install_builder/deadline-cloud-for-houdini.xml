@@ -217,6 +217,6 @@
             <destinationDirectory>${houdini_installdir}/python</destinationDirectory>
             <zipFile>${installdir}/tmp/houdini_deps/dependency_bundle/deadline_cloud_for_houdini_submitter-deps.zip</zipFile>
         </unzip>
-        <deleteFile path="${installdir}/tmp/houdini_deps"/>
+        <deleteFile path="${installdir}/tmp"/>
     </postInstallationActionList>
 </componentGroup>

@@ -185,6 +185,15 @@ def test_default_location(installer_path: Path):
         assert str(Path(location.group(1))) == str(default_install_location)
 
 
+@pytest.mark.parametrize("install_type", ["user_installation", "system_installation"])
+def test_tmp_directory_removed(install_type, request):
+    """Test that the temporary directory used during installation is removed."""
+    # GIVEN / WHEN / THEN
+    install_path = request.getfixturevalue(install_type)
+    tmp_dir = install_path / "tmp"
+    assert not tmp_dir.exists(), f"Temporary directory {tmp_dir} was not removed after installation"
+
+
 @pytest.mark.skipif(
     os.getenv("CODEBUILD_SRC_DIR") is None or os.getenv("IS_DEV_BUILD", "false").lower() == "true",
     reason="Only installers built with a license will not be evaluation mode",
