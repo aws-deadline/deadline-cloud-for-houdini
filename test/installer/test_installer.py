@@ -68,6 +68,12 @@ def _run_installer(installer_path, install_scope, installation_path) -> Path:
         installation_path,
         "--enable-components",
         "deadline_cloud_for_houdini,houdini_19_5,houdini_20_0,houdini_20_5",
+        "--houdini-20-5-package-dir",
+        installation_path / "houdini19.5" / "packages",
+        "--houdini-20-0-package-dir",
+        installation_path / "houdini20.0" / "packages",
+        "--houdini-19-5-package-dir",
+        installation_path / "houdini20.5" / "packages",
     ]
     subprocess.run(args, check=True)
 
