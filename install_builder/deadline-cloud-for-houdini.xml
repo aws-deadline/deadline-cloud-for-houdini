@@ -29,13 +29,13 @@
                 </distributionDirectory>
             </distributionFileList>
             <actionList>
-                <setInstallerVariable name="deadline_package_file_name" value="deadline_submitter_for_houdini.json" />
+                <setInstallerVariable name="deadline_package_file_name" value="deadline_submitter_for_houdini.json"/>
                 <substitute>
                     <files>${houdini_packagedir}/${deadline_package_file_name}</files>
                     <type>exact</type>
                     <encoding>utf-8</encoding>
                     <substitutionList>
-                        <substitution pattern="INSTALL_DIR_PLACEHOLDER" value="${houdini_installdir.unix}" />
+                        <substitution pattern="INSTALL_DIR_PLACEHOLDER" value="${houdini_installdir.unix}"/>
                     </substitutionList>
                 </substitute>
                 <fnAddPathEnvironmentVariable>
@@ -95,10 +95,67 @@
                     <cliOptionName>houdini-19-5-package-dir</cliOptionName>
                     <cliOptionText>Path to the Houdini 19.5 packages directory. When the installer is run, if the HOUDINI_USER_PREF_DIR environment variable is set, this directory will default to the packages subdirectory at that path.</cliOptionText>
                     <mustBeWritable>yes</mustBeWritable>
+                    <!-- Do not show this parameter on Windows; we will just add the installation directory to HOUDINI_PACKAGE_DIR. -->
+                    <ruleList>
+                        <platformTest type="windows" negate="true"/>
+                    </ruleList>
+                    <!-- For non-Windows, choose an appropriate default based on install scope and OS -->
+                    <preShowPageActionList>
+                        <!-- User (any): Set based on user pref -->
+                        <if>
+                            <conditionRuleEvaluationLogic>and</conditionRuleEvaluationLogic>
+                            <conditionRuleList>
+                                <compareText logic="equals" text="${houdini_19_5_packagedir}" value=""/>
+                                <compareText logic="equals" text="${installscope}" value="user"/>
+                            </conditionRuleList>
+                            <actionList>
+                                <setInstallerVariable name="houdini_19_5_packagedir" value="${houdini_user_pref_dir_default}19.5/packages"/>
+                            </actionList>
+                        </if>
+
+                        <!-- System (any): Set based on default Houdini location for the OS -->
+                        <if>
+                            <conditionRuleEvaluationLogic>and</conditionRuleEvaluationLogic>
+                            <conditionRuleList>
+                                <compareText logic="equals" text="${houdini_19_5_packagedir}" value=""/>
+                                <compareText logic="equals" text="${installscope}" value="system"/>
+                            </conditionRuleList>
+                            <actionList>
+                                <if>
+                                    <conditionRuleList>
+                                        <platformTest type="linux" />   
+                                    </conditionRuleList>
+                                    <actionList>
+                                        <setInstallerVariable name="houdini_19_5_packagedir" value="/opt/hfs19.5/packages"/>
+                                    </actionList>
+                                </if>
+                                <if>
+                                    <conditionRuleList>
+                                        <platformTest type="osx" />   
+                                    </conditionRuleList>
+                                    <actionList>
+                                        <setInstallerVariable name="houdini_19_5_packagedir" value="/Applications/Houdini/Current/Frameworks/Houdini.framework/Versions/Current/Resources/packages"/>
+                                    </actionList>
+                                </if>
+                            </actionList>
+                        </if>
+                    </preShowPageActionList>
                 </directoryParameter>
             </parameterList>
             <postInstallationActionList>
-                <fnCopyHoudiniPackageFile destinationDir="${houdini_19_5_packagedir}" />
+                <!-- On Windows, we don't require copying the package file and can just set an environment variable.
+                For macOS and Linux, we must copy the file into the latest Houdini installation. -->
+                <if>
+                    <conditionRuleList>
+                        <platformTest type="windows"/>
+                    </conditionRuleList>
+                    <actionList>
+                        <fnAddPathEnvironmentVariable name="HOUDINI_PACKAGE_DIR" value="${houdini_packagedir}" scope="${installscope}"/>
+                    </actionList>
+                    <elseActionList>
+                        <fnCopyHoudiniPackageFile destinationDir="${houdini_19_5_packagedir}" />
+                    </elseActionList>
+                </if>
             </postInstallationActionList>
         </component>
         <component>
@@ -116,10 +173,67 @@
                     <cliOptionName>houdini-20-0-package-dir</cliOptionName>
                     <cliOptionText>Path to the Houdini 20.0 packages directory. When the installer is run, if the HOUDINI_USER_PREF_DIR environment variable is set, this directory will default to the packages subdirectory at that path.</cliOptionText>
                     <mustBeWritable>yes</mustBeWritable>
+                    <!-- Do not show this parameter on Windows; we will just add the installation directory to HOUDINI_PACKAGE_DIR. -->
+                    <ruleList>
+                        <platformTest type="windows" negate="true"/>
+                    </ruleList>
+                    <!-- For non-Windows, choose an appropriate default based on install scope and OS -->
+                    <preShowPageActionList>
+                        <!-- User (any): Set based on user pref -->
+                        <if>
+                            <conditionRuleEvaluationLogic>and</conditionRuleEvaluationLogic>
+                            <conditionRuleList>
+                                <compareText logic="equals" text="${houdini_20_0_packagedir}" value=""/>
+                                <compareText logic="equals" text="${installscope}" value="user"/>
+                            </conditionRuleList>
+                            <actionList>
+                                <setInstallerVariable name="houdini_20_0_packagedir" value="${houdini_user_pref_dir_default}20.0/packages"/>
+                            </actionList>
+                        </if>
+
+                        <!-- System (any): Set based on default Houdini location for the OS -->
+                        <if>
+                            <conditionRuleEvaluationLogic>and</conditionRuleEvaluationLogic>
+                            <conditionRuleList>
+                                <compareText logic="equals" text="${houdini_20_0_packagedir}" value=""/>
+                                <compareText logic="equals" text="${installscope}" value="system"/>
+                            </conditionRuleList>
+                            <actionList>
+                                <if>
+                                    <conditionRuleList>
+                                        <platformTest type="linux" />   
+                                    </conditionRuleList>
+                                    <actionList>
+                                        <setInstallerVariable name="houdini_20_0_packagedir" value="/opt/hfs20.0/packages"/>
+                                    </actionList>
+                                </if>
+                                <if>
+                                    <conditionRuleList>
+                                        <platformTest type="osx" />   
+                                    </conditionRuleList>
+                                    <actionList>
+                                        <setInstallerVariable name="houdini_20_0_packagedir" value="/Applications/Houdini/Current/Frameworks/Houdini.framework/Versions/Current/Resources/packages"/>
+                                    </actionList>
+                                </if>
+                            </actionList>
+                        </if>
+                    </preShowPageActionList>
                 </directoryParameter>
             </parameterList>
             <postInstallationActionList>
-                <fnCopyHoudiniPackageFile destinationDir="${houdini_20_0_packagedir}" />
+                <!-- On Windows, we don't require copying the package file and can just set an environment variable.
+                For macOS and Linux, we must copy the file into the latest Houdini installation. -->
+                <if>
+                    <conditionRuleList>
+                        <platformTest type="windows"/>
+                    </conditionRuleList>
+                    <actionList>
+                        <fnAddPathEnvironmentVariable name="HOUDINI_PACKAGE_DIR" value="${houdini_packagedir}" scope="${installscope}"/>
+                    </actionList>
+                    <elseActionList>
+                        <fnCopyHoudiniPackageFile destinationDir="${houdini_20_0_packagedir}" />
+                    </elseActionList>
+                </if>
             </postInstallationActionList>
         </component>
         <component>
@@ -131,22 +245,76 @@
                     <name>houdini_20_5_packagedir</name>
                     <description>Houdini 20.5 Packages Directory</description>
                     <explanation>Enter the path to the Houdini 20.5 packages directory. For easiest installation, Houdini should be installed before installing Deadline Cloud for Houdini.</explanation>
-                    <default>${houdini_user_pref_dir_default}20.5/packages</default>
                     <allowEmptyValue>0</allowEmptyValue>
                     <ask>yes</ask>
                     <cliOptionName>houdini-20-5-package-dir</cliOptionName>
                     <cliOptionText>Path to the Houdini 20.5 packages directory. When the installer is run, if the HOUDINI_USER_PREF_DIR environment variable is set, this directory will default to the packages subdirectory at that path.</cliOptionText>
                     <mustBeWritable>yes</mustBeWritable>
+                    <!-- Do not show this parameter on Windows; we will just add the installation directory to HOUDINI_PACKAGE_DIR. -->
+                    <ruleList>
+                        <platformTest type="windows" negate="true"/>
+                    </ruleList>
+                    <!-- For non-Windows, choose an appropriate default based on install scope and OS -->
+                    <preShowPageActionList>
+                        <!-- User (any): Set based on user pref -->
+                        <if>
+                            <conditionRuleEvaluationLogic>and</conditionRuleEvaluationLogic>
+                            <conditionRuleList>
+                                <compareText logic="equals" text="${houdini_20_5_packagedir}" value=""/>
+                                <compareText logic="equals" text="${installscope}" value="user"/>
+                            </conditionRuleList>
+                            <actionList>
+                                <setInstallerVariable name="houdini_20_5_packagedir" value="${houdini_user_pref_dir_default}20.5/packages"/>
+                            </actionList>
+                        </if>
+
+                        <!-- System (any): Set based on default Houdini location for the OS -->
+                        <if>
+                            <conditionRuleEvaluationLogic>and</conditionRuleEvaluationLogic>
+                            <conditionRuleList>
+                                <compareText logic="equals" text="${houdini_20_5_packagedir}" value=""/>
+                                <compareText logic="equals" text="${installscope}" value="system"/>
+                            </conditionRuleList>
+                            <actionList>
+                                <if>
+                                    <conditionRuleList>
+                                        <platformTest type="linux" />   
+                                    </conditionRuleList>
+                                    <actionList>
+                                        <setInstallerVariable name="houdini_20_5_packagedir" value="/opt/hfs20.5/packages" />
+                                    </actionList>
+                                </if>
+                                <if>
+                                    <conditionRuleList>
+                                        <platformTest type="osx" />   
+                                    </conditionRuleList>
+                                    <actionList>
+                                        <setInstallerVariable name="houdini_20_5_packagedir" value="/Applications/Houdini/Current/Frameworks/Houdini.framework/Versions/Current/Resources/packages"/>
+                                    </actionList>
+                                </if>
+                            </actionList>
+                        </if>
+                    </preShowPageActionList>
                 </directoryParameter>
             </parameterList>
             <postInstallationActionList>
-                <fnCopyHoudiniPackageFile destinationDir="${houdini_20_5_packagedir}" />
+                <!-- On Windows, we don't require copying the package file and can just set an environment variable.
+                For macOS and Linux, we must copy the file into the latest Houdini installation. -->
+                <if>
+                    <conditionRuleList>
+                        <platformTest type="windows"/>
+                    </conditionRuleList>
+                    <actionList>
+                        <fnAddPathEnvironmentVariable name="HOUDINI_PACKAGE_DIR" value="${houdini_packagedir}" scope="${installscope}"/>
+                    </actionList>
+                    <elseActionList>
+                        <fnCopyHoudiniPackageFile destinationDir="${houdini_20_5_packagedir}" />
+                    </elseActionList>
+                </if>
             </postInstallationActionList>
         </component>
     </componentList>
-    <initializationActionList>
-        <setInstallerVariable name="all_components" value="${all_components} deadline_cloud_for_houdini" />
-        <if>
+    <preInitializationActionList><if>
             <conditionRuleList>
                 <compareText>
                     <text>${env(HOUDINI_USER_PREF_DIR)}</text>
@@ -184,10 +352,9 @@
                 <setInstallerVariable name="houdini_user_pref_dir_default" value="${user_home_directory}/Library/Preferences/houdini/" />
             </actionList>
         </if>
-        <!--To prevent conflicts we delete any copies of our package file in the old install locations-->
-        <deleteFile path="${houdini_user_pref_dir_default}19.5/packages/deadline_submitter_for_houdini.json" />
-        <deleteFile path="${houdini_user_pref_dir_default}20.0/packages/deadline_submitter_for_houdini.json" />
-        <deleteFile path="${houdini_user_pref_dir_default}20.5/packages/deadline_submitter_for_houdini.json" />
+    </preInitializationActionList>
+    <initializationActionList>
+        <setInstallerVariable name="all_components" value="${all_components} deadline_cloud_for_houdini" />
     </initializationActionList>
     <readyToInstallActionList>
         <if>
