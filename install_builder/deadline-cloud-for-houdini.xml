@@ -89,7 +89,6 @@
                     <name>houdini_19_5_packagedir</name>
                     <description>Houdini 19.5 Packages Directory</description>
                     <explanation>Enter the path to the Houdini 19.5 packages directory. For easiest installation, Houdini should be installed before installing Deadline Cloud for Houdini.</explanation>
-                    <default>${houdini_user_pref_dir_default}19.5/packages</default>
                     <allowEmptyValue>0</allowEmptyValue>
                     <ask>yes</ask>
                     <cliOptionName>houdini-19-5-package-dir</cliOptionName>
@@ -167,7 +166,6 @@
                     <name>houdini_20_0_packagedir</name>
                     <description>Houdini 20.0 Packages Directory</description>
                     <explanation>Enter the path to the Houdini 20.0 packages directory. For easiest installation, Houdini should be installed before installing Deadline Cloud for Houdini.</explanation>
-                    <default>${houdini_user_pref_dir_default}20.0/packages</default>
                     <allowEmptyValue>0</allowEmptyValue>
                     <ask>yes</ask>
                     <cliOptionName>houdini-20-0-package-dir</cliOptionName>
@@ -314,7 +312,8 @@
             </postInstallationActionList>
         </component>
     </componentList>
-    <preInitializationActionList><if>
+    <preInitializationActionList>
+        <if>
             <conditionRuleList>
                 <compareText>
                     <text>${env(HOUDINI_USER_PREF_DIR)}</text>
