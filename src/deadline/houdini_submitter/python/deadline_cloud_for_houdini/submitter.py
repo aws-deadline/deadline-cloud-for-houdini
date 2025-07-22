@@ -762,6 +762,7 @@ def get_houdini_environments(init_data_attachment: dict[str, Any]) -> list[dict[
                         "cancelation": {
                             "mode": "NOTIFY_THEN_TERMINATE",
                         },
+                        "timeout": 400,
                     },
                     "onExit": {
                         "command": "houdini-openjd",
@@ -774,6 +775,7 @@ def get_houdini_environments(init_data_attachment: dict[str, Any]) -> list[dict[
                         "cancelation": {
                             "mode": "NOTIFY_THEN_TERMINATE",
                         },
+                        "timeout": 120,
                     },
                 },
             },
