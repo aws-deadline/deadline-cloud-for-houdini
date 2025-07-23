@@ -53,7 +53,7 @@ def _create_scene_and_rop(output_dir: str) -> hou.RopNode:
 
 def _set_parameters(submitter_node: hou.Node):
     """
-    Set scene parameters to create the template we expect
+    Set scene parameters in the submitter to create the template we expect.
     """
     submitter_node.parm("name").set("$HIPNAME")
     submitter_node.parm("separate_steps").set(1)
@@ -69,9 +69,9 @@ def _set_parameters(submitter_node: hou.Node):
     hou.playbar.setFrameRange(1, 2)
 
 
-def main(job_history_dir: str, output_dir: str):
+def create_submitter_bundle(job_history_dir: str, output_dir: str) -> None:
     """
-    This script will run when Houdini is launched. It creates a scene and a submitter node, then uses the node to export a job bundle.
+    Add a submitter node to the pre-defined scene and set parameters.
     """
     submitter_node = hou.node("/out").createNode("deadline_cloud")
     render_node = _create_scene_and_rop(output_dir)
@@ -84,9 +84,27 @@ def main(job_history_dir: str, output_dir: str):
     )
 
 
+def save_as_hip(job_history_dir: str, output_dir: str) -> None:
+    """
+    Not yet implemented.
+
+    Save the pre-defined scene as a HIP file so it can be used in adaptor tests.
+    """
+    pass
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("job_history_dir")
     parser.add_argument("output_dir")
+    parser.add_argument("test_type", type=str, choices=["submitter", "adaptor"])
     args = parser.parse_args(args=sys.argv[sys.argv.index("--") :])
-    main(args.job_history_dir, args.output_dir)
+
+    # We want to use the same scene for both submitter and adaptor tests.
+    # Depending on which test, we have different uses for the scene file:
+    # Either use the submitter node to generate a job bundle,
+    # or save the scene for use in an `openjd run` call.
+    if args.test_type == "submitter":
+        create_submitter_bundle(args.job_history_dir, args.output_dir)
+    elif args.test_type == "adaptor":
+        save_as_hip(args.job_history_dir, args.output_dir)

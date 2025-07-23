@@ -33,6 +33,7 @@ class TestSubmitters:
             script_location / "minimal_test" / "_test_hip.py",
             str(job_history_dir),
             str(output_path),
+            "submitter",
         )
 
         assert (
