@@ -1,3 +1,12 @@
+## 1.0.0 (2025-07-23)
+
+
+
+### Bug Fixes
+* System installs have no default path ([`42a3454`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/42a3454338ab3c77e783f84233951bb3ca9ab7ef))
+* properly clean up env vars created by the installer ([`a283647`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/a28364709357c20f66de19366e11e01a76a70f5f))
+* remove tmp install directory after installation (#266) ([`6dcfccd`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/6dcfccd721c94976799ba13a4ff38fcc1bf0b917))
+
 ## 0.7.7 (2025-05-26)
 
 
