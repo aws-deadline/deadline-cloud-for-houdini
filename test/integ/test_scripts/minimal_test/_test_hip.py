@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+from pathlib import Path
 
 from deadline_cloud_for_houdini.submitter import _create_job_bundle  # type: ignore
 from deadline_cloud_for_houdini._assets import _get_evaluated_asset_references, _parse_files  # type: ignore
@@ -45,8 +46,8 @@ def _create_scene_and_rop(output_dir: str) -> hou.RopNode:
     render_node = hou.node("/out").createNode("ifd")
 
     # Set the render node to use the camera we just created
-    render_node.parm("camera").set(cam_node.name())
-    render_node.parm("vm_picture").set(f"{output_dir}/test.png")
+    render_node.parm("camera").set(cam_node.path())
+    render_node.parm("vm_picture").set(f"{output_dir}/render/$HIPNAME.$OS.$F4.png")
 
     return render_node
 
@@ -84,13 +85,16 @@ def create_submitter_bundle(job_history_dir: str, output_dir: str) -> None:
     )
 
 
-def save_as_hip(job_history_dir: str, output_dir: str) -> None:
+def save_as_hip(output_dir: str) -> None:
     """
-    Not yet implemented.
-
     Save the pre-defined scene as a HIP file so it can be used in adaptor tests.
     """
-    pass
+    submitter_node = hou.node("/out").createNode("deadline_cloud")
+    render_node = _create_scene_and_rop(output_dir)
+    submitter_node.setFirstInput(render_node)
+    _set_parameters(submitter_node)
+
+    hou.hipFile.save(str(Path(output_dir).joinpath(hou.hipFile.basename())))
 
 
 if __name__ == "__main__":
@@ -107,4 +111,4 @@ if __name__ == "__main__":
     if args.test_type == "submitter":
         create_submitter_bundle(args.job_history_dir, args.output_dir)
     elif args.test_type == "adaptor":
-        save_as_hip(args.job_history_dir, args.output_dir)
+        save_as_hip(args.output_dir)

@@ -4,6 +4,7 @@ import json
 import subprocess
 
 from pathlib import Path
+from typing import Any
 
 
 def run_command(args: list[str]) -> subprocess.CompletedProcess[bytes]:
@@ -25,6 +26,13 @@ def run_houdini_submitter_test(
         args.extend(["--", *additional_args])
 
     return run_command(args)
+
+
+def run_houdini_adaptor_test(template_location: Path, job_params: dict[str, Any]) -> None:
+    output = run_command(
+        ["openjd", "run", str(template_location), "--job-param", json.dumps(job_params)]
+    )
+    assert output.returncode == 0
 
 
 def is_valid_template(template_location: Path) -> bool:

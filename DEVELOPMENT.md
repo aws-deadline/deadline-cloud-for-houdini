@@ -140,7 +140,14 @@ To run integration tests:
 4. Set the environment variable `HOUDINI_VERSION` to the version of Houdini you want to test against. For example:
    * On Linux: `export HOUDINI_VERSION='20.5.487'`
    * On Windows (powershell): `$Env:HOUDINI_VERSION='20.5.487'`
-5. Run `hatch run integ:test`.
+5. **On Windows**: Install `pywin32` into Houdini's Python site packages using Admin privileges.
+   ```powershell
+   # Python version should be 3.9 for Houdini 19.5,
+   # 3.10 for Houdini 20.0,
+   # and 3.11 for Houdini 20.5.
+   pip install pywin32 --python-version=3.11 --only-binary=:all: --target="C:\\Program Files\\Side Effects Software\\Houdini 20.5.487\\python311\\lib\\site-packages"
+   ```
+6. Run `hatch run integ:test`. **If you are on Windows**, you may need Admin privileges to run the tests.
    * To only run submitter tests, run `hatch run integ:test_submitters`. This runs tests with the `@pytest.mark.submitter` decorator.
    * To only run adaptor tests, run `hatch run integ:test_adaptors`. This runs tests with the `@pytest.mark.adaptor` decorator.
 
