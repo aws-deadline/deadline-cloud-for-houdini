@@ -33,6 +33,7 @@ class TestSubmitters:
             script_location / "minimal_test" / "_test_hip.py",
             str(job_history_dir),
             str(output_path),
+            "submitter",
         )
 
         assert (
@@ -90,7 +91,9 @@ class TestSubmitters:
             "assetReferences": {
                 "inputs": {"directories": [], "filenames": {scene_location_posix}},
                 "outputs": {
-                    "directories": [str(output_path)],
+                    "directories": [
+                        str(output_path) + "/render"
+                    ],  # The test scene uses a forward slash for the render directory
                 },
                 "referencedPaths": [],
             }
