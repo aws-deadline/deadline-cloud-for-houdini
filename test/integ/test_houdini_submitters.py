@@ -190,3 +190,66 @@ class TestSubmitters:
             }
         }
         self._assert_asset_references(job_history_dir, expected_asset_references)
+
+    def test_render_dependencies_submitter(
+        self,
+        hython_location: Path,
+        script_location: Path,
+        tmp_path: Path,
+    ) -> None:
+        job_history_dir = tmp_path / "jobhistory"
+        output_path = tmp_path / "output"
+
+        os.makedirs(job_history_dir, exist_ok=True)
+        os.makedirs(output_path, exist_ok=True)
+
+        output = run_houdini_submitter_test(
+            hython_location,
+            script_location / "render_dependencies_test" / "_test_hip.py",
+            str(job_history_dir),
+            str(output_path),
+            "submitter",
+        )
+
+        assert (
+            output.returncode == 0
+        ), f"Houdini submitter exited with code {output.returncode}:\n{output.stderr.decode(encoding='utf-8', errors='replace')}"
+        assert is_valid_template(job_history_dir / "template.yaml")
+
+        scene_location = Path.cwd() / "test_render_deps.hip"
+        scene_location_posix = scene_location.as_posix()
+
+        self._assert_job_template(
+            scene_location_posix,
+            script_location / "render_dependencies_test" / "expected_job_bundle",
+            job_history_dir,
+        )
+
+        expected_params: dict[str, list] = {
+            "parameterValues": [
+                {"name": "HipFile", "value": scene_location_posix},
+                {"name": "deadline:priority", "value": 50},
+                {"name": "deadline:maxRetriesPerTask", "value": 5},
+                {"name": "deadline:maxFailedTasksCount", "value": 20},
+                {"name": "deadline:targetTaskRunStatus", "value": "READY"},
+            ]
+        }
+        self._assert_parameter_values(job_history_dir, expected_params)
+
+        expected_asset_reference: dict[str, dict[str, Any]] = {
+            "assetReferences": {
+                "inputs": {
+                    "directories": [],
+                    "filenames": {
+                        scene_location_posix,
+                    },
+                },
+                "outputs": {
+                    "directories": [
+                        str(output_path) + "/render"
+                    ],  # The test scene uses a forward slash for the render directory
+                },
+                "referencedPaths": [],
+            }
+        }
+        self._assert_asset_references(job_history_dir, expected_asset_reference)
