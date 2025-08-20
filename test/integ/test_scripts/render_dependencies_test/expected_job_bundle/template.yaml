@@ -147,4 +147,6 @@ steps:
     - name: Frame
       range: 1-2:1
       type: INT
+  dependencies:
+  - dependsOn: /out/mantra1-1
 description: Render dependencies

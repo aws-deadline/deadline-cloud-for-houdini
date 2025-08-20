@@ -22,7 +22,7 @@ def _create_scene_and_rop(output_dir: str) -> hou.RopNode:
     geo_node = hou.node("/obj").createNode("geo", "test_geometry")
     geo_node.createNode("box", "test_box")
 
-    # Create two distinct cameras to merge them together afterwards
+    # Create two distinct cameras for our render nodes
     cam_node1 = hou.node("/obj").createNode("cam", "test_cam")
     cam_node2 = hou.node("/obj").createNode("cam", "test_cam2")
 
@@ -64,9 +64,6 @@ def _create_scene_and_rop(output_dir: str) -> hou.RopNode:
 
     render_node1 = hou.node("/out").createNode("ifd")
     render_node2 = hou.node("/out").createNode("ifd")
-    merge_node = hou.node("/out").createNode("merge", "merge_node")
-    merge_node.setFirstInput(render_node1)
-    merge_node.setNextInput(render_node2)
 
     # Set the render node to use the camera we just created
     render_node1.parm("camera").set(cam_node1.path())
@@ -77,7 +74,10 @@ def _create_scene_and_rop(output_dir: str) -> hou.RopNode:
     render_node2.parm("vm_picture").set(f"{output_dir}/render/$HIPNAME.$OS.$F4.png")
     render_node2.parm("soho_mkpath").set(1)  # Set intermediate directories
 
-    return render_node1
+    # Create a dependency by chaining the render nodes
+    render_node2.setFirstInput(render_node1)
+
+    return render_node2
 
 
 def _set_parameters(submitter_node: hou.Node):
@@ -100,10 +100,10 @@ def _set_parameters(submitter_node: hou.Node):
 
 
 def _build_scene(output_dir: str) -> None:
-    _create_scene_and_rop(output_dir)
+    final_render_node = _create_scene_and_rop(output_dir)
     submitter_node = hou.node("/out").createNode("deadline_cloud")
 
-    submitter_node.setFirstInput(hou.node("/out/merge_node"))
+    submitter_node.setFirstInput(final_render_node)
     _set_parameters(submitter_node)
 
 
