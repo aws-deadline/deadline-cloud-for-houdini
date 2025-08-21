@@ -17,8 +17,6 @@ def _create_scene_and_rop(output_dir: str) -> hou.RopNode:
     Uses the Houdini API to create nodes comprising a simple scene.
     """
 
-    hou.hipFile.setName("test_render_deps.hip")
-
     geo_node = hou.node("/obj").createNode("geo", "test_geometry")
     geo_node.createNode("box", "test_box")
 
@@ -67,11 +65,11 @@ def _create_scene_and_rop(output_dir: str) -> hou.RopNode:
 
     # Set the render node to use the camera we just created
     render_node1.parm("camera").set(cam_node1.path())
-    render_node1.parm("vm_picture").set(f"{output_dir}/render/$HIPNAME.$OS.$F4.png")
+    render_node1.parm("vm_picture").set(f"{output_dir}/$HIPNAME.$OS.$F4.png")
     render_node1.parm("soho_mkpath").set(1)  # Set intermediate directories
 
     render_node2.parm("camera").set(cam_node2.path())
-    render_node2.parm("vm_picture").set(f"{output_dir}/render/$HIPNAME.$OS.$F4.png")
+    render_node2.parm("vm_picture").set(f"{output_dir}/$HIPNAME.$OS.$F4.png")
     render_node2.parm("soho_mkpath").set(1)  # Set intermediate directories
 
     # Create a dependency by chaining the render nodes
@@ -99,7 +97,8 @@ def _set_parameters(submitter_node: hou.Node):
     hou.playbar.setFrameRange(1, 2)
 
 
-def _build_scene(output_dir: str) -> None:
+def _build_scene(output_dir: str, scene_name: str) -> None:
+    hou.hipFile.setName(scene_name)
     final_render_node = _create_scene_and_rop(output_dir)
     submitter_node = hou.node("/out").createNode("deadline_cloud")
 
@@ -111,6 +110,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("job_history_dir")
     parser.add_argument("output_dir")
+    parser.add_argument("scene_name")
     parser.add_argument("test_type", type=str, choices=["submitter", "adaptor"])
     args = parser.parse_args(args=sys.argv[sys.argv.index("--") :])
 
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     # Depending on which test, we have different uses for the scene file:
     # Either use the submitter node to generate a job bundle,
     # or save the scene for use in an `openjd run` call.
-    _build_scene(args.output_dir)
+    _build_scene(args.output_dir, args.scene_name)
 
     if args.test_type == "submitter":
         submitter_node = hou.node("/out/deadline_cloud1")

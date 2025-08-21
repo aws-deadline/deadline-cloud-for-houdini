@@ -66,11 +66,16 @@ class TestSubmitters:
     """
 
     def test_minimal_scene_submitter(
-        self,
-        hython_location: Path,
-        script_location: Path,
-        tmp_path: Path,
+        self, hython_location: Path, script_location: Path, tmp_path: Path
     ) -> None:
+        """
+        Tests a basic scene with one render node and two frames.
+        This generates:
+        - a job template with one step and a task parameter
+        - the HIP filename as a job parameter
+        - the HIP filename and output directory in asset references
+        """
+
         job_history_dir = tmp_path / "jobhistory"
         output_path = tmp_path / "output"
 
@@ -133,6 +138,14 @@ class TestSubmitters:
     def test_wedge_node_submitter(
         self, hython_location: Path, script_location: Path, tmp_path: Path
     ):
+        """
+        Tests a basic scene with a material wedge node and one render node.
+        This generates:
+        - a job template with two steps, one per wedge parameter, with two frames each
+        - the HIP filename as a job parameter
+        - the HIP filename and output directory as asset references
+        """
+
         job_history_dir = tmp_path / "jobhistory"
         output_path = tmp_path / "output"
 
@@ -182,9 +195,7 @@ class TestSubmitters:
             "assetReferences": {
                 "inputs": {"directories": [], "filenames": {scene_location_posix}},
                 "outputs": {
-                    "directories": [
-                        str(output_path) + "/render"
-                    ],  # The test scene uses a forward slash for the render directory
+                    "directories": [str(output_path) + "/render"],
                 },
                 "referencedPaths": [],
             }
@@ -197,6 +208,15 @@ class TestSubmitters:
         script_location: Path,
         tmp_path: Path,
     ) -> None:
+        """
+        Tests a basic scene with two render nodes chained together.
+        This generates:
+        - a job template with two steps, one dependent on the other; each step has two tasks
+        - the HIP filename as a job parameter
+        - the HIP filename and output directory as asset references
+        """
+        scene_name = "test_render_deps.hip"
+
         job_history_dir = tmp_path / "jobhistory"
         output_path = tmp_path / "output"
 
@@ -208,6 +228,7 @@ class TestSubmitters:
             script_location / "render_dependencies_test" / "_test_hip.py",
             str(job_history_dir),
             str(output_path),
+            scene_name,
             "submitter",
         )
 
@@ -216,7 +237,7 @@ class TestSubmitters:
         ), f"Houdini submitter exited with code {output.returncode}:\n{output.stderr.decode(encoding='utf-8', errors='replace')}"
         assert is_valid_template(job_history_dir / "template.yaml")
 
-        scene_location = Path.cwd() / "test_render_deps.hip"
+        scene_location = Path.cwd() / scene_name
         scene_location_posix = scene_location.as_posix()
 
         self._assert_job_template(
@@ -245,9 +266,7 @@ class TestSubmitters:
                     },
                 },
                 "outputs": {
-                    "directories": [
-                        str(output_path) + "/render"
-                    ],  # The test scene uses a forward slash for the render directory
+                    "directories": [str(output_path)],
                 },
                 "referencedPaths": [],
             }
