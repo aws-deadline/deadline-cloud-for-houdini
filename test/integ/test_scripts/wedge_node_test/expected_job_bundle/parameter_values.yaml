@@ -1,0 +1,11 @@
+parameterValues:
+- name: deadline:priority
+  value: 50
+- name: deadline:targetTaskRunStatus
+  value: READY
+- name: deadline:maxFailedTasksCount
+  value: 20
+- name: deadline:maxRetriesPerTask
+  value: 5
+- name: HipFile
+  value: <HIP_LOCATION>/test_wedge.hip

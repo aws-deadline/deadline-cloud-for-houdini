@@ -129,7 +129,7 @@ def _get_wedge_steps(rop: hou.Node):
                 wedge = dict(**rop_step)
                 # add wedge node and num to use in adaptor
                 wedge["wedge_node"] = wedge_node.path()
-                wedge["wedgenum"] = wedgenum
+                wedge["wedgenum"] = str(wedgenum)
                 # append wedge suffix to name and dependency names
                 suffix = f"{prefix}-{wedgenum}"
                 wedge["name"] = f"{rop_step['name']}-{suffix}"
