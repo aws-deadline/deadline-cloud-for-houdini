@@ -24,7 +24,7 @@ ability to run Houdini efficiently on your render farm.
 
 This library requires:
 
-1. Houdini 19.5, 20.0, or 20.5
+1. Houdini 19.5, 20.0, 20.5 or 21.0
 1. Python 3.9 or higher; and
 1. Linux, Windows, or a macOS operating system.
 
