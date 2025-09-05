@@ -20,7 +20,7 @@ See [DEVELOPMENT.md](https://github.com/aws-deadline/deadline-cloud-for-houdini/
 
 #### Please run the integration tests and paste the results below.
 
-#### #### If `installer/` was modified or a file was added/removed from `src/`, then update the installer tests and post the test results below.
+#### If `installer/` was modified or a file was added/removed from `src/`, then update the installer tests and post the test results below.
 
 ### Was this change documented?
 
