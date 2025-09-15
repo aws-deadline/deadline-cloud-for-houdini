@@ -1,3 +1,12 @@
+## 0.7.9 (2025-09-15)
+
+
+### Features
+* Added Houdini 21.0. (#297) ([`fd1444e`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/fd1444efed0d058b8cd56f7d4931727083ffaf9d))
+
+### Bug Fixes
+* Scenes with wedge nodes fail to render ([`4b34f2f`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/4b34f2feecb1fe799ccac227b9db2c0b835a632b))
+
 ## 0.7.8 (2025-07-24)
 
 
