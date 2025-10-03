@@ -3,5 +3,5 @@ from botocore.exceptions import CredentialRetrievalError
 try:
     node = kwargs['node']
     node.hdaModule().update_queue_parameters_callback(kwargs)
-except CredentialRetrievalError:
-    print('AWS Deadline Cloud credentials are expired.')
+except CredentialRetrievalError as e:
+    print(e)

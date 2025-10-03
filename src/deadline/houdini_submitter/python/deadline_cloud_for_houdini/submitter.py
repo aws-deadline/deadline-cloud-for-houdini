@@ -701,14 +701,30 @@ def settings_callback(kwargs):
     node = kwargs["node"]
     _show_farm_and_queue_as_refreshing(node)
     DeadlineConfigDialog.configure_settings(parent=hou.qt.mainWindow())
-    _apply_farm_and_queue_settings(node)
+    try:
+        _apply_farm_and_queue_settings(node)
+    except Exception as exc:
+        hou.ui.displayMessage(
+            str(exc),
+            title="Deadline Cloud",
+            severity=hou.severityType.Warning,
+            details=traceback.format_exc(),
+        )
 
 
 def login_callback(kwargs):
     node = kwargs["node"]
     _show_farm_and_queue_as_refreshing(node)
     DeadlineLoginDialog.login(parent=hou.qt.mainWindow())
-    _apply_farm_and_queue_settings(node)
+    try:
+        _apply_farm_and_queue_settings(node)
+    except Exception as exc:
+        hou.ui.displayMessage(
+            str(exc),
+            title="Deadline Cloud",
+            severity=hou.severityType.Warning,
+            details=traceback.format_exc(),
+        )
 
 
 def logout_callback(kwargs):
