@@ -5,6 +5,7 @@ import os
 import sys
 import yaml
 import json
+import traceback
 from typing import Any, Dict
 from pathlib import Path
 
@@ -159,6 +160,8 @@ def _get_rop_steps(rop: hou.Node):
     if err:
         raise Exception(f"hscript render: failed to list steps\n\n{str(err)}")
     rop_steps: list[dict[str, Any]] = []
+    deadline_node_seen = False
+
     for n in out.split("\n"):
         if not n.strip():
             continue
@@ -191,8 +194,13 @@ def _get_rop_steps(rop: hou.Node):
 
         node = hou.node(path)
 
-        # skip deadline and deadline_cloud rops
+        # we only want to skip the single root submission node
         if node.type().name() in ("deadline", "deadline_cloud"):
+            if deadline_node_seen:
+                raise RuntimeError(
+                    "The selected network contains multiple Deadline Cloud nodes. Only a single Deadline Cloud node should be used."
+                )
+            deadline_node_seen = True
             continue
 
         step_dict = {
@@ -477,12 +485,15 @@ def save_bundle_callback(kwargs):
             os.startfile(job_bundle_dir)
         hou.ui.displayMessage(
             f"Saved the submission as a job bundle: {job_bundle_dir}",
-            title="Houdini Job Submission",
+            title="Deadline Cloud Job Submission",
         )
     except Exception as exc:
         print("Error saving bundle")
         hou.ui.displayMessage(
-            str(exc), title="Houdini Job Submission", severity=hou.severityType.Warning
+            str(exc),
+            title="Deadline Cloud Job Submission",
+            severity=hou.severityType.Warning,
+            details=traceback.format_exc(),
         )
 
 
@@ -679,7 +690,10 @@ def submit_callback(kwargs):
         )
         print(str(exc))
         hou.ui.displayMessage(
-            str(exc), title="Houdini Job Submission", severity=hou.severityType.Warning
+            str(exc),
+            title="Deadline Cloud Job Submission",
+            severity=hou.severityType.Warning,
+            details=traceback.format_exc(),
         )
 
 
