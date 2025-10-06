@@ -1,1 +1,8 @@
-*.png filter=lfs diff=lfs merge=lfs -text
+test/integ/test_scripts/render_dependencies_test/expected_images/test_render_deps.mantra1.0002.png filter=lfs diff=lfs merge=lfs -text
+test/integ/test_scripts/render_dependencies_test/expected_images/test_render_deps.mantra2.0001.png filter=lfs diff=lfs merge=lfs -text
+test/integ/test_scripts/render_dependencies_test/expected_images/test_render_deps.mantra2.0002.png filter=lfs diff=lfs merge=lfs -text
+test/integ/test_scripts/wedge_node_test/expected_images/test_wedge.mantra1._wedge_wedge_colour_midr_0.000000.0.0001.png filter=lfs diff=lfs merge=lfs -text
+test/integ/test_scripts/wedge_node_test/expected_images/test_wedge.mantra1._wedge_wedge_colour_midr_1.000000.1.0001.png filter=lfs diff=lfs merge=lfs -text
+test/integ/test_scripts/minimal_test/expected_images/test.mantra1.0001.png filter=lfs diff=lfs merge=lfs -text
+test/integ/test_scripts/minimal_test/expected_images/test.mantra1.0002.png filter=lfs diff=lfs merge=lfs -text
+test/integ/test_scripts/render_dependencies_test/expected_images/test_render_deps.mantra1.0001.png filter=lfs diff=lfs merge=lfs -text
