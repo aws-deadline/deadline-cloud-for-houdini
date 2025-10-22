@@ -171,6 +171,7 @@ patch_tags = [
   "feat",
   "fix",
   "refactor",
+  "perf",
 ]
 
 [tool.semantic_release.publish]
