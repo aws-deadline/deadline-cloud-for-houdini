@@ -1,0 +1,42 @@
+name: Houdini Integration Tests
+
+on:
+  workflow_dispatch:
+
+jobs:  
+  MainlineLinuxIntegrationTest:
+    name: Linux Integration Tests
+    permissions:
+      id-token: write
+      contents: read
+    uses: aws-deadline/.github/.github/workflows/reusable_integration_test.yml@mainline
+    secrets: inherit
+    with:
+      repository: ${{ github.event.repository.name }}
+      branch: mainline
+      environment: mainline
+      os: linux
+  MainlineWindowsIntegrationTest:
+    name: Windows Integration Tests
+    permissions:
+      id-token: write
+      contents: read
+    uses: aws-deadline/.github/.github/workflows/reusable_integration_test.yml@mainline
+    secrets: inherit
+    with:
+      repository: ${{ github.event.repository.name }}
+      branch: mainline
+      environment: mainline
+      os: windows
+  MainlineMacOsIntegrationTest:
+    name: MacOS Integration Tests
+    permissions:
+      id-token: write
+      contents: read
+    uses: aws-deadline/.github/.github/workflows/reusable_integration_test.yml@mainline
+    secrets: inherit
+    with:
+      repository: ${{ github.event.repository.name }}
+      branch: mainline
+      environment: mainline
+      os: macos
