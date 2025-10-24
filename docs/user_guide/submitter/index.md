@@ -1,6 +1,6 @@
 # Using the Deadline Cloud for Houdini Submitter
 
-The Deadline Cloud for Houdini submitter is a node that accepts a render operator (ROP) node as input. You can configure and submit your job through this node.
+The Deadline Cloud for Houdini submitter is a node that accepts a render operator (ROP) node as input. You can configure and submit your job through this node. When you submit a job, it will include steps for each ROP in the graph.
 
 Topics:
 

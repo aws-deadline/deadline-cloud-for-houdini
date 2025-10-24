@@ -2,8 +2,8 @@
 
 To install the AWS Deadline Cloud for Houdini submitter, you will need:
 
-* A Windows, macOS, or Linux workstation
-* Houdini 19.5 or later
+* A Windows, macOS (arm64), or Linux workstation
+* Houdini 19.5 - 21.0
 
 **To install the submitter**
 
