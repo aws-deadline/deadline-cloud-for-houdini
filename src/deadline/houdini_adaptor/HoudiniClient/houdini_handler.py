@@ -36,6 +36,32 @@ class HoudiniHandler:
         self.wedge = None
         self.wegenum = None
 
+    def _path_map_envs(self) -> None:
+        """
+        Applies the contents of HOUDINI_PATHMAP to global variables
+        that are not automatically re-mapped.
+        """
+
+        # We know that $JOB and $POSE are not pathmapped automatically,
+        # because they don't change when a scene file moves:
+        # https://www.sidefx.com/docs/houdini/basics/project.html#tips-and-notes
+        envs_to_remap: list[str] = ["JOB", "POSE"]
+
+        for env in envs_to_remap:
+            print(f"Mapping {env} ({hou.getenv(env)})")
+            # Use the `pathmap` command to apply HOUDINI_PATHMAP to each variable
+            # in case it missed mapping.
+            # `-t` (test) applies the path mapping rules to the given path
+            # `-c` (compact) prints out just the re-mapped path (with a newline we must strip)
+            # https://www.sidefx.com/docs/houdini/commands/pathmap.html
+            mapped_path, err = hou.hscript(f"pathmap -t '{hou.getenv(env)}' -c")
+            if not err and mapped_path:
+                hou.putenv(env, mapped_path.strip())
+                print(f"Set {env} to {mapped_path.strip()}")
+
+        # Reload the env variables
+        hou.hscript("varchange")
+
     def set_node_settings(self, node):
         # this is a place holder function
         # TODO remove after common node library implemented
@@ -204,3 +230,5 @@ class HoudiniHandler:
             hou.hipFile.load(scene_path)
         except hou.LoadWarning as e:
             print(e)
+
+        self._path_map_envs()

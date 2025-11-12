@@ -1,5 +1,5 @@
 name: "Release: Publish"
-run-name: "Release: ${{ github.event.head_commit.message }}"
+run-name: "Release: ${{ github.event.head_commit.message || inputs.tag }}"
 
 on:
   push:
@@ -7,34 +7,113 @@ on:
       - mainline
     paths:
       - CHANGELOG.md
+  workflow_dispatch:
+    inputs:
+      tag:
+        required: true
+        type: string
+        description: Specify a tag to re-run a release.
 
 concurrency:
   group: release
 
+permissions:
+  contents: read
+
 jobs:
-  Publish:
-    name: Publish Release
+  TagRelease:
+    uses: aws-deadline/.github/.github/workflows/reusable_tag_release.yml@mainline
+    secrets: inherit
+    with:
+      tag: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+
+  UnitTests:
+    needs: [TagRelease]
+    name: Unit and Integration Tests
+    uses: ./.github/workflows/code_quality.yml
+    with:
+      tag: ${{ needs.TagRelease.outputs.tag }}
+
+  PreRelease:
+      needs: [TagRelease, UnitTests]
+      uses: aws-deadline/.github/.github/workflows/reusable_prerelease.yml@mainline
+      permissions:
+        id-token: write
+        contents: write
+      secrets: inherit
+      with:
+          tag: ${{ needs.TagRelease.outputs.tag }}
+
+  BuildInstaller:
+    needs: [TagRelease, PreRelease]
+    uses: aws-deadline/.github/.github/workflows/reusable_build_installers.yml@mainline
+    secrets: inherit
     permissions:
       id-token: write
-      contents: write
-    uses: aws-deadline/.github/.github/workflows/reusable_publish.yml@mainline
+      contents: read
+    with:
+      ref_type: tags
+      ref: ${{ needs.TagRelease.outputs.tag }}
+      oses: "['Linux', 'Windows', 'MacOS']"
+      environment: release
+      project_name: ${{ github.event.repository.name }}
+
+  Publish:
+      needs: [TagRelease, BuildInstaller]
+      uses: aws-deadline/.github/.github/workflows/reusable_publish_python.yml@mainline
+      permissions:
+        id-token: write
+      secrets: inherit
+      with:
+          tag: ${{ needs.TagRelease.outputs.tag }}
+
+  IsCondaReady:
+    needs: Publish
+    runs-on: ubuntu-latest
+    environment: release
+    name: “Is the Conda Package available in all ProdWaves and have you ran any required manual tests?”
+    steps:
+      - run: |
+         :
+
+  ReleaseInstaller:
+    needs: [TagRelease, IsCondaReady]
+    uses: aws-deadline/.github/.github/workflows/reusable_release_installers.yml@mainline
     secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      tag: ${{ needs.TagRelease.outputs.tag }}
+      oses: "['Linux', 'Windows', 'MacOS']"
+      project_name: ${{ github.event.repository.name }}
+
+  Release:
+      needs: [TagRelease, ReleaseInstaller]
+      uses: aws-deadline/.github/.github/workflows/reusable_release.yml@mainline
+      secrets: inherit
+      permissions:
+        id-token: write
+        contents: write
+      with:
+          tag: ${{ needs.TagRelease.outputs.tag }}
+
   # PyPI does not support reusable workflows yet
   # # See https://github.com/pypi/warehouse/issues/11096
   PublishToPyPI:
-    needs: Publish
+    needs: [TagRelease, Release]
     runs-on: ubuntu-latest
     environment: release
     permissions:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
-          ref: release
+          ref: ${{ needs.TagRelease.outputs.tag }}
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.9'
       - name: Install dependencies

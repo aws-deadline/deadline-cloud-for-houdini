@@ -2,10 +2,13 @@ name: Code Quality
 
 on:
   pull_request:
-    branches: [ mainline, release ]
+    branches: [ mainline, release, 'patch_*' ]
   workflow_call:
     inputs:
       branch:
+        required: false
+        type: string
+      tag:
         required: false
         type: string
 
@@ -15,8 +18,9 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
     uses: aws-deadline/.github/.github/workflows/reusable_python_build.yml@mainline
     with:
       os: ${{ matrix.os }}
       python-version: ${{ matrix.python-version }}
+      ref: ${{inputs.tag}}

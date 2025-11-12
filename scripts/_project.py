@@ -5,12 +5,19 @@ from __future__ import annotations
 import subprocess
 import sys
 
+from enum import Enum
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Optional
 
 
 ADAPTOR_ONLY_DEPENDENCIES = {"openjd-adaptor-runtime"}
+
+
+class CPUArch(Enum):
+    X86_64: str = "x86_64"
+    ARM64: str = "arm64"
+    AMD64: str = "amd64"
 
 
 def get_project_dict(project_path: Optional[Path] = None) -> dict[str, Any]:
@@ -62,12 +69,23 @@ def get_git_root() -> Path:
     return Path(__file__).parents[1].resolve()
 
 
-def get_pip_platform(system_platform: str) -> str:
+def get_pip_platform(system_platform: str, cpu_arch: CPUArch = CPUArch.X86_64) -> str:
     if system_platform == "Windows":
-        return "win_amd64"
-    elif system_platform == "Darwin":
-        return "macosx_10_9_x86_64"
-    elif system_platform == "Linux":
-        return "manylinux2014_x86_64"
-    else:
-        raise Exception(f"Unsupported platform: {system_platform}")
+        if cpu_arch in [CPUArch.AMD64, CPUArch.X86_64]:
+            return "win_amd64"
+        if cpu_arch is CPUArch.ARM64:
+            return "win_arm64"
+
+    if system_platform == "Darwin":
+        if cpu_arch is CPUArch.X86_64:
+            return "macosx_10_9_x86_64"
+        if cpu_arch is CPUArch.ARM64:
+            return "macosx_11_0_arm64"
+
+    if system_platform == "Linux":
+        if cpu_arch is CPUArch.X86_64:
+            return "manylinux_2_17_x86_64"
+        if cpu_arch is CPUArch.ARM64:
+            return "manylinux_2_17_aarch64"
+
+    raise Exception(f"Unsupported platform/archicture: {system_platform}, {cpu_arch}")

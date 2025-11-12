@@ -10,7 +10,7 @@ By default, if a node is a geometry node with the "Initialize Simulation OPs" op
 
 ### Overriding the render strategy
 
-You can override the render strategy be creating a `deadline_cloud_render_strategy` parameter with a value of either `SEQUENTIAL` or `PARALLEL`.
+You can override the render strategy by creating a `deadline_cloud_render_strategy` parameter on your render node (e.g. Mantra or Karma) with a value of either `SEQUENTIAL` or `PARALLEL`.
 
 To add a parameter to a node:
 1. Right click a node in the `out` context, select "Parameters and Channels" then click "Edit Parameter Interface".

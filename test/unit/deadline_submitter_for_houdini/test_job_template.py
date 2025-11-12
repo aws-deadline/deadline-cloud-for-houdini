@@ -119,6 +119,7 @@ def test_job_template(mock_get_steps, mock_parm):
                                         "file://{{ Env.File.initData }}",
                                     ],
                                     "cancelation": {"mode": "NOTIFY_THEN_TERMINATE"},
+                                    "timeout": 400,
                                 },
                                 "onExit": {
                                     "command": "houdini-openjd",
@@ -129,6 +130,7 @@ def test_job_template(mock_get_steps, mock_parm):
                                         "{{ Session.WorkingDirectory }}/connection.json",
                                     ],
                                     "cancelation": {"mode": "NOTIFY_THEN_TERMINATE"},
+                                    "timeout": 120,
                                 },
                             },
                         },

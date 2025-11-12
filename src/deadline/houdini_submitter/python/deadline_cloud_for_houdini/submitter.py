@@ -5,6 +5,7 @@ import os
 import sys
 import yaml
 import json
+import traceback
 from typing import Any, Dict
 from pathlib import Path
 
@@ -21,7 +22,7 @@ from deadline.job_attachments.upload import S3AssetManager
 from deadline.job_attachments.models import JobAttachmentS3Settings
 
 from .queue_parameters import update_queue_parameters, get_queue_parameter_values_as_openjd
-from ._assets import _get_hip_file, _get_asset_references, _parse_files
+from ._assets import _get_hip_file, _get_evaluated_asset_references, _parse_files
 
 # For temporary backwards compatibility
 from ._assets import (
@@ -129,7 +130,7 @@ def _get_wedge_steps(rop: hou.Node):
                 wedge = dict(**rop_step)
                 # add wedge node and num to use in adaptor
                 wedge["wedge_node"] = wedge_node.path()
-                wedge["wedgenum"] = wedgenum
+                wedge["wedgenum"] = str(wedgenum)
                 # append wedge suffix to name and dependency names
                 suffix = f"{prefix}-{wedgenum}"
                 wedge["name"] = f"{rop_step['name']}-{suffix}"
@@ -159,6 +160,8 @@ def _get_rop_steps(rop: hou.Node):
     if err:
         raise Exception(f"hscript render: failed to list steps\n\n{str(err)}")
     rop_steps: list[dict[str, Any]] = []
+    deadline_node_seen = False
+
     for n in out.split("\n"):
         if not n.strip():
             continue
@@ -191,8 +194,13 @@ def _get_rop_steps(rop: hou.Node):
 
         node = hou.node(path)
 
-        # skip deadline and deadline_cloud rops
+        # we only want to skip the single root submission node
         if node.type().name() in ("deadline", "deadline_cloud"):
+            if deadline_node_seen:
+                raise RuntimeError(
+                    "The selected network contains multiple Deadline Cloud nodes. Only a single Deadline Cloud node should be used."
+                )
+            deadline_node_seen = True
             continue
 
         step_dict = {
@@ -223,7 +231,7 @@ def _get_render_strategy_for_node(node: hou.Node) -> RenderStrategy:
     render_strategy = RenderStrategy.PARALLEL
 
     if (
-        node.type().nameWithCategory() == "Driver/geometry"
+        node.type().nameWithCategory() in ["Driver/geometry", "Sop/rop_geometry"]
         and node.parm("initsim")
         and node.parm("initsim").eval()
     ):
@@ -467,7 +475,7 @@ def parse_files_callback(kwargs):
 def save_bundle_callback(kwargs):
     node = kwargs["node"]
     name = node.parm("name").evalAsString()
-    asset_references = _get_asset_references(node)
+    asset_references = _get_evaluated_asset_references(node)
     try:
         job_bundle_dir = create_job_history_bundle_dir("houdini", name)
         _create_job_bundle(node, job_bundle_dir, asset_references)
@@ -477,12 +485,15 @@ def save_bundle_callback(kwargs):
             os.startfile(job_bundle_dir)
         hou.ui.displayMessage(
             f"Saved the submission as a job bundle: {job_bundle_dir}",
-            title="Houdini Job Submission",
+            title="Deadline Cloud Job Submission",
         )
     except Exception as exc:
         print("Error saving bundle")
         hou.ui.displayMessage(
-            str(exc), title="Houdini Job Submission", severity=hou.severityType.Warning
+            str(exc),
+            title="Deadline Cloud Job Submission",
+            severity=hou.severityType.Warning,
+            details=traceback.format_exc(),
         )
 
 
@@ -502,7 +513,7 @@ def submit_callback(kwargs):
     name = node.parm("name").evalAsString()
     # TODO: Populate from queue environment so that parameters can be overridden.
     queue_parameters: list[JobParameter] = []
-    asset_references = _get_asset_references(node)
+    asset_references = _get_evaluated_asset_references(node)
 
     # check for locked rops, Karma for example
     locked_rops = []
@@ -679,7 +690,10 @@ def submit_callback(kwargs):
         )
         print(str(exc))
         hou.ui.displayMessage(
-            str(exc), title="Houdini Job Submission", severity=hou.severityType.Warning
+            str(exc),
+            title="Deadline Cloud Job Submission",
+            severity=hou.severityType.Warning,
+            details=traceback.format_exc(),
         )
 
 
@@ -687,14 +701,30 @@ def settings_callback(kwargs):
     node = kwargs["node"]
     _show_farm_and_queue_as_refreshing(node)
     DeadlineConfigDialog.configure_settings(parent=hou.qt.mainWindow())
-    _apply_farm_and_queue_settings(node)
+    try:
+        _apply_farm_and_queue_settings(node)
+    except Exception as exc:
+        hou.ui.displayMessage(
+            str(exc),
+            title="Deadline Cloud",
+            severity=hou.severityType.Warning,
+            details=traceback.format_exc(),
+        )
 
 
 def login_callback(kwargs):
     node = kwargs["node"]
     _show_farm_and_queue_as_refreshing(node)
     DeadlineLoginDialog.login(parent=hou.qt.mainWindow())
-    _apply_farm_and_queue_settings(node)
+    try:
+        _apply_farm_and_queue_settings(node)
+    except Exception as exc:
+        hou.ui.displayMessage(
+            str(exc),
+            title="Deadline Cloud",
+            severity=hou.severityType.Warning,
+            details=traceback.format_exc(),
+        )
 
 
 def logout_callback(kwargs):
@@ -762,6 +792,7 @@ def get_houdini_environments(init_data_attachment: dict[str, Any]) -> list[dict[
                         "cancelation": {
                             "mode": "NOTIFY_THEN_TERMINATE",
                         },
+                        "timeout": 400,
                     },
                     "onExit": {
                         "command": "houdini-openjd",
@@ -774,6 +805,7 @@ def get_houdini_environments(init_data_attachment: dict[str, Any]) -> list[dict[
                         "cancelation": {
                             "mode": "NOTIFY_THEN_TERMINATE",
                         },
+                        "timeout": 120,
                     },
                 },
             },

@@ -11,7 +11,7 @@ authors = [
 dynamic = ["version"]
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.9"
+requires-python = ">=3.9, <3.14"
 # https://pypi.org/classifiers/
 classifiers = [
   "Development Status :: 5 - Production/Stable",
@@ -21,6 +21,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Operating System :: POSIX :: Linux",
   "Operating System :: Microsoft :: Windows",
   "Operating System :: MacOS",
@@ -30,8 +31,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "deadline == 0.48.*",
-    "openjd-adaptor-runtime == 0.7.*",
+    "deadline >= 0.49,< 0.51",
+    "openjd-adaptor-runtime >= 0.7,< 0.10",
 ]
 
 [project.urls]
@@ -82,7 +83,8 @@ packages = [
 check_untyped_defs = true
 show_error_codes = true
 pretty = true
-# Tell mypy that there's a namspace package src/deadline
+ignore_missing_imports = true
+# Tell mypy that there's a namespace package at src/deadline
 namespace_packages = true
 explicit_package_bases = true
 mypy_path = "src"
@@ -124,6 +126,10 @@ looponfailroots = [
 filterwarnings = [
     "ignore::DeprecationWarning"
 ]
+markers = [
+  "submitter: mark a test as using the submitter.",
+  "adaptor: mark a test as using the adaptor.",
+]
 
 [tool.coverage.run]
 source_pkgs = [ "deadline/houdini_adaptor", "deadline/houdini_submitter" ]
@@ -138,12 +144,13 @@ source =  [
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 60
+fail_under = 65
 
 [tool.semantic_release]
 # Can be removed or set to true once we are v1
 major_on_zero = false
 tag_format = "{version}"
+allow_zero_version = true
 
 [tool.semantic_release.commit_parser_options]
 allowed_tags = [
@@ -164,6 +171,7 @@ patch_tags = [
   "feat",
   "fix",
   "refactor",
+  "perf",
 ]
 
 [tool.semantic_release.publish]
@@ -177,4 +185,4 @@ trim_blocks = true
 lstrip_blocks = true
 
 [tool.semantic_release.branches.release]
-match = "(mainline|release)"
+match = "(mainline|release|patch_.*)"

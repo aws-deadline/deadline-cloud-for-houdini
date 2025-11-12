@@ -7,11 +7,9 @@ import platform
 import re
 import subprocess
 from pathlib import Path
-
 from typing import Optional
 
-from _project import get_git_root, get_dependencies, get_project_dict, get_pip_platform
-
+from _project import CPUArch, get_git_root, get_dependencies, get_project_dict, get_pip_platform
 
 SUBMITTER_PACKAGE_TEMPLATE = {
     "env": [],
@@ -26,9 +24,7 @@ class HoudiniVersion:
 
     VERSION_REGEX = re.compile(r"^([0-9]+)\.([0-9]+)(?:\.([0-9]+))?")
 
-    PYTHON_VERSIONS = {
-        "19.5": "3.9",
-    }
+    PYTHON_VERSIONS = {"19.5": "3.9", "20.0": "3.10", "20.5": "3.11", "21.0": "3.11"}
 
     def __init__(self, arg_version: Optional[str] = None):
         version = self._get_houdini_version(arg_version)
@@ -107,7 +103,9 @@ def _resolve_dependencies(local_deps: list[Path]) -> dict[str, str]:
     return json.loads(result.stdout)
 
 
-def _build_deps_env(destination: Path, python_version: str, local_deps: list[Path]) -> None:
+def _build_deps_env(
+    destination: Path, python_version: str, cpu_arch: CPUArch, local_deps: list[Path]
+) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     if not destination.is_dir():
         raise Exception(f"{str(destination)} is not a directory")
@@ -118,22 +116,26 @@ def _build_deps_env(destination: Path, python_version: str, local_deps: list[Pat
         for dep_name, resolved_version in resolved_dependencies_dict.items()
     ]
 
+    pip_platform = get_pip_platform(platform.system(), cpu_arch)
     args = [
         "pip",
         "install",
         "--target",
         str(destination),
         "--platform",
-        get_pip_platform(platform.system()),
+        pip_platform,
         "--python-version",
         python_version,
         "--only-binary=:all:",
         *resolved_dependencies,
     ]
+    print(f"Running: {' '.join(args)}")
     subprocess.run(args, check=True)
 
 
-def install_submitter_package(houdini_version_arg: Optional[str], local_deps: list[Path]) -> None:
+def install_submitter_package(
+    houdini_version_arg: Optional[str], cpu_arch: CPUArch, local_deps: list[Path]
+) -> None:
     houdini_version = HoudiniVersion(houdini_version_arg)
     major_minor = houdini_version.major_minor()
 
@@ -142,6 +144,7 @@ def install_submitter_package(houdini_version_arg: Optional[str], local_deps: li
     _build_deps_env(
         plugin_env_path,
         houdini_version.python_major_minor(),
+        cpu_arch,
         local_deps,
     )
 
@@ -161,6 +164,7 @@ def install_submitter_package(houdini_version_arg: Optional[str], local_deps: li
     packages_path.mkdir(parents=True, exist_ok=True)
     submitter_package_path = packages_path / "deadline_submitter_for_houdini.json"
 
+    print(f"Installing Houdini plugin to: {submitter_package_path}")
     with open(submitter_package_path, "w", encoding="utf-8") as f:
         json.dump(submitter_package, f, indent=4)
 
@@ -173,6 +177,16 @@ if __name__ == "__main__":
         type=str,
         default=None,
     )
+    cpu_arch_choices = set(e.value for e in CPUArch)
+    parser.add_argument(
+        "--cpu-arch",
+        help="Architecture for python's native deps, should match Houdini's target archicture",
+        type=str,
+        default=(
+            platform.machine().lower() if platform.machine().lower() in cpu_arch_choices else None
+        ),
+        choices=cpu_arch_choices,
+    )
     parser.add_argument(
         "--local-dep",
         help="Path to a repository containing a dependency for in-place install",
@@ -180,6 +194,7 @@ if __name__ == "__main__":
         type=str,
     )
     args = parser.parse_args()
+    cpu_arch = CPUArch(args.cpu_arch)
     local_deps = [Path(dep) for dep in args.local_dep or []]
 
-    install_submitter_package(args.houdini_version, local_deps)
+    install_submitter_package(args.houdini_version, cpu_arch, local_deps)

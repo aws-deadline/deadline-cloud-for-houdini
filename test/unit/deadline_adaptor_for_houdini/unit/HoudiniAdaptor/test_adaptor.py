@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from itertools import chain
 import os
-from typing import Generator
 from unittest.mock import Mock, PropertyMock, call, patch
 
 import pytest
@@ -14,45 +14,6 @@ from deadline.houdini_adaptor.HoudiniAdaptor.adaptor import (
     _REQUIRED_HOUDINI_INIT_KEYS,
     HoudiniNotRunningError,
 )
-
-
-@pytest.fixture()
-def init_data() -> dict:
-    """
-    Pytest Fixture to return an init_data dictionary that passes validation
-
-    Returns:
-        dict: An init_data dictionary
-    """
-    return {
-        "scene_file": "/path/to/scene/houdiniscene-19.5.hip",
-        "version": "19.5.435",
-        "render_node": "mantra1",
-        "wedge_node": "",
-        "wedgenum": "",
-        "ignore_input_nodes": True,
-    }
-
-
-@pytest.fixture()
-def run_data() -> dict:
-    """
-    Pytest Fixture to return a run_data dictionary that passes validation
-
-    Returns:
-        dict: A run_data dictionary
-    """
-    return {"frame_range": {"start": 1, "end": 5, "step": 2}}
-
-
-@pytest.fixture(autouse=True)
-def mock_config() -> Generator[Mock, None, None]:
-    config_mock = Mock()
-    config_mock.get_executable_path.return_value = "/path/to/houdini/hython"
-
-    with patch.object(HoudiniAdaptor, "config", new_callable=PropertyMock) as mock:
-        mock.return_value = config_mock
-        yield config_mock
 
 
 class TestHoudiniAdaptor_on_start:
@@ -584,15 +545,17 @@ class TestHoudiniAdaptor_on_cleanup:
         init_data: dict,
     ) -> None:
         # GIVEN
-        ERROR_CALLBACK_INDEX = 2
+        ERROR_CALLBACK_INDEX = 3
         init_data["strict_error_checking"] = True
         adaptor = HoudiniAdaptor(init_data)
         regex_callbacks = adaptor._get_regex_callbacks()
-        error_regex = regex_callbacks[ERROR_CALLBACK_INDEX].regex_list[0]
-        print(error_regex.search(stdout))
-        if match := error_regex.search(stdout):
-            # WHEN
-            adaptor._handle_error(match)
+        for error_regex in regex_callbacks[ERROR_CALLBACK_INDEX].regex_list:
+            if match := error_regex.search(stdout):
+                # WHEN
+                adaptor._handle_error(match)
+                break
+        else:
+            assert False
 
         # THEN
         assert match
@@ -615,7 +578,7 @@ class TestHoudiniAdaptor_on_cleanup:
         init_data: dict,
     ) -> None:
         # GIVEN
-        ERROR_CALLBACK_INDEX = 2
+        ERROR_CALLBACK_INDEX = 3
         init_data["strict_error_checking"] = True
         adaptor = HoudiniAdaptor(init_data)
         regex_callbacks = adaptor._get_regex_callbacks()
@@ -627,6 +590,25 @@ class TestHoudiniAdaptor_on_cleanup:
 
         # THEN
         assert not match
+
+    def test_handle_hython_license_error(self, init_data: dict):
+        """Tests that the _handle_license_error method reports an error properly"""
+        # GIVEN
+        stdout = "No licenses could be found to run this application."
+        adaptor = HoudiniAdaptor(init_data)
+        regex_callbacks = adaptor._get_regex_callbacks()
+        for error_regex in chain(*[callback.regex_list for callback in regex_callbacks]):
+            if match := error_regex.search(stdout):
+                # WHEN
+                adaptor._handle_license_error(match)
+                break
+        else:
+            assert False
+
+        # THEN
+        assert match
+        assert isinstance(adaptor._exc_info, RuntimeError)
+        assert str(adaptor._exc_info) == f"Houdini encountered a license error: {stdout}"
 
     def test_handle_version(self, init_data: dict):
         """Tests that the _handle_houdini_version method reports the version correctly"""

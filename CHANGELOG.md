@@ -1,3 +1,92 @@
+## 0.7.9 (2025-09-15)
+
+
+### Features
+* Added Houdini 21.0. (#297) ([`fd1444e`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/fd1444efed0d058b8cd56f7d4931727083ffaf9d))
+
+### Bug Fixes
+* Scenes with wedge nodes fail to render ([`4b34f2f`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/4b34f2feecb1fe799ccac227b9db2c0b835a632b))
+
+## 0.7.8 (2025-07-24)
+
+
+
+### Bug Fixes
+* System installs have no default path ([`42a3454`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/42a3454338ab3c77e783f84233951bb3ca9ab7ef))
+* properly clean up env vars created by the installer ([`a283647`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/a28364709357c20f66de19366e11e01a76a70f5f))
+* remove tmp install directory after installation (#266) ([`6dcfccd`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/6dcfccd721c94976799ba13a4ff38fcc1bf0b917))
+
+## 0.7.7 (2025-05-26)
+
+
+### Features
+* add Redshift pathmapping support (#261) ([`79a7531`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/79a753170dea011b4ce71549af84b581e01a67b0))
+
+### Bug Fixes
+* `Path not available` errors due to Environment Variables not being pathmapped(#259) ([`ea16801`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/ea16801e1ccc4faf183d20b5fe8746a15aea259d))
+* ROP geometry nodes not being evaluated (#257) ([`cd02e83`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/cd02e83cf4bf686cd2474c395fae76972ac6bb14))
+
+## 0.7.6 (2025-04-14)
+
+
+### Bug Fixes
+* bug that caused unhandled exceptions during file parsing (#235) ([`c304bca`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/c304bca9ca54ed2ad3e15bf5536877b80c8988f7))
+* job attachments tab showing unevaluated and evaluated entries for same file (#234) ([`8582f6e`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/8582f6e2269ac70aad8a773dce63cf7c979d99b0))
+* **submitter**: do not stop finding job attachment files if a node's filename parm could not be evaluated (#225) ([`cfe4425`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/cfe442535a6e9e09f707393ef816aaeb4a712003))
+
+
+## 0.7.5 (2025-01-13)
+
+
+### Features
+* **adaptor**: Add HYTHON_EXECUTABLE environment variable  (#202) ([`aed5d1c`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/aed5d1c69f16f2c061831f9f9323090eff676b58))
+
+### Bug Fixes
+* **installer**: fix installer system installs (#203) ([`bd591cd`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/bd591cd32af8b86c7222c9c4fe98af360d182a93))
+
+## 0.7.4 (2024-11-21)
+
+
+### Features
+* installer component support for Houdini 20.0 and 20.5 (#192) ([`244bc71`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/244bc7130999f38e5d408b0e845939411b09d2a4))
+
+### Bug Fixes
+* detect ROP USD Render output directories (#190) ([`fbeb81d`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/fbeb81df89944f6164d58835fb72cee37a3019b4))
+* add deadline cloud soho script (#189) ([`f88974f`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/f88974ff8b79fced74c145f53821b1542f75092e))
+
+## 0.7.3 (2024-10-11)
+
+
+### Features
+* add 20.0 and 20.5 dev installation (#173) ([`81a9d73`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/81a9d7385f7f80a04919db2ec359a8490377f8d2))
+
+
+## 0.7.2 (2024-06-27)
+
+
+
+### Bug Fixes
+* fail when mantra license error is seen (#164) ([`6012e2b`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/6012e2b2859abf9f08db702022e571e7d9a35d36))
+
+## 0.7.1 (2024-06-19)
+
+
+### Features
+* capture files with time-based variables for job attachments (#162) ([`55d1a6b`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/55d1a6b9b991f4f648e1eaf135b3f15ea55e514f))
+
+
+## 0.7.0 (2024-05-29)
+
+### BREAKING CHANGES
+* run simulations sequentially (#149) ([`084553c`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/084553c5ab74921e6a33715540066ebeca4ac8f4))
+
+### Features
+* add help text for various fields (#156) ([`a9154b9`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/a9154b9d19a358b9bed47f52e757a74c91eadd00))
+
+### Bug Fixes
+* parse files no longer removes manually added attachments (#153) ([`a0c0988`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/a0c0988b2e9321edf92e4559aa9df7ed08682e6e))
+* add missing submission telemetry event (#158) ([`f1ec97d`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/f1ec97d16312fbb950308ae3b5d0a88b4e98b36e))
+
 ## 0.6.3 (2024-05-22)
 
 
