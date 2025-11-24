@@ -31,6 +31,7 @@ nav:
     - submitter/index.md
     - Submitting a job from Houdini: submitter/using-submitter.md
     - Overriding the render strategy for jobs: submitter/render-strategy.md
+    - Husk rendering and USD workflows: submitter/husk-rendering.md
   - Telemetry: telemetry.md
   - Frequently asked questions: FAQ.md
 

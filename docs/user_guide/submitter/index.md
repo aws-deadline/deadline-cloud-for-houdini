@@ -6,3 +6,4 @@ Topics:
 
 * [Submitting a job to Deadline Cloud from Houdini](using-submitter.md)
 * [Overriding the render strategy for Deadline Cloud jobs](render-strategy.md)
+* [Husk rendering and USD workflows](husk-rendering.md)
