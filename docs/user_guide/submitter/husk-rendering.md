@@ -11,6 +11,7 @@ This means you cannot use the submitter node to create a single job that will ex
 AWS Deadline Cloud provides an [**example Husk job bundle**](https://github.com/aws-deadline/deadline-cloud-samples/tree/mainline/job_bundles/houdini_husk_usd_render) that enables USD export rendering workflows outside of the Houdini submitter. You will need to export the USD scene yourself separately from Houdini before using the example job bundle. 
 
 The Husk example job bundle:
+
 - Allows direct submission of USD scenes for rendering via Husk and a chosen Hydra render delegate without launching Houdini and consuming a Houdini engine license during the render
 - Automatically introspects USD files to find any file dependencies within to attach using job attachments
 - Provides a simple GUI for configuration of common Husk settings and submission
