@@ -28,7 +28,7 @@ Before using the Husk example job bundle, you will need:
 * A git clone of the [Deadline Cloud samples repository](https://github.com/aws-deadline/deadline-cloud-samples)
 
 * The Hydra render delegate available on the worker nodes
-    * Karma is included with Houdini. If you want to use other Hydra render delegates then you must provide them on the worker. See the deadline-cloud-samples repository for example Conda packages for[V-Ray](https://github.com/aws-deadline/deadline-cloud-samples/tree/mainline/conda_recipes/vray) and [Redshift](https://github.com/aws-deadline/deadline-cloud-samples/tree/mainline/conda_recipes/redshift) as one option to make them available on the worker nodes.
+    * Karma is included with Houdini. If you want to use other Hydra render delegates then you must provide them on the worker. See the deadline-cloud-samples repository for example Conda packages for[V-Ray](https://github.com/aws-deadline/deadline-cloud-samples/tree/mainline/conda_recipes/houdini-vray-7) and [Redshift](https://github.com/aws-deadline/deadline-cloud-samples/tree/mainline/conda_recipes/houdini-redshift-2026) as one option to make them available on the worker nodes.
 
 ### To Use the Husk Example Job Bundle
 
