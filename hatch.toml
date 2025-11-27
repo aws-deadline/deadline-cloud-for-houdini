@@ -26,15 +26,6 @@ install = "python {root}/scripts/install_dev_submitter.py {args:}"
 [[envs.all.matrix]]
 python = ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
-[envs.default.env-vars]
-SKIP_BOOTSTRAP_TEST_RESOURCES="True"
-
-[envs.codebuild.scripts]
-build = "hatch build"
-
-[envs.codebuild.env-vars]
-SKIP_BOOTSTRAP_TEST_RESOURCES="True"
-
 [envs.installer.scripts]
 build-installer = "python {root}/scripts/build_installer_cli.py --installer-source-path {root}/installer/DeadlineCloudForHoudiniSubmitter.xml {args:}"
 
