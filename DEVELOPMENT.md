@@ -137,9 +137,11 @@ To run integration tests:
 3. Set the environment variable `HYTHON_EXECUTABLE` to the location of `hython` in your Houdini installation. For example:
    * On Linux: `export HYTHON_EXECUTABLE='/opt/hfs20.5.487/bin/hython'`
    * On Windows (powershell): `$Env:HYTHON_EXECUTABLE='C:\Program Files\Side Effects Software\Houdini 20.5.487\bin\hython.exe'`
+   * On Mac: `export HYTHON_EXECUTABLE="/Applications/Houdini/Houdini20.5.487/Frameworks/Houdini.framework/Resources/bin/hython"`
 4. Set the environment variable `HOUDINI_VERSION` to the version of Houdini you want to test against. For example:
    * On Linux: `export HOUDINI_VERSION='20.5.487'`
    * On Windows (powershell): `$Env:HOUDINI_VERSION='20.5.487'`
+   * On Mac: `export HOUDINI_VERSION='20.5.487'`
 5. **On Windows**: Install `pywin32` into Houdini's Python site packages using Admin privileges.
    ```powershell
    # Python version should be 3.9 for Houdini 19.5,

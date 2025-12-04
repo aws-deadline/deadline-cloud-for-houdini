@@ -58,6 +58,10 @@ class HoudiniHandler:
             if not err and mapped_path:
                 hou.putenv(env, mapped_path.strip())
                 print(f"Set {env} to {mapped_path.strip()}")
+            elif err:
+                print(f"Error mapping {env}: {err}")
+            elif not mapped_path:
+                print(f"Could not map {env}, no rules in HOUDINI_PATHMAP applied")
 
         # Reload the env variables
         hou.hscript("varchange")
