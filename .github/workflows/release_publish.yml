@@ -29,13 +29,36 @@ jobs:
 
   UnitTests:
     needs: [TagRelease]
-    name: Unit and Integration Tests
+    name: Unit Tests
     uses: ./.github/workflows/code_quality.yml
     with:
       tag: ${{ needs.TagRelease.outputs.tag }}
 
+  IntegrationTests:
+    needs: [TagRelease, UnitTests]
+    name: ${{ matrix.name}} Integration Tests
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            name: Linux
+          - os: windows
+            name: Windows
+          - os: macos
+            name: MacOS
+    uses: aws-deadline/.github/.github/workflows/reusable_integration_test.yml@mainline
+    secrets: inherit
+    with:
+      repository: ${{ github.event.repository.name }}
+      tag: ${{ needs.TagRelease.outputs.tag }}
+      os: ${{ matrix.os }}
+
   PreRelease:
-      needs: [TagRelease, UnitTests]
+      needs: [TagRelease, UnitTests, IntegrationTests]
       uses: aws-deadline/.github/.github/workflows/reusable_prerelease.yml@mainline
       permissions:
         id-token: write
