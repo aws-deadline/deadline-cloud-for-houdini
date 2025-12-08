@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from _project import CPUArch, get_git_root, get_dependencies, get_project_dict, get_pip_platform
+from _project import CPUArch, get_dependencies, get_git_root, get_pip_platform, get_project_dict
 
 SUBMITTER_PACKAGE_TEMPLATE = {
     "env": [],
@@ -57,7 +57,7 @@ class HoudiniVersion:
             return cls._validate_version(arg)
         houdini_version_file = get_git_root() / "houdini_version.txt"
         if houdini_version_file.exists():
-            with open(houdini_version_file, "r", encoding="utf-8") as f:
+            with open(houdini_version_file, encoding="utf-8") as f:
                 return cls._validate_version(f.read().strip())
         return cls._validate_version(
             input("Please enter the Houdini version (Major.Minor[.Patch]): ")
@@ -66,7 +66,11 @@ class HoudiniVersion:
 
 def _get_houdini_user_prefs_path(major_minor: str) -> Path:
     if platform.system() == "Windows":
-        return Path.home() / "Documents" / f"houdini{major_minor}"
+        # Check if running in CodeBuild environment
+        if os.environ.get("CODEBUILD_BUILD_ID"):
+            return Path.home() / f"houdini{major_minor}"
+        else:
+            return Path.home() / "Documents" / f"houdini{major_minor}"
     elif platform.system() == "Darwin":
         return Path.home() / "Library" / "Preferences" / "houdini" / major_minor
     elif platform.system() == "Linux":
@@ -79,7 +83,7 @@ def _get_submitter_src_path() -> Path:
     return get_git_root() / "src" / "deadline" / "houdini_submitter"
 
 
-def _resolve_dependencies(local_deps: list[Path]) -> dict[str, str]:
+def _resolve_dependencies(local_deps: list[Path], python_version: str) -> list[str]:
     project_dict = get_project_dict()
     local_dep_project_dicts = [get_project_dict(local_dep) for local_dep in local_deps]
     local_dep_names = set([local_dep["project"]["name"] for local_dep in local_dep_project_dicts])
@@ -93,14 +97,7 @@ def _resolve_dependencies(local_deps: list[Path]) -> dict[str, str]:
         dep for dependency_list in filtered_dependency_lists for dep in dependency_list
     ]
 
-    args = [
-        "pipgrip",
-        "--json",
-        *[dep.for_pip() for dep in flattened_dependency_list],
-    ]
-    print(f"Running: {' '.join(args)}")
-    result = subprocess.run(args, check=True, capture_output=True, text=True)
-    return json.loads(result.stdout)
+    return [dep.for_pip() for dep in flattened_dependency_list]
 
 
 def _build_deps_env(
@@ -108,18 +105,38 @@ def _build_deps_env(
 ) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     if not destination.is_dir():
-        raise Exception(f"{str(destination)} is not a directory")
+        raise Exception(f"{destination!s} is not a directory")
 
-    resolved_dependencies_dict = _resolve_dependencies(local_deps)
-    resolved_dependencies = [
-        f"{dep_name}=={resolved_version}"
-        for dep_name, resolved_version in resolved_dependencies_dict.items()
-    ]
+    resolved_dependencies = _resolve_dependencies(local_deps, python_version)
 
     pip_platform = get_pip_platform(platform.system(), cpu_arch)
+
+    # Install dependencies from requirements file on Windows
+    if platform.system() == "Windows":
+        requirements_file = get_git_root() / "requirements-dcc-env.txt"
+        if requirements_file.exists():
+            args = [
+                "pip",
+                "install",
+                "--upgrade",
+                "--target",
+                str(destination),
+                "--platform",
+                pip_platform,
+                "--python-version",
+                python_version,
+                "--only-binary=:all:",
+                "-r",
+                str(requirements_file),
+            ]
+            print(f"Running: {' '.join(args)}")
+            subprocess.run(args, check=True)
+
+    # Install resolved dependencies
     args = [
         "pip",
         "install",
+        "--upgrade",
         "--target",
         str(destination),
         "--platform",
@@ -134,12 +151,16 @@ def _build_deps_env(
 
 
 def install_submitter_package(
-    houdini_version_arg: Optional[str], cpu_arch: CPUArch, local_deps: list[Path]
+    houdini_version_arg: Optional[str],
+    cpu_arch: CPUArch,
+    local_deps: list[Path],
 ) -> None:
     houdini_version = HoudiniVersion(houdini_version_arg)
     major_minor = houdini_version.major_minor()
 
-    plugin_env_path = get_git_root() / "plugin_env"
+    plugin_env_suffix = f"_{major_minor}"
+    plugin_env_path = get_git_root() / f"plugin_env{plugin_env_suffix}"
+
     os.makedirs(plugin_env_path, exist_ok=True)
     _build_deps_env(
         plugin_env_path,
