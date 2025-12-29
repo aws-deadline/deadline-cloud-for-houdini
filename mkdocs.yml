@@ -1,0 +1,42 @@
+site_name: AWS Deadline Cloud for Houdini User Guide
+site_url: https://miabatta.github.io/deadline-cloud-for-houdini/
+repo_url: https://github.com/aws-deadline/deadline-cloud-for-houdini
+repo_name: aws-deadline/deadline-cloud-for-houdini
+edit_uri: edit/mainline/docs/user_guide/
+
+theme:
+  name: material
+  palette:
+    primary: custom
+  features:
+    - navigation.indexes
+    - navigation.instant
+    - navigation.tracking
+    - navigation.expand
+    - content.code.copy
+
+extra:
+  generator: false # Hide mkdocs-material call out
+
+copyright: Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+markdown_extensions:
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Using the submitter:
+    - submitter/index.md
+    - Submitting a job from Houdini: submitter/using-submitter.md
+    - Overriding the render strategy for jobs: submitter/render-strategy.md
+    - Husk rendering and USD workflows: submitter/husk-rendering.md
+  - Telemetry: telemetry.md
+  - Frequently asked questions: FAQ.md
+
+plugins:
+  - search
+
+docs_dir: docs/user_guide
+site_dir: site

@@ -2,13 +2,12 @@
 
 import json
 import subprocess
-
 from pathlib import Path
 from typing import Any
 
 
 def run_command(args: list[str]) -> subprocess.CompletedProcess[bytes]:
-    output = subprocess.run(args, capture_output=True)
+    output = subprocess.run(args, capture_output=True, check=False)
 
     print(f"Ran the following: {' '.join(output.args)}")
     print(f"\nstdout:\n\n{output.stdout.decode('utf-8', errors='replace')}")
@@ -29,10 +28,28 @@ def run_houdini_submitter_test(
 
 
 def run_houdini_adaptor_test(template_location: Path, job_params: dict[str, Any]) -> None:
-    output = run_command(
-        ["openjd", "run", str(template_location), "--job-param", json.dumps(job_params)]
-    )
-    assert output.returncode == 0
+    import yaml
+
+    # Parse template to get step names
+    with open(template_location) as f:
+        template = yaml.safe_load(f)
+
+    steps = [step["name"] for step in template.get("steps", [])]
+
+    # Run each step separately to avoid connection file race condition
+    for step_name in steps:
+        output = run_command(
+            [
+                "openjd",
+                "run",
+                str(template_location),
+                "--step",
+                step_name,
+                "--job-param",
+                json.dumps(job_params),
+            ]
+        )
+        assert output.returncode == 0
 
 
 def is_valid_template(template_location: Path) -> bool:

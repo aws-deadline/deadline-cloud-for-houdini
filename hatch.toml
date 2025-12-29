@@ -26,22 +26,12 @@ install = "python {root}/scripts/install_dev_submitter.py {args:}"
 [[envs.all.matrix]]
 python = ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
-[envs.default.env-vars]
-SKIP_BOOTSTRAP_TEST_RESOURCES="True"
-
-[envs.codebuild.scripts]
-build = "hatch build"
-
-[envs.codebuild.env-vars]
-SKIP_BOOTSTRAP_TEST_RESOURCES="True"
-
 [envs.installer.scripts]
 build-installer = "python {root}/scripts/build_installer_cli.py --installer-source-path {root}/installer/DeadlineCloudForHoudiniSubmitter.xml {args:}"
 
 [envs.integ]
 pre-install-commands = [
-  "pip install -r requirements-integ-testing.txt",
-  "pip install -r requirements-testing.txt"
+  "pip install -r requirements-integ-testing.txt -r requirements-testing.txt",
 ]
 
 [envs.integ.scripts]
@@ -52,6 +42,21 @@ test_adaptors = "pytest --no-cov {args:test/integ} -vvv --numprocesses=1 -m adap
 [envs.e2e.scripts]
 test = "pytest --no-cov {args:test/*/e2e}"
 
+[envs.integ-ci]
+pre-install-commands = [
+  "pip install -r requirements-integ-testing.txt -r requirements-testing.txt",
+]
+
+[[envs.integ-ci.matrix]]
+houdini = ["19.5.805", "20.0.896", "20.5.613", "21.0.440"]
+
+[envs.integ-ci.env-vars]
+HOUDINI_VERSION = "{matrix:houdini}"
+
+[envs.integ-ci.scripts]
+setup = "python ./pipeline/setup-runner.py --versions {matrix:houdini} {args}"
+test = "pytest --no-cov {args:test/integ} -vvv --numprocesses=1"
+
 [envs.release]
 detached = true
 
@@ -59,3 +64,14 @@ detached = true
 deps = "pip install -r requirements-release.txt"
 bump = "semantic-release -v --strict version --no-push --no-commit --no-tag --skip-build {args}"
 version = "semantic-release -v --strict version --print {args}"
+
+[envs.docs]
+dependencies = [
+  "mkdocs>=1.5.0",
+  "mkdocs-material>=9.4.0",
+]
+
+[envs.docs.scripts]
+build = "mkdocs build"
+serve = "mkdocs serve"
+deploy = "mkdocs gh-deploy --force"

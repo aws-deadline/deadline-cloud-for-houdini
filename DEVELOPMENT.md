@@ -137,15 +137,17 @@ To run integration tests:
 3. Set the environment variable `HYTHON_EXECUTABLE` to the location of `hython` in your Houdini installation. For example:
    * On Linux: `export HYTHON_EXECUTABLE='/opt/hfs20.5.487/bin/hython'`
    * On Windows (powershell): `$Env:HYTHON_EXECUTABLE='C:\Program Files\Side Effects Software\Houdini 20.5.487\bin\hython.exe'`
+   * On Mac: `export HYTHON_EXECUTABLE="/Applications/Houdini/Houdini20.5.487/Frameworks/Houdini.framework/Resources/bin/hython"`
 4. Set the environment variable `HOUDINI_VERSION` to the version of Houdini you want to test against. For example:
    * On Linux: `export HOUDINI_VERSION='20.5.487'`
    * On Windows (powershell): `$Env:HOUDINI_VERSION='20.5.487'`
-5. **On Windows**: Install `pywin32` into Houdini's Python site packages using Admin privileges.
+   * On Mac: `export HOUDINI_VERSION='20.5.487'`
+5. **On Windows**: Install dependencies into Houdini's Python site packages using Admin privileges.
    ```powershell
    # Python version should be 3.9 for Houdini 19.5,
    # 3.10 for Houdini 20.0,
    # and 3.11 for Houdini 20.5 & 21.0.
-   pip install pywin32 --python-version=3.11 --only-binary=:all: --target="C:\\Program Files\\Side Effects Software\\Houdini 20.5.487\\python311\\lib\\site-packages"
+   pip install -r requirements-integ-dcc-env.txt --python-version=3.11 --only-binary=:all: --target="C:\\Program Files\\Side Effects Software\\Houdini 20.5.487\\python311\\lib\\site-packages"
    ```
 6. Run `hatch run integ:test`. **If you are on Windows**, you may need Admin privileges to run the tests.
    * To only run submitter tests, run `hatch run integ:test_submitters`. This runs tests with the `@pytest.mark.submitter` decorator.
@@ -155,6 +157,24 @@ We provide a Python script that can set up and run integration tests for multipl
 ```sh
 $ python scripts/run_integ_tests.py "{\"19.5.805\": \"C:\\Program Files\\Side Effects Software\\Houdini 19.5.805\\bin\\hython.exe\", \"20.0.896\": \"C:\\Program Files\\Side Effects Software\\Houdini 20.0.896\\bin\\hython.exe\"}"
 ```
+
+#### CI Integration Tests (integ-ci environment)
+
+The `integ-ci` hatch environment is designed for automated testing in CI/CD pipelines with multiple Houdini versions.
+
+**Environment Variables:**
+- `HOUDINI_VERSION`: Set automatically by the hatch matrix.
+- `INSTALLER_BUCKET`: S3 bucket name containing Houdini installers (required).
+- `INSTALLER_BUCKET_EXPECTED_OWNER`: AWS account ID that owns the installer bucket (required, must be 12-digit account ID).
+
+**Usage:**
+```bash
+hatch build # The package must be built first
+hatch run integ-ci:setup 
+hatch run integ-ci:test
+```
+
+The `pipeline/setup-runner.py` script downloads Houdini installers from S3 with SHA256 checksum verification, installs them, and then installs the submitter for each version.
 
 ### Installer Tests
 Installer tests are located in the `test/installer` directory. These tests assume that a built installer corresponding to your platform exists in the repository root.
