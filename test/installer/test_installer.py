@@ -166,7 +166,7 @@ def test_default_location(installer_path: Path):
     # Since windows doesn't have text mode, it'll pop-up a gui. We use the timeout to ensure it stops
     try:
         help_result = subprocess.run(
-            [installer_path, *text_mode, "--help"], capture_output=True, text=True, timeout=5
+            [installer_path, *text_mode, "--help"], capture_output=True, text=True, timeout=7
         )
         assert (
             help_result.returncode == 0

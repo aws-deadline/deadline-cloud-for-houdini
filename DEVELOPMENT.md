@@ -132,24 +132,25 @@ Integration tests are located in the `test/unit` directory. Individual test case
 To run integration tests:
 1. Log out of any Deadline Cloud Monitor profiles with `deadline auth logout`.
    * Running the integration tests while logged in may result to queue parameters being written to the test job template, which will fail the tests.
-2. Configure your Houdini licensing.
-3. Install the dev submitter for the major and minor version of Houdini you want to test against: `hatch run install --houdini-version <MAJOR>.<MINOR>`
-3. Set the environment variable `HYTHON_EXECUTABLE` to the location of `hython` in your Houdini installation. For example:
+1. Configure your Houdini licensing.
+1. Run `git lfs pull` to retrieve the expected test images.
+1. Install the dev submitter for the major and minor version of Houdini you want to test against: `hatch run install --houdini-version <MAJOR>.<MINOR>`
+1. Set the environment variable `HYTHON_EXECUTABLE` to the location of `hython` in your Houdini installation. For example:
    * On Linux: `export HYTHON_EXECUTABLE='/opt/hfs20.5.487/bin/hython'`
    * On Windows (powershell): `$Env:HYTHON_EXECUTABLE='C:\Program Files\Side Effects Software\Houdini 20.5.487\bin\hython.exe'`
    * On Mac: `export HYTHON_EXECUTABLE="/Applications/Houdini/Houdini20.5.487/Frameworks/Houdini.framework/Resources/bin/hython"`
-4. Set the environment variable `HOUDINI_VERSION` to the version of Houdini you want to test against. For example:
+1. Set the environment variable `HOUDINI_VERSION` to the version of Houdini you want to test against. For example:
    * On Linux: `export HOUDINI_VERSION='20.5.487'`
    * On Windows (powershell): `$Env:HOUDINI_VERSION='20.5.487'`
    * On Mac: `export HOUDINI_VERSION='20.5.487'`
-5. **On Windows**: Install dependencies into Houdini's Python site packages using Admin privileges.
+1. **On Windows**: Install dependencies into Houdini's Python site packages using Admin privileges.
    ```powershell
    # Python version should be 3.9 for Houdini 19.5,
    # 3.10 for Houdini 20.0,
    # and 3.11 for Houdini 20.5 & 21.0.
    pip install -r requirements-integ-dcc-env.txt --python-version=3.11 --only-binary=:all: --target="C:\\Program Files\\Side Effects Software\\Houdini 20.5.487\\python311\\lib\\site-packages"
    ```
-6. Run `hatch run integ:test`. **If you are on Windows**, you may need Admin privileges to run the tests.
+1. Run `hatch run integ:test`. **If you are on Windows**, you may need Admin privileges to run the tests.
    * To only run submitter tests, run `hatch run integ:test_submitters`. This runs tests with the `@pytest.mark.submitter` decorator.
    * To only run adaptor tests, run `hatch run integ:test_adaptors`. This runs tests with the `@pytest.mark.adaptor` decorator.
 
