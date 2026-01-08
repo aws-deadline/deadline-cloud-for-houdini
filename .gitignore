@@ -14,7 +14,7 @@ __pycache__/
 .tox
 /htmlcov
 **/otls/backup
-plugin_env
+plugin_env*
 
 # Hatch version temp file
 *_version.py
