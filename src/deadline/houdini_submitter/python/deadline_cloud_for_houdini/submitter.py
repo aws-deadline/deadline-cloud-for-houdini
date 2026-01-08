@@ -272,6 +272,32 @@ def _get_parameter_values(node: hou.Node) -> dict[str, Any]:
     return {"parameterValues": parameter_values}
 
 
+def _follow_fetch_nodes(node: hou.Node) -> hou.Node:
+    """Follow a chain of fetch nodes to find the final target node.
+
+    Args:
+        node: The starting node, which may or may not be a fetch node
+
+    Returns:
+        The final non-fetch node in the chain
+    """
+    current_node = node
+    visited_nodes = set()  # Prevent infinite loops
+
+    while (
+        current_node
+        and current_node.type().nameWithCategory() == "Driver/fetch"
+        and current_node.path() not in visited_nodes
+    ):
+        visited_nodes.add(current_node.path())
+        inner_node = current_node.node(current_node.parm("source").eval())
+        if not inner_node:
+            break
+        current_node = inner_node
+
+    return current_node
+
+
 def _is_node_locked(rop_path: str) -> bool:
     """Check rop path lineage for any locked nodes.
 
@@ -518,6 +544,10 @@ def submit_callback(kwargs):
     # check for locked rops, Karma for example
     locked_rops = []
     for n in all_inputs:
+
+        # Check for and follow any fetch nodes
+        n = _follow_fetch_nodes(n)
+
         node_path = n.path()
         if _is_node_locked(node_path):
             locked_rops.append(node_path)
