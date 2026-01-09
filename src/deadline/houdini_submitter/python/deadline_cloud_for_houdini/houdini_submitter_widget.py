@@ -36,7 +36,7 @@ class SceneSettingsWidget(QWidget):
 
         qt_pos_index += 1
         self.adaptor_wheels_directory_picker = DirectoryPickerWidget(
-            initial_directory=hou.getEnvConfigValue("HIP"),
+            initial_directory=hou.getenv("HIP"),
             directory_label="Adaptor Wheels",
             parent=self,
         )
