@@ -8,7 +8,6 @@ from qtpy.QtWidgets import QCheckBox, QWidget, QGridLayout
 
 from .hip_settings import HoudiniSubmitterUISettings
 
-from deadline.client.ui.dialogs.submit_job_to_deadline_dialog import SubmitJobToDeadlineDialog
 from deadline.client.ui.widgets.path_widgets import DirectoryPickerWidget
 
 
@@ -86,29 +85,4 @@ class SceneSettingsWidget(QWidget):
             settings.adaptor_wheels_dir = self.adaptor_wheels_directory_picker.getText()
         settings.auto_unlock_rops = self.auto_unlock_rops_check.isChecked()
         settings.auto_parse_hip = self.auto_parse_hip_check.isChecked()
-        self.auto_save_hip_check = self.auto_save_hip_check.isChecked()
-
-
-def create_dialog(
-    job_setup_widget_type,
-    initial_job_settings,
-    initial_shared_parameter_values,
-    auto_detected_attachments,
-    attachments,
-    on_create_job_bundle_callback,
-    submitter_name,
-    show_host_requirements_tab,
-) -> SubmitJobToDeadlineDialog:
-
-    dialog = SubmitJobToDeadlineDialog(
-        job_setup_widget_type=job_setup_widget_type,
-        initial_job_settings=initial_job_settings,
-        initial_shared_parameter_values=initial_shared_parameter_values,
-        auto_detected_attachments=auto_detected_attachments,
-        attachments=attachments,
-        on_create_job_bundle_callback=on_create_job_bundle_callback,
-        submitter_name=submitter_name,
-        f=Qt.Tool,
-        show_host_requirements_tab=show_host_requirements_tab,
-    )
-    return dialog
+        settings.auto_save_hip = self.auto_save_hip_check.isChecked()
