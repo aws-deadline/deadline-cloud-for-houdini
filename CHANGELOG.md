@@ -1,3 +1,15 @@
+## 0.7.10 (2026-01-19)
+
+
+### Features
+* **log**: add path mapping logging for $JOB and $POSE env variables (#328) ([`3f71e05`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/3f71e057ddf2c15f862054edb6663689be4eb4e6))
+
+### Bug Fixes
+* detection of locked HDAs didn't follow fetch nodes (#333) ([`b7897e1`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/b7897e1d6a0ebacd04da5e6764e9537013fcec14))
+* aws credential error message on node creation is not actionable (#309) ([`5a702a9`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/5a702a97d163441530e664242e1f9528cd515b63))
+* unhelpful error with multiple deadline cloud nodes in the network (#308) ([`ede0b1b`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/ede0b1bd228a6000d01dbc6a3b2467709efad55e))
+
+
 ## 0.7.9 (2025-09-15)
 
 
