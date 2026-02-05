@@ -203,8 +203,8 @@ def _get_control_for_int_parameter(param: JobParameter) -> hou.ParmTemplate:  # 
         else param["name"]
     )
     default = _get_default_value(param)
-    min = (int(param["minValue"]),) if "minValue" in param else (0,)
-    max = (int(param["maxValue"]),) if "maxValue" in param else (10,)
+    min = int(param["minValue"]) if "minValue" in param else 0
+    max = int(param["maxValue"]) if "maxValue" in param else 10
     min_is_strict = "minValue" in param
     max_is_strict = "maxValue" in param
     hidden = _is_param_hidden(param)
