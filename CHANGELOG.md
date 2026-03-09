@@ -1,3 +1,11 @@
+## 0.7.11 (2026-03-09)
+
+
+
+### Bug Fixes
+* handle AccessDeniedException when user lacks GetFarm permission ([`7fdc64c`](https://github.com/aws-deadline/deadline-cloud-for-houdini/commit/7fdc64cda2d436e6cc320034af8701e8490daab6))
+
+
 ## 0.7.10 (2026-01-19)
 
 
