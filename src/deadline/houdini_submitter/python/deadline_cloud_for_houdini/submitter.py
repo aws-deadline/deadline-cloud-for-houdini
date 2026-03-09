@@ -9,6 +9,8 @@ import traceback
 from typing import Any, Dict
 from pathlib import Path
 
+from botocore.exceptions import ClientError
+
 from deadline.client.job_bundle._yaml import deadline_yaml_dump
 from deadline.client import api
 from deadline.client.job_bundle.submission import AssetReferences
@@ -782,8 +784,14 @@ def _apply_farm_and_queue_settings(node):
         node.parm("queue").set(_NONE_SELECTED_TEXT)
         return
     deadline = api.get_boto3_client("deadline")
-    farm_response = deadline.get_farm(farmId=farm_id)
-    node.parm("farm").set(farm_response["displayName"])
+    try:
+        farm_response = deadline.get_farm(farmId=farm_id)
+        node.parm("farm").set(farm_response["displayName"])
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") == "AccessDeniedException":
+            node.parm("farm").set(farm_id)
+        else:
+            raise
     queue_id = get_setting("defaults.queue_id")
     if not queue_id:
         node.parm("queue").set(_NONE_SELECTED_TEXT)
