@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import tempfile
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -173,8 +174,7 @@ def export_arnold_ass_locally(
         ass_path = ass_parm.eval()
         if not ass_path:
             # Set a default output path
-            tmp_dir = os.environ.get("TMPDIR", "/tmp")
-            hip = _hou.getenv("HIP", tmp_dir)
+            hip = _hou.getenv("HIP", tempfile.gettempdir())
             default_path = f"{hip}/ass/{rop.name()}.$F4.ass"
             ass_parm.set(default_path)
             ass_path = ass_parm.eval()
