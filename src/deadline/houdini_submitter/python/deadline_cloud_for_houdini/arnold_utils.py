@@ -173,7 +173,8 @@ def export_arnold_ass_locally(
         ass_path = ass_parm.eval()
         if not ass_path:
             # Set a default output path
-            hip = _hou.getenv("HIP", "/tmp")
+            tmp_dir = os.environ.get("TMPDIR", "/tmp")
+            hip = _hou.getenv("HIP", tmp_dir)
             default_path = f"{hip}/ass/{rop.name()}.$F4.ass"
             ass_parm.set(default_path)
             ass_path = ass_parm.eval()
