@@ -496,20 +496,27 @@ def _create_job_bundle(
 
 
 def _auto_configure_arnold_rops(node: hou.Node) -> list:
-    """Detect Arnold ROPs in the input network and configure them for .ass export.
+    """Detect Arnold ROPs in the input network and optionally configure them.
 
     Checks the ``arnold_auto_configure`` parm on *node* (defaults to True when
-    the parm is absent).  Returns the list of Arnold ROPs found (may be empty).
+    the parm is absent).
+
+    Returns:
+        List of Arnold ROPs found (empty list if none detected).
+        When auto-configure is enabled the ROPs are modified in-place and the
+        scene is saved before returning.
     """
     from .arnold_utils import find_arnold_rops_in_network, configure_arnold_rop_for_export
     from .arnold_utils import ArnoldExportSettings as _ArnoldExportSettings
 
     arnold_rops = find_arnold_rops_in_network(node)
     if not arnold_rops:
-        return arnold_rops
+        return []
 
-    auto_configure = node.parm("arnold_auto_configure")
-    if auto_configure is not None and not auto_configure.eval():
+    auto_configure_parm = node.parm("arnold_auto_configure")
+    should_configure = auto_configure_parm is None or auto_configure_parm.eval()
+
+    if not should_configure:
         return arnold_rops
 
     arnold_settings = _ArnoldExportSettings(
@@ -517,17 +524,64 @@ def _auto_configure_arnold_rops(node: hou.Node) -> list:
         disable_image_render=True,
         log_verbosity=2,
     )
+    configured_rops = []
     for rop in arnold_rops:
         configure_arnold_rop_for_export(rop, arnold_settings)
+        configured_rops.append(rop)
     hou.hipFile.save()
 
-    return arnold_rops
+    return configured_rops
 
 
 def callback(kwargs):
     """ROP parameter callback wrapper"""
     function_name = f"{kwargs['parm'].name()}_callback"
     globals()[function_name](kwargs)
+
+
+_ARNOLD_EXPORT_TITLE = "Arnold .ass Export"
+
+
+def _get_parm_int(node: hou.Node, name: str, default: int = 0) -> int:
+    """Read an integer parameter, returning *default* when the parm is absent."""
+    parm = node.parm(name)
+    return int(parm.eval()) if parm else default
+
+
+def _get_frame_range_from_node(node: hou.Node):
+    """Return a (start, end, step) tuple or None for current-frame-only."""
+    trange = _get_parm_int(node, "trange", 0)
+    if trange == 0:
+        return None
+    return (
+        _get_parm_int(node, "f1", 1),
+        _get_parm_int(node, "f2", 1),
+        _get_parm_int(node, "f3", 1),
+    )
+
+
+def _report_ass_export_results(all_exported: list[str], errors: list[str]) -> None:
+    """Show a Houdini UI message summarising the .ass export outcome."""
+    if errors:
+        hou.ui.displayMessage(
+            f"Exported {len(all_exported)} .ass file(s) with {len(errors)} error(s).",
+            title=_ARNOLD_EXPORT_TITLE,
+            severity=hou.severityType.Warning,
+            details="\n".join(errors + ["", "Exported files:"] + all_exported),
+        )
+    elif all_exported:
+        hou.ui.displayMessage(
+            f"Exported {len(all_exported)} .ass file(s) successfully.",
+            title=_ARNOLD_EXPORT_TITLE,
+            details="\n".join(all_exported),
+        )
+    else:
+        hou.ui.displayMessage(
+            "Export completed but no .ass files were found on disk.\n"
+            "Check that ar_ass_file is set on your Arnold ROP(s).",
+            title=_ARNOLD_EXPORT_TITLE,
+            severity=hou.severityType.Warning,
+        )
 
 
 def export_ass_callback(kwargs):
@@ -543,7 +597,7 @@ def export_ass_callback(kwargs):
     if not arnold_rops:
         hou.ui.displayMessage(
             "No Arnold ROPs found in the input network.",
-            title="Arnold .ass Export",
+            title=_ARNOLD_EXPORT_TITLE,
             severity=hou.severityType.Warning,
         )
         return
@@ -553,16 +607,7 @@ def export_ass_callback(kwargs):
         disable_image_render=True,
         log_verbosity=2,
     )
-
-    # Get frame range from the Deadline Cloud node
-    trange = node.parm("trange").eval() if node.parm("trange") else 0
-    if trange == 0:
-        frame_range = None  # current frame only
-    else:
-        f1 = int(node.parm("f1").eval()) if node.parm("f1") else 1
-        f2 = int(node.parm("f2").eval()) if node.parm("f2") else 1
-        f3 = int(node.parm("f3").eval()) if node.parm("f3") else 1
-        frame_range = (f1, f2, f3)
+    frame_range = _get_frame_range_from_node(node)
 
     all_exported = []
     errors = []
@@ -573,30 +618,8 @@ def export_ass_callback(kwargs):
         except Exception as exc:
             errors.append(f"{rop.path()}: {exc}")
 
-    # Save scene after modifications
     hou.hipFile.save()
-
-    # Report results
-    if errors:
-        hou.ui.displayMessage(
-            f"Exported {len(all_exported)} .ass file(s) with {len(errors)} error(s).",
-            title="Arnold .ass Export",
-            severity=hou.severityType.Warning,
-            details="\n".join(errors + ["", "Exported files:"] + all_exported),
-        )
-    elif all_exported:
-        hou.ui.displayMessage(
-            f"Exported {len(all_exported)} .ass file(s) successfully.",
-            title="Arnold .ass Export",
-            details="\n".join(all_exported),
-        )
-    else:
-        hou.ui.displayMessage(
-            "Export completed but no .ass files were found on disk.\n"
-            "Check that ar_ass_file is set on your Arnold ROP(s).",
-            title="Arnold .ass Export",
-            severity=hou.severityType.Warning,
-        )
+    _report_ass_export_results(all_exported, errors)
 
 
 def parse_files_callback(kwargs):

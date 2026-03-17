@@ -193,7 +193,7 @@ class TestSnapshotRestore:
         result = _snapshot_parms(node, ["ar_ass_file", "missing_parm"])
         assert result == {"ar_ass_file": "$HIP/render.ass"}
 
-    def test_snapshot_falls_back_to_evalAsString(self):
+    def test_snapshot_falls_back_to_eval_as_string(self):
         parm = MagicMock()
         parm.unexpandedString.side_effect = Exception("no unexpanded")
         parm.evalAsString.return_value = "/tmp/render.ass"

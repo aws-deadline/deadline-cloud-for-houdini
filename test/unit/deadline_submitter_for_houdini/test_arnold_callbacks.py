@@ -10,6 +10,9 @@ from .mock_hou import hou_module as hou
 from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
     export_ass_callback,
     _auto_configure_arnold_rops,
+    _get_frame_range_from_node,
+    _get_parm_int,
+    _report_ass_export_results,
 )
 
 _ARNOLD_UTILS = "deadline.houdini_submitter.python.deadline_cloud_for_houdini.arnold_utils"
@@ -112,4 +115,37 @@ class TestExportAssCallback:
         mock_find.return_value = [_make_arnold_rop()]
         mock_export.return_value = []
         export_ass_callback({"node": _make_deadline_node(trange=0)})
+        assert "no .ass files were found" in hou.ui.displayMessage.call_args[0][0]
+
+
+class TestGetParmInt:
+    def test_returns_value(self):
+        node = _make_deadline_node(trange=1)
+        assert _get_parm_int(node, "trange", 0) == 1
+
+    def test_returns_default_when_missing(self):
+        node = _make_deadline_node()
+        assert _get_parm_int(node, "nonexistent", 42) == 42
+
+
+class TestGetFrameRangeFromNode:
+    def test_current_frame(self):
+        assert _get_frame_range_from_node(_make_deadline_node(trange=0)) is None
+
+    def test_frame_range(self):
+        node = _make_deadline_node(trange=1, f1=5, f2=20, f3=2)
+        assert _get_frame_range_from_node(node) == (5, 20, 2)
+
+
+class TestReportAssExportResults:
+    def test_success(self):
+        _report_ass_export_results(["/renders/scene.0001.ass"], [])
+        assert "1 .ass file(s) successfully" in hou.ui.displayMessage.call_args[0][0]
+
+    def test_errors(self):
+        _report_ass_export_results([], ["error1"])
+        assert "1 error(s)" in hou.ui.displayMessage.call_args[0][0]
+
+    def test_no_files(self):
+        _report_ass_export_results([], [])
         assert "no .ass files were found" in hou.ui.displayMessage.call_args[0][0]
