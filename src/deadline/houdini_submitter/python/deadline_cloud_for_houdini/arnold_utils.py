@@ -62,9 +62,7 @@ def _set_parm_safe(parm: "hou.Parm", value) -> None:
             raise
 
 
-def configure_arnold_rop_for_export(
-    rop: "hou.Node", settings: ArnoldExportSettings
-) -> None:
+def configure_arnold_rop_for_export(rop: "hou.Node", settings: ArnoldExportSettings) -> None:
     """Apply safe export configuration to an Arnold ROP before submission.
 
     Addresses known Arnold pitfalls:
@@ -103,9 +101,7 @@ def configure_arnold_rop_for_export(
         try:
             _set_parm_safe(parm, param_value)
         except Exception as e:
-            logger.warning(
-                "Failed to set '%s' on '%s': %s", param_name, rop.path(), e
-            )
+            logger.warning("Failed to set '%s' on '%s': %s", param_name, rop.path(), e)
 
 
 def _snapshot_parms(rop: "hou.Node", parm_names: list[str]) -> dict[str, str]:
@@ -202,9 +198,7 @@ def export_arnold_ass_locally(
 
         # Replace frame tokens with glob pattern to find exported files
         unexpanded = ass_parm.unexpandedString()
-        glob_pattern = re.sub(
-            r"\$F\d*|\${F\d*}|\$FF|\${FF}", "*", unexpanded
-        )
+        glob_pattern = re.sub(r"\$F\d*|\${F\d*}|\$FF|\${FF}", "*", unexpanded)
         # Evaluate remaining Houdini variables in the glob pattern
         # Use try/finally to guarantee parm is restored even on error
         orig = ass_parm.unexpandedString()

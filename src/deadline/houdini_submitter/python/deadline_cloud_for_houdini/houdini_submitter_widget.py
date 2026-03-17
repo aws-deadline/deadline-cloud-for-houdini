@@ -63,9 +63,7 @@ class SceneSettingsWidget(QWidget):
         layout.addWidget(arnold_label, qt_pos_index, 0)
 
         qt_pos_index += 1
-        self.arnold_auto_configure_check = QCheckBox(
-            "Auto-configure Arnold ROPs for export", self
-        )
+        self.arnold_auto_configure_check = QCheckBox("Auto-configure Arnold ROPs for export", self)
         self.arnold_auto_configure_check.setToolTip(
             "Automatically configure Arnold ROP parameters before submission "
             "to ensure proper .ass file export and prevent known issues."
@@ -80,9 +78,7 @@ class SceneSettingsWidget(QWidget):
         layout.addWidget(self.arnold_ass_export_check, qt_pos_index, 0)
 
         qt_pos_index += 1
-        self.arnold_disable_image_check = QCheckBox(
-            "Disable image render (prevent hang)", self
-        )
+        self.arnold_disable_image_check = QCheckBox("Disable image render (prevent hang)", self)
         self.arnold_disable_image_check.setToolTip(
             "Clear ar_picture to prevent hython from hanging when set to 'ip' "
             "(interactive render mode)."
@@ -90,9 +86,7 @@ class SceneSettingsWidget(QWidget):
         layout.addWidget(self.arnold_disable_image_check, qt_pos_index, 0)
 
         # Wire Arnold auto-configure to enable/disable sub-options
-        self.arnold_auto_configure_check.stateChanged.connect(
-            self._arnold_auto_configure_changed
-        )
+        self.arnold_auto_configure_check.stateChanged.connect(self._arnold_auto_configure_changed)
 
     def _load(self, settings: HoudiniSubmitterUISettings) -> None:
         """

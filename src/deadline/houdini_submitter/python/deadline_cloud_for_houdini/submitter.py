@@ -35,7 +35,6 @@ from ._version import version
 
 import hou
 
-
 _NONE_SELECTED_TEXT = "<none selected>"
 _REFRESHING_TEXT = "<refreshing>"
 
