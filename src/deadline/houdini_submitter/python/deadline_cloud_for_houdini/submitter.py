@@ -397,6 +397,13 @@ def _get_step_template(node: Dict, ignore_input_nodes: bool):
         "wedgenum": node["wedgenum"],
         "wedge_node": node["wedge_node"],
     }
+
+    # Propagate Arnold license server to farm workers if set (Arnold ROPs only)
+    rop_node = hou.node(node["rop"])
+    if rop_node and rop_node.type().name() == "arnold":
+        arnold_license = os.environ.get("ADSKFLEX_LICENSE_FILE", "")
+        if arnold_license:
+            init_data["arnold_license_server"] = arnold_license
     init_data_attachment = {
         "name": "initData",
         "filename": "init-data.yaml",
@@ -489,10 +496,108 @@ def _create_job_bundle(
         deadline_yaml_dump(asset_references.to_dict(), f, indent=1)
 
 
+def _auto_configure_arnold_rops(node: hou.Node) -> list:
+    """Detect Arnold ROPs in the input network and configure them for .ass export.
+
+    Checks the ``arnold_auto_configure`` parm on *node* (defaults to True when
+    the parm is absent).  Returns the list of Arnold ROPs found (may be empty).
+    """
+    from .arnold_utils import find_arnold_rops_in_network, configure_arnold_rop_for_export
+    from .arnold_utils import ArnoldExportSettings as _ArnoldExportSettings
+
+    arnold_rops = find_arnold_rops_in_network(node)
+    if not arnold_rops:
+        return arnold_rops
+
+    auto_configure = node.parm("arnold_auto_configure")
+    if auto_configure is not None and not auto_configure.eval():
+        return arnold_rops
+
+    arnold_settings = _ArnoldExportSettings(
+        enable_ass_export=True,
+        disable_image_render=True,
+        log_verbosity=2,
+    )
+    for rop in arnold_rops:
+        configure_arnold_rop_for_export(rop, arnold_settings)
+    hou.hipFile.save()
+
+    return arnold_rops
+
+
 def callback(kwargs):
     """ROP parameter callback wrapper"""
     function_name = f"{kwargs['parm'].name()}_callback"
     globals()[function_name](kwargs)
+
+
+def export_ass_callback(kwargs):
+    """Export .ass files locally from all Arnold ROPs wired into the Deadline Cloud node."""
+    node = kwargs["node"]
+    from .arnold_utils import (
+        find_arnold_rops_in_network,
+        export_arnold_ass_locally,
+        ArnoldExportSettings as _ArnoldExportSettings,
+    )
+
+    arnold_rops = find_arnold_rops_in_network(node)
+    if not arnold_rops:
+        hou.ui.displayMessage(
+            "No Arnold ROPs found in the input network.",
+            title="Arnold .ass Export",
+            severity=hou.severityType.Warning,
+        )
+        return
+
+    settings = _ArnoldExportSettings(
+        enable_ass_export=True,
+        disable_image_render=True,
+        log_verbosity=2,
+    )
+
+    # Get frame range from the Deadline Cloud node
+    trange = node.parm("trange").eval() if node.parm("trange") else 0
+    if trange == 0:
+        frame_range = None  # current frame only
+    else:
+        f1 = int(node.parm("f1").eval()) if node.parm("f1") else 1
+        f2 = int(node.parm("f2").eval()) if node.parm("f2") else 1
+        f3 = int(node.parm("f3").eval()) if node.parm("f3") else 1
+        frame_range = (f1, f2, f3)
+
+    all_exported = []
+    errors = []
+    for rop in arnold_rops:
+        try:
+            exported = export_arnold_ass_locally(rop, settings, frame_range)
+            all_exported.extend(exported)
+        except Exception as exc:
+            errors.append(f"{rop.path()}: {exc}")
+
+    # Save scene after modifications
+    hou.hipFile.save()
+
+    # Report results
+    if errors:
+        hou.ui.displayMessage(
+            f"Exported {len(all_exported)} .ass file(s) with {len(errors)} error(s).",
+            title="Arnold .ass Export",
+            severity=hou.severityType.Warning,
+            details="\n".join(errors + ["", "Exported files:"] + all_exported),
+        )
+    elif all_exported:
+        hou.ui.displayMessage(
+            f"Exported {len(all_exported)} .ass file(s) successfully.",
+            title="Arnold .ass Export",
+            details="\n".join(all_exported),
+        )
+    else:
+        hou.ui.displayMessage(
+            "Export completed but no .ass files were found on disk.\n"
+            "Check that ar_ass_file is set on your Arnold ROP(s).",
+            title="Arnold .ass Export",
+            severity=hou.severityType.Warning,
+        )
 
 
 def parse_files_callback(kwargs):
@@ -502,6 +607,10 @@ def parse_files_callback(kwargs):
 
 def save_bundle_callback(kwargs):
     node = kwargs["node"]
+
+    # Arnold ROP pre-configuration (same as submit_callback)
+    _auto_configure_arnold_rops(node)
+
     name = node.parm("name").evalAsString()
     asset_references = _get_evaluated_asset_references(node)
     try:
@@ -588,6 +697,10 @@ def submit_callback(kwargs):
 
     # check hip is listed in input_filenames
     hip_file = _get_hip_file()
+
+    # Arnold ROP pre-configuration: detect and configure Arnold ROPs for safe export
+    _auto_configure_arnold_rops(node)
+
     hip_input = hip_file in asset_references.input_filenames
     if not hip_input:
         auto_parse = node.parm("auto_parse_hip").eval()

@@ -7,6 +7,16 @@ from .constants import FrameRange, RenderStrategy
 
 
 @dataclass
+class ArnoldExportSettings:
+    """Settings controlling how Arnold ROPs are configured before submission."""
+
+    enable_ass_export: bool = True
+    disable_image_render: bool = True
+    log_verbosity: int = 2
+    ass_output_path: str = ""
+
+
+@dataclass
 class HoudiniSubmitterUISettings:
     """Settings that the submitter UI will use."""
 
@@ -29,3 +39,7 @@ class HoudiniSubmitterUISettings:
 
     include_adaptor_wheels: bool = field(default=False, metadata={"sticky": True})
     adaptor_wheels_dir: Optional[str] = field(default=None, metadata={"sticky": True})
+
+    # Arnold export settings
+    arnold_auto_configure: bool = field(default=True, metadata={"sticky": True})
+    arnold_settings: ArnoldExportSettings = field(default_factory=ArnoldExportSettings)

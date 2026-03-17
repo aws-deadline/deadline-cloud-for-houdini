@@ -712,6 +712,14 @@
              parmtag { "script_callback_language" "python" }
              help    "Automatically save the scene (.hip) file to $HIP when submitting a job."
          }
+         parm {
+             name    "arnold_auto_configure"
+             label   "Auto-configure Arnold ROPs for export"
+             type    toggle
+             default { "1" }
+             parmtag { "script_callback_language" "python" }
+             help    "Automatically detect Arnold ROPs in the input network and configure them for safe .ass export before submission. Enables ar_ass_export_enable, clears ar_picture (prevents hython hang on 'ip'), and sets logging parameters."
+         }
     }
 
     group {
@@ -849,6 +857,16 @@
         nolabel
         joinnext
         default { "" }
+    }
+    parm {
+        name    "export_ass"
+        label   "Export .ass"
+        type    button
+        joinnext
+        default { "0" }
+        parmtag { "script_callback" "hou.phm().callback(kwargs)" }
+        parmtag { "script_callback_language" "python" }
+        help    "Export Arnold .ass files locally from all Arnold ROPs in the input network. Configures ROPs for safe export, renders them, and reports the exported files."
     }
     parm {
         name    "save_bundle"

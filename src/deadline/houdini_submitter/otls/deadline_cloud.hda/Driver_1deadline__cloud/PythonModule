@@ -1,1 +1,1 @@
-from deadline_cloud_for_houdini.submitter import callback, update_queue_parameters_callback
+from deadline_cloud_for_houdini.submitter import callback, update_queue_parameters_callback, export_ass_callback

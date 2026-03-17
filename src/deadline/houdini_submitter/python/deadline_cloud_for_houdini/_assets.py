@@ -326,9 +326,16 @@ def _usd_render_outputs(node: hou.Node) -> set[str]:
     return output_directories
 
 
+def _arnold_outputs(node: hou.Node) -> set[str]:
+    """Get Arnold output directories, prioritizing .ass export path over ar_picture."""
+    from .arnold_utils import get_arnold_ass_output_directories
+
+    return get_arnold_ass_output_directories(node)
+
+
 _NODE_DIR_MAP = {
     "Driver/alembic": "filename",  # Alembic
-    "Driver/arnold": "ar_picture",  # Arnold
+    "Driver/arnold": _arnold_outputs,  # Arnold (.ass export aware)
     "Driver/baketexture::3.0": "vm_uvoutputpicture1",  # Bake Texture
     "Driver/channel": "chopoutput",  # Channel
     "Driver/comp": "copoutput",  # Composite
