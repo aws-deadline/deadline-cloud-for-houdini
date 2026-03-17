@@ -196,11 +196,11 @@ class TestSnapshotRestore:
     def test_snapshot_falls_back_to_eval_as_string(self):
         parm = MagicMock()
         parm.unexpandedString.side_effect = Exception("no unexpanded")
-        parm.evalAsString.return_value = "/tmp/render.ass"
+        parm.evalAsString.return_value = "/var/scenes/render.ass"
         node = MagicMock()
         node.parm = MagicMock(return_value=parm)
         result = _snapshot_parms(node, ["ar_ass_file"])
-        assert result == {"ar_ass_file": "/tmp/render.ass"}
+        assert result == {"ar_ass_file": "/var/scenes/render.ass"}
 
     def test_restore_sets_values(self):
         parm = MagicMock()
