@@ -4,6 +4,7 @@ import os
 import re
 
 from deadline.client.job_bundle.submission import AssetReferences
+from pxr import Usd, UsdUtils
 
 import hou
 
@@ -196,10 +197,65 @@ def _update_paths_parm(node: hou.Node, parm_name: str, paths: list[str]):
         n.set(paths[i])
 
 
+_USD_EXTENSIONS: set[str] = {".usd", ".usda", ".usdc", ".usdz"}
+
+
+def _get_usd_output_directories(usd_path: str) -> set[str]:
+    """
+    Open a USD stage and return output directories from RenderProduct prims
+    at /Render/Products.
+    """
+    output_directories: set[str] = set()
+    stage: Usd.Stage = Usd.Stage.Open(usd_path)
+    if not stage:
+        return output_directories
+    products: Usd.Prim = stage.GetPrimAtPath("/Render/Products")
+    if not products.IsValid():
+        return output_directories
+    for child in products.GetChildren():
+        if child.GetTypeName() == "RenderProduct":
+            product_name_attr: Usd.Attribute = child.GetAttribute("productName")
+            if product_name_attr:
+                path: str = product_name_attr.Get(0)
+                if path:
+                    resolved: str = os.path.normpath(os.path.join(os.path.dirname(usd_path), path))
+                    output_directories.add(os.path.dirname(resolved))
+    return output_directories
+
+
+def _get_usd_asset_references(usd_file_paths: set[str]) -> tuple[set[str], set[str], list[str]]:
+    """
+    Traverse USD composition arcs to find all dependencies of the given USD files.
+
+    Returns:
+        A tuple of (input_files, output_directories, unresolved_paths).
+    """
+    input_files: set[str] = set()
+    output_directories: set[str] = set()
+    all_unresolved: list[str] = []
+
+    for usd_path in usd_file_paths:
+        layers, assets, unresolved = UsdUtils.ComputeAllDependencies(usd_path)
+        usd_dir: str = os.path.dirname(usd_path)
+
+        for layer in layers:
+            if layer.realPath:
+                input_files.add(layer.realPath)
+
+        for asset in assets:
+            input_files.add(os.path.normpath(os.path.join(usd_dir, asset)))
+        all_unresolved.extend(unresolved)
+        output_directories.update(_get_usd_output_directories(usd_path))
+
+    return input_files, output_directories, all_unresolved
+
+
 def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
     # collect input filenames
-    asset_references = AssetReferences()
+    asset_references: AssetReferences = AssetReferences()
     asset_references.input_filenames.add(_get_hip_file())
+
+    usd_files: set[str] = set()
 
     for parm, ref in hou.fileReferences():
         if (
@@ -210,7 +266,7 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
         ):
             continue
 
-        path = parm.evalAsString()
+        path: str = parm.evalAsString()
         # Check the evaluated version to ensure _something_ exists, but add
         # the unexpanded version to evaluate afterwards. Allows us to limit
         # files with parameters, such as $F, to one entry instead of possibly
@@ -221,8 +277,26 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
             asset_references.input_directories.add(ref)
         if os.path.isfile(path):
             asset_references.input_filenames.add(ref)
+            if os.path.splitext(path)[1].lower() in _USD_EXTENSIONS:
+                # Collect USD files for dependency traversal in the next step.
+                # We use the resolved absolute path because UsdUtils.ComputeAllDependencies
+                # needs a real filesystem path, not a Houdini variable like $HIP/scene.usda.
+                usd_files.add(os.path.realpath(path))
 
-    all_inputs = rop_node.inputAncestors()
+    # Traverse USD files to find nested dependencies
+    if usd_files:
+        usd_inputs: set[str]
+        usd_outputs: set[str]
+        unresolved: list[str]
+        usd_inputs, usd_outputs, unresolved = _get_usd_asset_references(usd_files)
+        asset_references.input_filenames.update(usd_inputs)
+        asset_references.output_directories.update(usd_outputs)
+        if unresolved:
+            print(f"WARNING: {len(unresolved)} USD asset paths could not be resolved:")
+            for p in unresolved:
+                print(f"  {p}")
+
+    all_inputs: list[hou.Node] = rop_node.inputAncestors()
     for node in all_inputs:
         asset_references.output_directories.update(_get_output_directories(node))
 

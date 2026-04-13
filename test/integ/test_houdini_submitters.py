@@ -272,3 +272,69 @@ class TestSubmitters:
             }
         }
         self._assert_asset_references(job_history_dir, expected_asset_reference)
+
+    def test_usd_scene_dependency_detection(
+        self, hython_location: Path, script_location: Path, tmp_path: Path
+    ) -> None:
+        """
+        Tests that the submitter detects all dependencies inside USD scenes,
+        including sublayers, references, payloads, and texture assets.
+
+        The test scene has this dependency graph:
+            scene.usda
+            ├── sublayer: lighting.usda
+            │   └── sublayer: model.usda
+            │       └── asset: textures/wood.exr
+            └── payload: heavy_asset.usda
+        """
+        job_history_dir = tmp_path / "jobhistory"
+        output_path = tmp_path / "output"
+
+        os.makedirs(job_history_dir, exist_ok=True)
+        os.makedirs(output_path, exist_ok=True)
+
+        output = run_houdini_submitter_test(
+            hython_location,
+            script_location / "usd_scene_test" / "_test_hip.py",
+            str(job_history_dir),
+            str(output_path),
+            "submitter",
+        )
+
+        assert (
+            output.returncode == 0
+        ), f"Houdini submitter exited with code {output.returncode}:\n{output.stderr.decode(encoding='utf-8', errors='replace')}"
+
+        assert is_valid_template(job_history_dir / "template.yaml")
+
+        scene_location_posix = (Path.cwd() / "test_usd.hip").as_posix()
+        usd_dir = output_path / "usd_scene"
+
+        with open(job_history_dir / "asset_references.yaml") as f:
+            actual_refs = yaml.safe_load(f)
+
+        actual_input_files: set[str] = set(actual_refs["assetReferences"]["inputs"]["filenames"])
+
+        # All USD layers and assets must be detected
+        expected_files = {
+            str(usd_dir / "scene.usda"),
+            str(usd_dir / "lighting.usda"),
+            str(usd_dir / "model.usda"),
+            str(usd_dir / "heavy_asset.usda"),
+            str(usd_dir / "textures" / "wood.exr"),
+        }
+
+        for expected in expected_files:
+            assert (
+                expected in actual_input_files
+            ), f"Missing USD dependency: {expected}\nActual files: {actual_input_files}"
+
+        # Hip file must also be present
+        assert scene_location_posix in actual_input_files
+
+        # Output directory from RenderProduct must be detected (resolved from relative path)
+        actual_output_dirs: list[str] = actual_refs["assetReferences"]["outputs"]["directories"]
+        expected_output_dir: str = str(usd_dir / "renders")
+        assert (
+            expected_output_dir in actual_output_dirs
+        ), f"Missing output directory: {expected_output_dir}\nActual dirs: {actual_output_dirs}"

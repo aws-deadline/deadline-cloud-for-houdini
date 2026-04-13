@@ -1,4 +1,5 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+import os
 from pathlib import Path
 from unittest import mock
 
@@ -10,6 +11,8 @@ from deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets import
     _get_evaluated_asset_references,
     _get_scene_asset_references,
     _get_output_directories,
+    _get_usd_asset_references,
+    _get_usd_output_directories,
     _houdini_time_vars_to_glob,
     _parse_files,
 )
@@ -51,6 +54,8 @@ def test_get_scene_asset_references():
     mock_os = mock.Mock()
     mock_os.path.isdir = lambda path: path.endswith("/")
     mock_os.path.isfile = lambda path: not path.endswith("/")
+    mock_os.path.splitext = os.path.splitext
+    mock_os.path.realpath = os.path.realpath
 
     with mock.patch(
         "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets.os", mock_os
@@ -468,3 +473,240 @@ def test_dirs_with_time_variable(tmpdir):
     assert filesystem != matched_filesystem
     assert result_refs.input_filenames == matched_filesystem
     assert len(result_refs.input_filenames) == len(matched_filesystem)
+
+
+# --- USD dependency detection tests ---
+
+
+class TestGetUsdAssetReferences:
+    """Tests for _get_usd_asset_references()"""
+
+    @mock.patch(
+        "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_usd_output_directories",
+        return_value=set(),
+    )
+    def test_finds_layers_and_assets(self, mock_output_dirs):
+        """Verify layers and assets from ComputeAllDependencies are collected."""
+        mock_layer_a = mock.Mock()
+        mock_layer_a.realPath = "/scene/scene.usda"
+        mock_layer_b = mock.Mock()
+        mock_layer_b.realPath = "/scene/model.usda"
+        mock_layer_empty = mock.Mock()
+        mock_layer_empty.realPath = ""
+
+        with mock.patch(
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets.UsdUtils"
+        ) as mock_usd_utils:
+            mock_usd_utils.ComputeAllDependencies.return_value = (
+                [mock_layer_a, mock_layer_b, mock_layer_empty],
+                ["/scene/textures/wood.exr", "/scene/textures/metal.exr"],
+                [],
+            )
+
+            input_files, output_dirs, unresolved = _get_usd_asset_references({"/scene/scene.usda"})
+
+        assert input_files == {
+            "/scene/scene.usda",
+            "/scene/model.usda",
+            os.path.normpath("/scene/textures/wood.exr"),
+            os.path.normpath("/scene/textures/metal.exr"),
+        }
+        assert unresolved == []
+
+    @mock.patch(
+        "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_usd_output_directories",
+        return_value=set(),
+    )
+    def test_handles_unresolved(self, mock_output_dirs):
+        """Verify resolved assets and unresolved paths are separated correctly."""
+        mock_layer = mock.Mock()
+        mock_layer.realPath = "/scene/scene.usda"
+
+        with mock.patch(
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets.UsdUtils"
+        ) as mock_usd_utils:
+            mock_usd_utils.ComputeAllDependencies.return_value = (
+                [mock_layer],
+                ["/scene/textures/valid.exr"],
+                ["/missing/texture.exr", "/missing/model.usd"],
+            )
+
+            input_files, _, unresolved = _get_usd_asset_references({"/scene/scene.usda"})
+
+        assert os.path.normpath("/scene/textures/valid.exr") in input_files
+        assert "/missing/texture.exr" not in input_files
+        assert "/missing/model.usd" not in input_files
+        assert unresolved == ["/missing/texture.exr", "/missing/model.usd"]
+
+    @mock.patch(
+        "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_usd_output_directories",
+        return_value=set(),
+    )
+    def test_deduplicates_across_files(self, mock_output_dirs):
+        """Verify shared dependencies across two USD files appear only once."""
+        mock_layer_a = mock.Mock()
+        mock_layer_a.realPath = "/scene/a.usda"
+        mock_layer_b = mock.Mock()
+        mock_layer_b.realPath = "/scene/b.usda"
+        mock_shared = mock.Mock()
+        mock_shared.realPath = "/scene/shared.usda"
+
+        with mock.patch(
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets.UsdUtils"
+        ) as mock_usd_utils:
+            mock_usd_utils.ComputeAllDependencies.side_effect = [
+                ([mock_layer_a, mock_shared], ["/scene/tex.exr"], []),
+                ([mock_layer_b, mock_shared], ["/scene/tex.exr"], []),
+            ]
+
+            input_files, _, _ = _get_usd_asset_references({"/scene/a.usda", "/scene/b.usda"})
+
+        assert input_files == {
+            "/scene/a.usda",
+            "/scene/b.usda",
+            "/scene/shared.usda",
+            os.path.normpath("/scene/tex.exr"),
+        }
+
+
+class TestGetUsdOutputDirectories:
+    """Tests for _get_usd_output_directories()"""
+
+    @pytest.mark.parametrize(
+        "products_setup, expected",
+        [
+            pytest.param(
+                [
+                    ("/renders/beauty/output.exr", "RenderProduct"),
+                    ("/renders/aov/depth.exr", "RenderProduct"),
+                ],
+                {os.path.normpath("/renders/beauty"), os.path.normpath("/renders/aov")},
+                id="multiple_products",
+            ),
+            pytest.param(
+                [("/renders/output.exr", "RenderProduct")],
+                {os.path.normpath("/renders")},
+                id="single_product",
+            ),
+            pytest.param(
+                [],
+                set(),
+                id="no_products",
+            ),
+        ],
+    )
+    def test_output_directories(self, products_setup, expected):
+        """Verify output directories extracted from RenderProduct prims."""
+        with mock.patch(
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets.Usd"
+        ) as mock_usd:
+            mock_stage = mock.Mock()
+            mock_usd.Stage.Open.return_value = mock_stage
+
+            if not products_setup:
+                mock_products = mock.Mock()
+                mock_products.IsValid.return_value = False
+                mock_stage.GetPrimAtPath.return_value = mock_products
+            else:
+                mock_products = mock.Mock()
+                mock_products.IsValid.return_value = True
+                children = []
+                for product_name, type_name in products_setup:
+                    child = mock.Mock()
+                    child.GetTypeName.return_value = type_name
+                    attr = mock.Mock()
+                    attr.Get.return_value = product_name
+                    child.GetAttribute.return_value = attr
+                    children.append(child)
+                mock_products.GetChildren.return_value = children
+                mock_stage.GetPrimAtPath.return_value = mock_products
+
+            result = _get_usd_output_directories("/scene/scene.usda")
+
+        assert result == expected
+
+    def test_invalid_stage_returns_empty(self):
+        """Verify no crash when stage fails to open."""
+        with mock.patch(
+            "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets.Usd"
+        ) as mock_usd:
+            mock_usd.Stage.Open.return_value = None
+
+            result = _get_usd_output_directories("/nonexistent.usda")
+
+        assert result == set()
+
+
+class TestSceneAssetReferencesUsdTraversal:
+    """Tests for USD traversal integration in _get_scene_asset_references()"""
+
+    def test_usd_file_triggers_traversal(self):
+        """Verify that a .usda file in hou.fileReferences() triggers USD traversal."""
+        node = hou.node
+        hou.hipFile.path.return_value = "/scene/test.hip"
+
+        usd_parm = mock.Mock()
+        usd_parm.node.return_value = None
+        usd_parm.name.return_value = "file1"
+        usd_parm.evalAsString.return_value = "/scene/scene.usda"
+
+        hou.fileReferences.return_value = [(usd_parm, "/scene/scene.usda")]
+
+        mock_os = mock.Mock()
+        mock_os.path.isdir = lambda p: False
+        mock_os.path.isfile = lambda p: True
+        mock_os.path.splitext = os.path.splitext
+        mock_os.path.realpath = os.path.realpath
+        mock_os.path.dirname = os.path.dirname
+
+        with (
+            mock.patch(
+                "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets.os",
+                mock_os,
+            ),
+            mock.patch(
+                "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_usd_asset_references"
+            ) as mock_usd_refs,
+        ):
+            mock_usd_refs.return_value = (
+                {"/scene/model.usda", "/scene/tex.exr"},
+                {"/renders"},
+                [],
+            )
+            asset_refs = _get_scene_asset_references(node)
+
+        mock_usd_refs.assert_called_once()
+        assert "/scene/model.usda" in asset_refs.input_filenames
+        assert "/scene/tex.exr" in asset_refs.input_filenames
+        assert "/renders" in asset_refs.output_directories
+
+    def test_no_usd_files_skips_traversal(self):
+        """Verify that non-USD scenes skip USD traversal entirely."""
+        node = hou.node
+        hou.hipFile.path.return_value = "/scene/test.hip"
+
+        png_parm = mock.Mock()
+        png_parm.node.return_value = None
+        png_parm.name.return_value = "file1"
+        png_parm.evalAsString.return_value = "/scene/texture.png"
+
+        hou.fileReferences.return_value = [(png_parm, "/scene/texture.png")]
+
+        mock_os = mock.Mock()
+        mock_os.path.isdir = lambda p: False
+        mock_os.path.isfile = lambda p: True
+        mock_os.path.splitext = os.path.splitext
+        mock_os.path.realpath = os.path.realpath
+
+        with (
+            mock.patch(
+                "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets.os",
+                mock_os,
+            ),
+            mock.patch(
+                "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets._get_usd_asset_references"
+            ) as mock_usd_refs,
+        ):
+            _get_scene_asset_references(node)
+
+        mock_usd_refs.assert_not_called()
