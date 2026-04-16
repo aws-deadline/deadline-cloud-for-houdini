@@ -313,15 +313,17 @@ class TestSubmitters:
         with open(job_history_dir / "asset_references.yaml") as f:
             actual_refs = yaml.safe_load(f)
 
-        actual_input_files: set[str] = set(actual_refs["assetReferences"]["inputs"]["filenames"])
+        actual_input_files: set[str] = {
+            os.path.normcase(f) for f in actual_refs["assetReferences"]["inputs"]["filenames"]
+        }
 
         # All USD layers and assets must be detected
         expected_files = {
-            str(usd_dir / "scene.usda"),
-            str(usd_dir / "lighting.usda"),
-            str(usd_dir / "model.usda"),
-            str(usd_dir / "heavy_asset.usda"),
-            str(usd_dir / "textures" / "wood.exr"),
+            os.path.normcase(str(usd_dir / "scene.usda")),
+            os.path.normcase(str(usd_dir / "lighting.usda")),
+            os.path.normcase(str(usd_dir / "model.usda")),
+            os.path.normcase(str(usd_dir / "heavy_asset.usda")),
+            os.path.normcase(str(usd_dir / "textures" / "wood.exr")),
         }
 
         for expected in expected_files:
@@ -330,11 +332,13 @@ class TestSubmitters:
             ), f"Missing USD dependency: {expected}\nActual files: {actual_input_files}"
 
         # Hip file must also be present
-        assert scene_location_posix in actual_input_files
+        assert os.path.normcase(scene_location_posix) in actual_input_files
 
         # Output directory from RenderProduct must be detected (resolved from relative path)
-        actual_output_dirs: list[str] = actual_refs["assetReferences"]["outputs"]["directories"]
-        expected_output_dir: str = str(usd_dir / "renders")
+        actual_output_dirs: set[str] = {
+            os.path.normcase(d) for d in actual_refs["assetReferences"]["outputs"]["directories"]
+        }
+        expected_output_dir: str = os.path.normcase(str(usd_dir / "renders"))
         assert (
             expected_output_dir in actual_output_dirs
         ), f"Missing output directory: {expected_output_dir}\nActual dirs: {actual_output_dirs}"
