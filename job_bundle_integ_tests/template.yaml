@@ -1,0 +1,118 @@
+# Job template for running deadline-cloud-for-houdini integration tests on
+# Deadline Cloud Service Managed Fleets. See README.md for usage instructions.
+specificationVersion: jobtemplate-2023-09
+name: deadline-cloud-for-houdini integ tests
+parameterDefinitions:
+# The local checkout of the deadline-cloud-for-houdini repository.
+# Uploaded automatically as a job attachment because dataFlow is IN.
+# Note: run `git lfs install && git lfs pull` before submitting to
+# ensure expected test images are real files, not LFS pointers.
+- name: RepoDir
+  type: PATH
+  objectType: DIRECTORY
+  dataFlow: IN
+  description: Path to the deadline-cloud-for-houdini repository root.
+jobEnvironments:
+# Shared setup: installs the package, test dependencies, the Houdini plugin
+# module, and registers the deadline_cloud HDA node type. Runs once per
+# session and applies to all steps.
+- name: SetupTestEnv
+  script:
+    embeddedFiles:
+    - name: Setup
+      filename: setup.sh
+      type: TEXT
+      runnable: true
+      data: |
+        #!/bin/bash
+        set -euo pipefail
+        REPO='{{Param.RepoDir}}'
+        SUBMITTER_SRC="$REPO/src/deadline/houdini_submitter"
+
+        # Set HYTHON_EXECUTABLE for the conftest.py fixture that locates hython.
+        export HYTHON_EXECUTABLE=$(which hython)
+        echo "openjd_env: HYTHON_EXECUTABLE=${HYTHON_EXECUTABLE}"
+
+        # Install the pip-installable portion (adaptor, deadline client, deps).
+        hython -m pip install "$REPO" --force-reinstall
+        hython -m pip install -r "$REPO/requirements-testing.txt"
+        hython -m pip install -r "$REPO/requirements-integ-testing.txt"
+
+        # The deadline_cloud_for_houdini module is a Houdini plugin at
+        # src/deadline/houdini_submitter/python/ — NOT part of the pip package.
+        # hython ignores PYTHONPATH and .pth files in site-packages-forced,
+        # so we copy the module directly into the regular site-packages dir.
+        SITE_PKG=$(hython -c "import site; print([p for p in site.getsitepackages() if p.endswith('site-packages')][0])" 2>/dev/null)
+        cp -r "$SUBMITTER_SRC/python/deadline_cloud_for_houdini" "$SITE_PKG/"
+
+        # Register the deadline_cloud HDA node type via a Houdini package JSON.
+        # This is equivalent to running `hatch run install --houdini-version X.Y`
+        # locally. Without this, hou.node("/out").createNode("deadline_cloud") fails.
+        HOUDINI_VERSION=$(hython -c "import hou; v=hou.applicationVersion(); print(f'{v[0]}.{v[1]}')" 2>/dev/null)
+        PACKAGES_DIR="$HOME/houdini${HOUDINI_VERSION}/packages"
+        mkdir -p "$PACKAGES_DIR"
+        cat > "$PACKAGES_DIR/deadline_submitter_for_houdini.json" << EOF
+        {
+            "env": [
+                {"DEADLINE_CLOUD_FOR_HOUDINI": "$SUBMITTER_SRC"},
+                {"PYTHONPATH": "$SITE_PKG"}
+            ],
+            "hpath": "\$DEADLINE_CLOUD_FOR_HOUDINI"
+        }
+        EOF
+
+        # Verify both the module import and HDA node type registration.
+        hython -c "import deadline_cloud_for_houdini; print('Module OK:', deadline_cloud_for_houdini.__file__)" 2>&1
+        hython -c "import hou; hou.node('/out').createNode('deadline_cloud'); print('Node type OK')" 2>&1
+    actions:
+      onEnter:
+        command: '{{Env.File.Setup}}'
+        timeout: 300
+steps:
+# Submitter tests: validate that the Houdini submitter generates correct
+# job bundles from HIP scenes created by the _test_hip.py scripts.
+- name: submitter
+  hostRequirements:
+    attributes:
+      - name: attr.worker.os.family
+        anyOf:
+          - linux
+  script:
+    embeddedFiles:
+    - name: Run
+      filename: run.sh
+      type: TEXT
+      runnable: true
+      data: |
+        #!/bin/bash
+        set -euo pipefail
+        cd '{{Param.RepoDir}}'
+        hython -m pytest test/integ/test_houdini_submitters.py -vvv --numprocesses=1 --no-cov -m submitter
+    actions:
+      onRun:
+        command: '{{Task.File.Run}}'
+        timeout: 600
+# Adaptor tests: validate that the Houdini adaptor renders scenes correctly
+# with Mantra. Scenes are generated at test time by _test_hip.py scripts,
+# then rendered via `openjd run` which launches the HoudiniAdaptor.
+- name: adaptor
+  hostRequirements:
+    attributes:
+      - name: attr.worker.os.family
+        anyOf:
+          - linux
+  script:
+    embeddedFiles:
+    - name: Run
+      filename: run.sh
+      type: TEXT
+      runnable: true
+      data: |
+        #!/bin/bash
+        set -euo pipefail
+        cd '{{Param.RepoDir}}'
+        hython -m pytest test/integ/test_houdini_adaptors.py -vvv --numprocesses=1 --no-cov -m adaptor
+    actions:
+      onRun:
+        command: '{{Task.File.Run}}'
+        timeout: 600
