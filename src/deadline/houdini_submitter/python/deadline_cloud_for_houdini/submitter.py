@@ -6,13 +6,15 @@ import sys
 import yaml
 import json
 import traceback
-from typing import Any, Dict
+from typing import Any, Dict, Optional, cast
 from pathlib import Path
 
 from botocore.exceptions import ClientError
 
 from deadline.client.job_bundle._yaml import deadline_yaml_dump
+from deadline.client.exceptions import DeadlineOperationError
 from deadline.client import api
+from deadline.client.api._queue_parameters import get_queue_parameter_definitions
 from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.job_bundle import create_job_history_bundle_dir
 from deadline.client.job_bundle.parameters import JobParameter
@@ -252,6 +254,28 @@ def _get_render_strategy_for_node(node: hou.Node) -> RenderStrategy:
     return render_strategy
 
 
+def get_parameter_values_for_submission(
+    settings: Any,
+    queue_parameters: Optional[list[dict[str, Any]]] = None,
+) -> list[dict[str, Any]]:
+    """Generate the parameter values for Houdini render submissions.
+
+    This function returns the parameter values in their final state, ready to be
+    serialized to YAML. It can be used for external integrations.
+
+    Args:
+        settings: The render submitter UI settings.
+        queue_parameters: Optional queue parameters from the job bundle. These are
+            typically provided by the SubmitJobToDeadlineDialog but can be omitted
+            for external API usage. When omitted, no queue-specific parameters
+            (like RezPackages or CondaPackages) will be included.
+
+    Returns:
+        The parameter values list ready for serialization.
+    """
+    return _get_parameter_values(settings.rop_node)
+
+
 def _get_parameter_values(node: hou.Node) -> dict[str, Any]:
     priority = node.parm("priority").eval()
     initial_status = node.parm("initial_status").evalAsString()
@@ -334,6 +358,31 @@ def _unlock_node(rop_path: str) -> bool:
                 print(str(exc))
                 return False
     return False
+
+
+def get_job_template_for_submission(
+    setting: Any,
+    host_requirements: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Generate the job template for Houdini render submissions.
+
+    This function returns the job template in its final state, ready to be
+    serialized to YAML. It can be used for external integrations.
+
+    Args:
+        node: The Deadline Cloud ROP node to be submitted
+        host_requirements: Optional host requirements to inject into job steps.
+
+    Returns:
+        The job template dictionary ready for serialization.
+    """
+    rop_node = setting.rop_node
+    job_template = _get_job_template(rop_node)
+    # If "HostRequirements" is provided, inject it into each of the "Step"
+    if host_requirements:
+        for step in job_template["steps"]:
+            step["hostRequirements"] = host_requirements
+    return job_template
 
 
 def _get_job_template(rop: hou.Node) -> dict[str, Any]:
@@ -475,18 +524,36 @@ def _get_step_template(node: Dict, ignore_input_nodes: bool):
     return step
 
 
+def get_asset_references_for_submission(
+    asset_references: AssetReferences,
+) -> dict[str, Any]:
+    """Get the asset references in dictionary form for Houdini render submissions.
+
+    This function returns the asset references in their final state, ready to be
+    serialized to YAML. It can be used for external integrations.
+
+    Args:
+        asset_references: The asset references object.
+
+    Returns:
+        The asset references dictionary ready for serialization.
+    """
+    return asset_references.to_dict()
+
+
 def _create_job_bundle(
     rop_node: hou.Node, job_bundle_dir: str, asset_references: AssetReferences
 ) -> None:
     job_bundle_path = Path(job_bundle_dir)
     job_template = _get_job_template(rop_node)
     parameter_values = _get_parameter_values(rop_node)
+    asset_references_dict = get_asset_references_for_submission(asset_references)
     with open(job_bundle_path / "template.yaml", "w", encoding="utf8") as f:
         deadline_yaml_dump(job_template, f, indent=1)
     with open(job_bundle_path / "parameter_values.yaml", "w", encoding="utf8") as f:
         deadline_yaml_dump(parameter_values, f, indent=1)
     with open(job_bundle_path / "asset_references.yaml", "w", encoding="utf8") as f:
-        deadline_yaml_dump(asset_references.to_dict(), f, indent=1)
+        deadline_yaml_dump(asset_references_dict, f, indent=1)
 
 
 def callback(kwargs):
@@ -523,6 +590,60 @@ def save_bundle_callback(kwargs):
             severity=hou.severityType.Warning,
             details=traceback.format_exc(),
         )
+
+
+def get_queue_parameters(
+    farm_id: Optional[str] = None,
+    queue_id: Optional[str] = None,
+    initial_values: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
+    """Get queue parameters from Deadline Cloud for external API usage.
+
+    This function retrieves queue parameter definitions from the Deadline Cloud API
+    and optionally applies initial values. It can be used to construct queue_parameters
+    for get_parameter_values_for_submission() without going through the UI.
+
+    Args:
+        farm_id: The farm ID. If not provided, uses the default from settings.
+        queue_id: The queue ID. If not provided, uses the default from settings.
+        initial_values: Optional dict of {parameter_name: value} to override
+            default parameter values. For example:
+            {"RezPackages": "maya-2024 deadline_cloud_for_maya"}
+
+    Returns:
+        A list of parameter definition dicts with "name" and "value" keys,
+        suitable for passing to get_parameter_values_for_submission().
+
+    Raises:
+        DeadlineOperationError: If farm_id or queue_id are not configured.
+
+    Example:
+        >>> queue_params = get_queue_parameters(
+        ...     initial_values={"RezPackages": "maya-2024"}
+        ... )
+        >>> param_values = get_parameter_values_for_submission(settings, queue_params)
+    """
+    if farm_id is None:
+        farm_id = get_setting("defaults.farm_id")
+    if queue_id is None:
+        queue_id = get_setting("defaults.queue_id")
+
+    if not farm_id or not queue_id:
+        raise DeadlineOperationError(
+            "Farm ID and Queue ID must be configured. "
+            "Either provide them as arguments or configure them in Deadline Cloud settings."
+        )
+
+    # Fetch queue parameter definitions from the API
+    queue_parameters = get_queue_parameter_definitions(farmId=farm_id, queueId=queue_id)
+
+    # Apply initial values if provided
+    if initial_values:
+        for parameter in queue_parameters:
+            if parameter["name"] in initial_values:
+                parameter["value"] = initial_values[parameter["name"]]
+
+    return cast(list[dict[str, Any]], queue_parameters)
 
 
 def submit_callback(kwargs):
