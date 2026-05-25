@@ -1,0 +1,9 @@
+# OnCreated only fires for new nodes; OnLoaded fires when a scene is opened,
+# ensuring queue parameters (e.g. CondaPackages version) stay current.
+from botocore.exceptions import CredentialRetrievalError
+
+try:
+    node = kwargs['node']
+    node.hdaModule().update_queue_parameters_callback(kwargs)
+except CredentialRetrievalError as e:
+    print(e)

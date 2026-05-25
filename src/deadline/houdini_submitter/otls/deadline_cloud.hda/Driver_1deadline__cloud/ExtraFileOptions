@@ -19,6 +19,26 @@
 		"type":"string",
 		"value":""
 	},
+	"OnLoaded/Cursor":{
+		"type":"intarray",
+		"value":[15,33]
+	},
+	"OnLoaded/IsExpr":{
+		"type":"bool",
+		"value":false
+	},
+	"OnLoaded/IsPython":{
+		"type":"bool",
+		"value":true
+	},
+	"OnLoaded/IsScript":{
+		"type":"bool",
+		"value":true
+	},
+	"OnLoaded/Source":{
+		"type":"string",
+		"value":""
+	},
 	"PythonModule/Cursor":{
 		"type":"intarray",
 		"value":[6,1]
