@@ -43,6 +43,9 @@ This workflow creates a "houdini package", a JSON file which tells Houdini where
    ```sh
    git clone git@github.com:aws-deadline/deadline-cloud-for-houdini.git
    cd deadline-cloud-for-houdini
+
+   # Fetch tags to ensure the correct openjd version is detected
+   git fetch --tags
    ```
 
 2. Create a Houdini package using the provided script, specifying the full houdini version:

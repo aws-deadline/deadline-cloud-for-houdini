@@ -7,4 +7,5 @@ Tools.shelf	Tools.shelf
 IconSVG	IconSVG
 PythonModule	PythonModule
 OnCreated	OnCreated
+OnLoaded    OnLoaded
 ExtraFileOptions	ExtraFileOptions

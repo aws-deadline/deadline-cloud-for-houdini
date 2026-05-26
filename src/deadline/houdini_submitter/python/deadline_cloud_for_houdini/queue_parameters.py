@@ -1,6 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
 import json
+import re
 from typing import Any, Optional, Union
 
 import hou
@@ -357,6 +358,18 @@ def _rebuild_queue_parameters_ui(
 def _restore_queue_parameter_values(
     node: hou.Node, existing_values: dict[str, Union[float, int, str]]
 ) -> None:  # pragma: no cover
+
+    # Override the ApplicationVersion to the current Houdini version the scene is opened in
+    conda_value: Optional[Union[str, float, int]] = existing_values.pop("CondaPackages", None)
+    if conda_value is not None:
+        conda_parm = node.parm(_get_prefixed_name("CondaPackages"))
+        if conda_parm is not None and isinstance(conda_value, str):
+            houdini_version: str = ".".join(hou.applicationVersionString().split(".")[:2])
+            updated: str = re.sub(
+                r"(?<!\S)houdini=\S+", f"houdini={houdini_version}.*", conda_value
+            )
+            conda_parm.set(updated)
+
     for name, value in existing_values.items():
         parm = node.parm(_get_prefixed_name(name))
         if parm is not None:
