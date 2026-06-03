@@ -20,3 +20,6 @@ setattr(this_module, "hscript", Mock(name=module_name + ".hscript"))
 setattr(
     this_module, "applicationVersionString", Mock(name=module_name + ".applicationVersionString")
 )
+setattr(this_module, "nodeTypeFilter", Mock(name=module_name + ".nodeTypeFilter"))
+setattr(this_module, "parmTemplateType", Mock(name=module_name + ".parmTemplateType"))
+setattr(this_module, "stringParmType", Mock(name=module_name + ".stringParmType"))
