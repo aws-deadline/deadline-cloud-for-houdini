@@ -716,7 +716,7 @@ def submit_callback(kwargs):
         )
     except Exception as exc:
         api.get_deadline_cloud_library_telemetry_client().record_error(
-            event_details={"exception_scope": "submit_callback"},
+            event_details={"exception_scope": "caught", "error_operation": "submit_callback"},
             exception_type=str(type(exc)),
             from_gui=True,
         )
