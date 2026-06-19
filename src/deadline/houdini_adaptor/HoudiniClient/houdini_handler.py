@@ -11,7 +11,7 @@ except ImportError:  # pragma: no cover
     raise OSError("Could not find the Houdini module. Are you running this inside of Houdini?")
 
 if TYPE_CHECKING:  # pragma: no cover
-    from hou import Node
+    from hou import Node, Parm, ParmTemplate
 
 
 class HoudiniHandler:
@@ -65,6 +65,39 @@ class HoudiniHandler:
 
         # Reload the env variables
         hou.hscript("varchange")
+
+    def _remap_lop_file_paths(self) -> None:
+        """
+        Applies HOUDINI_PATHMAP to LOP node file path parameters.
+
+        HOUDINI_PATHMAP does not apply to USD/LOP nodes (sublayer, reference, etc.)
+        because USD asset resolution uses ArResolver, not Houdini's file I/O layer.
+        This method manually remaps any file reference string parms on LOP nodes.
+        """
+        if not os.environ.get("HOUDINI_PATHMAP"):
+            return
+
+        lop_nodes: list[Node] = hou.node("/").recursiveGlob("*", filter=hou.nodeTypeFilter.Lop)
+        for node in lop_nodes:
+            parms: list[Parm] = node.parms()
+            for parm in parms:
+                template: ParmTemplate = parm.parmTemplate()
+                if template.type() != hou.parmTemplateType.String:
+                    continue
+                if (
+                    template.stringType() == hou.stringParmType.FileReference
+                    or parm.name().startswith("filepath")
+                ):
+                    original: str = parm.unexpandedString()
+                    if not original or original.startswith("$") or original.startswith("`"):
+                        continue
+                    mapped, err = hou.hscript(f"pathmap -t '{original}' -c")
+                    mapped = mapped.strip()
+                    if err:
+                        print(f"Error remapping {parm.path()}: {err}")
+                    elif mapped and mapped != original:
+                        parm.set(mapped)
+                        print(f"Remapped LOP parm {parm.path()}: " f"{original} -> {mapped}")
 
     def set_node_settings(self, node):
         # this is a place holder function
@@ -236,3 +269,4 @@ class HoudiniHandler:
             print(e)
 
         self._path_map_envs()
+        self._remap_lop_file_paths()
