@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from .mock_hou import hou_module as hou
@@ -256,3 +256,126 @@ class TestHoudiniHandler:
 
         out, _ = capfd.readouterr()
         assert "Enabled Alfred style progress\n" not in out
+
+
+class TestRemapLopFilePaths:
+    """Tests for HoudiniHandler._remap_lop_file_paths (fix for issue #314)"""
+
+    def _setup_lop_nodes(self, parms):
+        """Helper to mock hou.node('/').recursiveGlob returning nodes with given parms."""
+        mock_node = Mock()
+        mock_node.parms.return_value = parms if isinstance(parms, list) else [parms]
+        mock_root = MagicMock()
+        mock_root.recursiveGlob.return_value = [mock_node]
+        hou.node.return_value = mock_root
+        return mock_node
+
+    def _make_parm(self, name, string_type, unexpanded_string):
+        """Helper to create a mock parm with template metadata."""
+        parm = Mock(name=f"parm_{name}")
+        parm.name.return_value = name
+        parm.path.return_value = f"/stage/node/{name}"
+        parm.unexpandedString.return_value = unexpanded_string
+        template = Mock()
+        template.type.return_value = hou.parmTemplateType.String
+        template.stringType.return_value = string_type
+        parm.parmTemplate.return_value = template
+        return parm
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_early_return_no_pathmap(self):
+        """Does nothing when HOUDINI_PATHMAP is not set."""
+        handler = HoudiniHandler()
+        handler._remap_lop_file_paths()
+        hou.node.assert_not_called()
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    def test_remaps_file_reference_parm(self, capfd):
+        """Remaps parms with stringType == FileReference (sublayer case)."""
+        handler = HoudiniHandler()
+        parm = self._make_parm("filepath1", hou.stringParmType.FileReference, "/src/asset.usd")
+        self._setup_lop_nodes(parm)
+        hou.hscript.return_value = ("/dest/asset.usd\n", "")
+
+        handler._remap_lop_file_paths()
+
+        parm.set.assert_called_once_with("/dest/asset.usd")
+        out, _ = capfd.readouterr()
+        assert "/src/asset.usd -> /dest/asset.usd" in out
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    def test_remaps_filepath_named_parm_not_tagged_as_file_reference(self, capfd):
+        """Remaps parms named 'filepath*' even if stringType is Regular (reference node case)."""
+        handler = HoudiniHandler()
+        parm = self._make_parm("filepath1", hou.stringParmType.Regular, "/src/model.usd")
+        self._setup_lop_nodes(parm)
+        hou.hscript.return_value = ("/dest/model.usd\n", "")
+
+        handler._remap_lop_file_paths()
+
+        parm.set.assert_called_once_with("/dest/model.usd")
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    def test_skips_empty_parm_values(self):
+        """Does not call hscript for empty parm values."""
+        handler = HoudiniHandler()
+        parm = self._make_parm("filepath1", hou.stringParmType.FileReference, "")
+        self._setup_lop_nodes(parm)
+
+        handler._remap_lop_file_paths()
+
+        hou.hscript.assert_not_called()
+        parm.set.assert_not_called()
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    @pytest.mark.parametrize("expression", ["$HIP/assets/mesh.usd", "`chs('path')`"])
+    def test_skips_expression_parms(self, expression):
+        """Does not remap parms starting with $ or backtick (expression-based paths)."""
+        handler = HoudiniHandler()
+        parm = self._make_parm("filepath1", hou.stringParmType.FileReference, expression)
+        self._setup_lop_nodes(parm)
+
+        handler._remap_lop_file_paths()
+
+        hou.hscript.assert_not_called()
+        parm.set.assert_not_called()
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    def test_skips_non_string_parms(self):
+        """Ignores non-String parm types (int, float, etc.)."""
+        handler = HoudiniHandler()
+        parm = Mock(name="int_parm")
+        template = Mock()
+        template.type.return_value = hou.parmTemplateType.Int
+        parm.parmTemplate.return_value = template
+        self._setup_lop_nodes(parm)
+
+        handler._remap_lop_file_paths()
+
+        hou.hscript.assert_not_called()
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    def test_no_op_when_path_unchanged(self):
+        """Does not call parm.set when pathmap returns the same path."""
+        handler = HoudiniHandler()
+        parm = self._make_parm("filepath1", hou.stringParmType.FileReference, "/other/path.usd")
+        self._setup_lop_nodes(parm)
+        hou.hscript.return_value = ("/other/path.usd\n", "")
+
+        handler._remap_lop_file_paths()
+
+        parm.set.assert_not_called()
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    def test_handles_hscript_error(self, capfd):
+        """Prints error and continues when hscript pathmap fails."""
+        handler = HoudiniHandler()
+        parm = self._make_parm("filepath1", hou.stringParmType.FileReference, "/src/bad.usd")
+        self._setup_lop_nodes(parm)
+        hou.hscript.return_value = ("", "pathmap: error\n")
+
+        handler._remap_lop_file_paths()
+
+        parm.set.assert_not_called()
+        out, _ = capfd.readouterr()
+        assert "Error remapping" in out
