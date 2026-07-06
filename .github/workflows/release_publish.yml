@@ -57,13 +57,6 @@ jobs:
       tag: ${{ needs.TagRelease.outputs.tag }}
       os: ${{ matrix.os }}
 
-  ManualTestGate:
-    needs: [TagRelease, BuildInstaller]
-    runs-on: ubuntu-latest
-    environment: release-gate
-    steps:
-      - run: echo "Manual testing approved for ${{ needs.TagRelease.outputs.tag }}"
-
   PreRelease:
       needs: [TagRelease, UnitTests, IntegrationTests]
       uses: aws-deadline/.github/.github/workflows/reusable_prerelease.yml@mainline
@@ -107,7 +100,7 @@ jobs:
          :
 
   ReleaseInstaller:
-    needs: [TagRelease, IsCondaReady, ManualTestGate]
+    needs: [TagRelease, IsCondaReady]
     uses: aws-deadline/.github/.github/workflows/reusable_release_installers.yml@mainline
     secrets: inherit
     permissions:
