@@ -1,1 +1,2 @@
 from deadline_cloud_for_houdini.submitter import callback, update_queue_parameters_callback
+from deadline_cloud_for_houdini.update_utils import check_and_show_update_dialog

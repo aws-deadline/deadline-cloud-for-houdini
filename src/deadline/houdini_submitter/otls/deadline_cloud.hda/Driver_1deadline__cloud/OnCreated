@@ -2,6 +2,7 @@ from botocore.exceptions import CredentialRetrievalError
 
 try:
     node = kwargs['node']
+    node.hdaModule().check_and_show_update_dialog()
     node.hdaModule().update_queue_parameters_callback(kwargs)
 except CredentialRetrievalError as e:
     print(e)
