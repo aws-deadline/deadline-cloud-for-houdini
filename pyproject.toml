@@ -31,7 +31,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "deadline >= 0.49,< 0.51",
+    "deadline >= 0.49,< 0.54",
     "openjd-adaptor-runtime >= 0.7,< 0.10",
 ]
 
