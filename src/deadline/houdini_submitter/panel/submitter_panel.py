@@ -11,8 +11,15 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
 )
 from qtpy.QtCore import Qt  # type: ignore
+from deadline.client.config import get_setting, str2bool
 from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.ui.dialogs.submit_job_to_deadline_dialog import SubmitJobToDeadlineDialog
+from deadline.client.ui.pre_gui_hooks import (  # pylint: disable=import-error
+    PreGuiHookContext,
+    apply_pre_gui_output,
+    qt_hook_confirmation,
+    run_pre_gui_hooks,
+)
 from deadline.client.dataclasses import SubmitterInfo
 from deadline_cloud_for_houdini._version import version as houdini_submitter_version
 from deadline_cloud_for_houdini._assets import _get_scene_asset_references
@@ -57,10 +64,33 @@ def onCreateInterface():
     # Ignore this as to not set off the linter.
     n = kwargs["paneTab"].currentNode()  # type: ignore # noqa:F821
 
+    ui_settings = HoudiniSubmitterUISettings()
+    shared_parameter_values: dict = {}
+
+    # Run pre-GUI hooks so studios can pre-populate dialog fields before it opens. Houdini has no
+    # on-disk job bundle at this point, so hooks are sourced from DEADLINE_HOOKS_DIR only
+    # (bundle_dir=None), gated by settings.allow_environment_hooks. The confirmation prompt is
+    # skipped when auto_accept is set; otherwise the standard dialog is shown.
+    confirm_callback = (
+        None
+        if str2bool(get_setting("settings.auto_accept"))
+        else qt_hook_confirmation(hou.qt.mainWindow())
+    )
+    pre_gui_output = run_pre_gui_hooks(
+        PreGuiHookContext(
+            bundle_dir=None,
+            job_name=ui_settings.name,
+            submitter_name="houdini",
+            parameters=dict(shared_parameter_values),
+        ),
+        confirm_callback=confirm_callback,
+    )
+    apply_pre_gui_output(pre_gui_output, ui_settings, shared_parameter_values)
+
     widget = SubmitJobToDeadlineDialog(
         job_setup_widget_type=SceneSettingsWidget,
-        initial_job_settings=HoudiniSubmitterUISettings(),
-        initial_shared_parameter_values={},
+        initial_job_settings=ui_settings,
+        initial_shared_parameter_values=shared_parameter_values,
         auto_detected_attachments=_get_scene_asset_references(n),
         attachments=AssetReferences(),
         on_create_job_bundle_callback=submit_callback,
