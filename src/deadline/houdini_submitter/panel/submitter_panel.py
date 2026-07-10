@@ -94,9 +94,9 @@ def onCreateInterface():
         auto_detected_attachments=_get_scene_asset_references(n),
         attachments=AssetReferences(),
         on_create_job_bundle_callback=submit_callback,
-        # submitter_into replaces submitter_name as of deadline-cloud 0.54.0: https://github.com/aws-deadline/deadline-cloud/releases/tag/0.54.0
-        # Until we upgrade versions, this code will throw a linting error. Ignore for now since this code is still unreachable without setup.
-        submitter_info=SubmitterInfo(  # type: ignore
+        # submitter_info replaces submitter_name as of deadline-cloud 0.54.0:
+        # https://github.com/aws-deadline/deadline-cloud/releases/tag/0.54.0
+        submitter_info=SubmitterInfo(
             submitter_name="Houdini",
             submitter_package_name="deadline-cloud-for-houdini",
             submitter_package_version=houdini_submitter_version,
