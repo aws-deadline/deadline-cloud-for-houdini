@@ -31,10 +31,10 @@ classifiers = [
 ]
 
 dependencies = [
-    # run_pre_gui_hooks / PreGuiHookContext are required for the pre-GUI hook integration
-    # in the submitter panel; they ship in deadline-cloud 0.60.x. Confirm the exact release
-    # before merging.
-    "deadline >= 0.60.0,< 0.61",
+    # run_pre_gui_hooks / PreGuiHookContext / apply_pre_gui_output are required for the pre-GUI
+    # hook integration in the submitter panel. The deadline.client.ui.pre_gui_hooks module first
+    # ships in deadline-cloud 0.60.1 (0.60.0 predates it), so 0.60.1 is the minimum.
+    "deadline >= 0.60.1,< 0.61",
     "openjd-adaptor-runtime >= 0.7,< 0.10",
 ]
 
