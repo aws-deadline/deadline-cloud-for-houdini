@@ -18,7 +18,8 @@ The hou / qtpy modules are stubbed by ``test/unit/deadline_submitter_for_houdini
 imports resolve.
 """
 
-from unittest.mock import patch
+import sys
+from unittest.mock import MagicMock, patch
 
 from deadline.client.ui.pre_gui_hooks import apply_pre_gui_output
 
@@ -99,9 +100,8 @@ def test_confirm_callback_none_when_auto_accept_enabled(mock_get_setting):
     mock_get_setting.assert_called_once_with("settings.auto_accept")
 
 
-@patch("qtpy.QtWidgets.QMessageBox")
 @patch.object(submitter, "get_setting", return_value="false")
-def test_confirmation_dialog_fires_when_auto_accept_disabled(mock_get_setting, mock_msgbox):
+def test_confirmation_dialog_fires_when_auto_accept_disabled(mock_get_setting):
     """With settings.auto_accept disabled, invoking the returned callback actually shows the
     confirmation dialog (QMessageBox.question), parented to the passed-in window.
 
@@ -109,16 +109,25 @@ def test_confirmation_dialog_fires_when_auto_accept_disabled(mock_get_setting, m
     verifies the prompt fires -- not merely that a non-None callback was selected.
     ``run_pre_gui_hooks`` invokes ``confirm_callback(sources)`` with the hook sources; an empty
     list is enough to reach the dialog. The user's answer is mapped from the QMessageBox reply.
+
+    ``qt_hook_confirmation`` runs ``from qtpy.QtWidgets import QMessageBox`` when it is *called*
+    (the import is in its body, before the returned closure), binding ``QMessageBox`` as a
+    closure local. So we install a controlled ``qtpy.QtWidgets`` in ``sys.modules`` around the
+    ``_pre_gui_hook_confirm_callback`` call itself -- patching the module entry, rather than a
+    ``qtpy.QtWidgets.QMessageBox`` attribute, makes the binding deterministic regardless of
+    whether a real qtpy is also installed or which xdist worker runs this test.
     """
-    mock_msgbox.question.return_value = mock_msgbox.Yes
+    fake_qtwidgets = MagicMock()
+    fake_qtwidgets.QMessageBox.question.return_value = fake_qtwidgets.QMessageBox.Yes
 
-    callback = submitter._pre_gui_hook_confirm_callback(parent="mainwin")
-    assert callback is not None
+    with patch.dict(sys.modules, {"qtpy.QtWidgets": fake_qtwidgets}):
+        callback = submitter._pre_gui_hook_confirm_callback(parent="mainwin")
+        assert callback is not None
+        result = callback([])  # no hook sources needed to reach the dialog
 
-    result = callback([])  # no hook sources needed to reach the dialog
-
-    assert mock_msgbox.question.call_count == 1
+    question = fake_qtwidgets.QMessageBox.question
+    assert question.call_count == 1
     # The dialog is parented to the window passed into the submitter.
-    assert mock_msgbox.question.call_args[0][0] == "mainwin"
+    assert question.call_args[0][0] == "mainwin"
     # "Yes" reply -> proceed.
     assert result is True
