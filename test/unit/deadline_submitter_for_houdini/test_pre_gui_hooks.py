@@ -19,6 +19,7 @@ imports resolve.
 """
 
 import sys
+from typing import Optional, Tuple
 from unittest.mock import MagicMock, patch
 
 from deadline.client.ui.pre_gui_hooks import apply_pre_gui_output
@@ -97,7 +98,7 @@ def test_falsy_output_is_a_noop():
     """The panel passes ``pre_gui_output or {}`` into apply_pre_gui_output, so the values the
     no-hooks / declined-confirmation path can produce -- ``{}`` today, or ``None`` if the
     contract ever changed -- must both be safe no-ops that leave settings/shared untouched."""
-    falsy_values: tuple[dict | None, ...] = ({}, None)
+    falsy_values: Tuple[Optional[dict], ...] = ({}, None)
     for falsy in falsy_values:
         settings = _settings()
         shared = {"RezPackages": "houdini-20 deadline_cloud_for_houdini"}
