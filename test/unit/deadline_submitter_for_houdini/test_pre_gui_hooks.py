@@ -93,6 +93,23 @@ def test_partial_output_only_touches_present_keys():
     assert shared == {}  # no parameters in output
 
 
+def test_falsy_output_is_a_noop():
+    """The panel passes ``pre_gui_output or {}`` into apply_pre_gui_output, so the values the
+    no-hooks / declined-confirmation path can produce -- ``{}`` today, or ``None`` if the
+    contract ever changed -- must both be safe no-ops that leave settings/shared untouched."""
+    falsy_values: tuple[dict | None, ...] = ({}, None)
+    for falsy in falsy_values:
+        settings = _settings()
+        shared = {"RezPackages": "houdini-20 deadline_cloud_for_houdini"}
+
+        # Mirror the panel call site: `pre_gui_output or {}`.
+        apply_pre_gui_output(falsy or {}, settings, shared)
+
+        assert settings.name == "Original"
+        assert settings.description == ""
+        assert shared == {"RezPackages": "houdini-20 deadline_cloud_for_houdini"}
+
+
 @patch.object(submitter, "get_setting", return_value="true")
 def test_confirm_callback_none_when_auto_accept_enabled(mock_get_setting):
     """With settings.auto_accept enabled, hooks run without a confirmation prompt."""

@@ -11,6 +11,7 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
 )
 from qtpy.QtCore import Qt  # type: ignore
+from deadline.client.exceptions import DeadlineOperationCanceled
 from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.ui.dialogs.submit_job_to_deadline_dialog import SubmitJobToDeadlineDialog
 from deadline.client.ui.pre_gui_hooks import (
@@ -69,16 +70,27 @@ def onCreateInterface():
     # on-disk job bundle at this point, so hooks are sourced from DEADLINE_HOOKS_DIR only
     # (bundle_dir=None), gated by settings.allow_environment_hooks. The confirmation prompt is
     # skipped when auto_accept is set; otherwise the standard dialog is shown.
-    pre_gui_output = run_pre_gui_hooks(
-        PreGuiHookContext(
-            bundle_dir=None,
-            job_name=ui_settings.name,
-            submitter_name="houdini",
-            parameters=dict(shared_parameter_values),
-        ),
-        confirm_callback=_pre_gui_hook_confirm_callback(hou.qt.mainWindow()),
-    )
-    apply_pre_gui_output(pre_gui_output, ui_settings, shared_parameter_values)
+    try:
+        pre_gui_output = run_pre_gui_hooks(
+            PreGuiHookContext(
+                bundle_dir=None,
+                job_name=ui_settings.name,
+                submitter_name="houdini",
+                parameters=dict(shared_parameter_values),
+            ),
+            confirm_callback=_pre_gui_hook_confirm_callback(hou.qt.mainWindow()),
+        )
+    except DeadlineOperationCanceled:
+        # The user declined the hook confirmation prompt. That is a deliberate cancellation, not
+        # an error: skip the hooks and open the submitter with its default settings. onCreateInterface
+        # must still return a panel (Houdini calls it to build the Python panel), and there is no
+        # outer gui_error_handler here, so without this the exception would propagate as a raw
+        # traceback and the panel would fail to open.
+        pre_gui_output = {}
+    # run_pre_gui_hooks returns {} when no hooks run; `or {}` is defensive against any future
+    # contract change so the common no-hooks path can never pass a falsy value into
+    # apply_pre_gui_output.
+    apply_pre_gui_output(pre_gui_output or {}, ui_settings, shared_parameter_values)
 
     widget = SubmitJobToDeadlineDialog(
         job_setup_widget_type=SceneSettingsWidget,
