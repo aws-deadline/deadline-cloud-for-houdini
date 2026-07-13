@@ -14,7 +14,7 @@ from qtpy.QtCore import Qt  # type: ignore
 from deadline.client.config import get_setting, str2bool
 from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.ui.dialogs.submit_job_to_deadline_dialog import SubmitJobToDeadlineDialog
-from deadline.client.ui.pre_gui_hooks import (  # pylint: disable=import-error
+from deadline.client.ui.pre_gui_hooks import (
     PreGuiHookContext,
     apply_pre_gui_output,
     qt_hook_confirmation,
