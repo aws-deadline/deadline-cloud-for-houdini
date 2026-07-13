@@ -11,13 +11,11 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
 )
 from qtpy.QtCore import Qt  # type: ignore
-from deadline.client.config import get_setting, str2bool
 from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.ui.dialogs.submit_job_to_deadline_dialog import SubmitJobToDeadlineDialog
 from deadline.client.ui.pre_gui_hooks import (
     PreGuiHookContext,
     apply_pre_gui_output,
-    qt_hook_confirmation,
     run_pre_gui_hooks,
 )
 from deadline.client.dataclasses import SubmitterInfo
@@ -25,7 +23,7 @@ from deadline_cloud_for_houdini._version import version as houdini_submitter_ver
 from deadline_cloud_for_houdini._assets import _get_scene_asset_references
 from deadline_cloud_for_houdini.hip_settings import HoudiniSubmitterUISettings
 from deadline_cloud_for_houdini.houdini_submitter_widget import SceneSettingsWidget
-from deadline_cloud_for_houdini.submitter import submit_callback
+from deadline_cloud_for_houdini.submitter import _pre_gui_hook_confirm_callback, submit_callback
 
 
 class SubmitterPanel(QWidget):
@@ -71,11 +69,6 @@ def onCreateInterface():
     # on-disk job bundle at this point, so hooks are sourced from DEADLINE_HOOKS_DIR only
     # (bundle_dir=None), gated by settings.allow_environment_hooks. The confirmation prompt is
     # skipped when auto_accept is set; otherwise the standard dialog is shown.
-    confirm_callback = (
-        None
-        if str2bool(get_setting("settings.auto_accept"))
-        else qt_hook_confirmation(hou.qt.mainWindow())
-    )
     pre_gui_output = run_pre_gui_hooks(
         PreGuiHookContext(
             bundle_dir=None,
@@ -83,7 +76,7 @@ def onCreateInterface():
             submitter_name="houdini",
             parameters=dict(shared_parameter_values),
         ),
-        confirm_callback=confirm_callback,
+        confirm_callback=_pre_gui_hook_confirm_callback(hou.qt.mainWindow()),
     )
     apply_pre_gui_output(pre_gui_output, ui_settings, shared_parameter_values)
 

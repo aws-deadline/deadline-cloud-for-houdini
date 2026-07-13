@@ -489,6 +489,22 @@ def _create_job_bundle(
         deadline_yaml_dump(asset_references.to_dict(), f, indent=1)
 
 
+def _pre_gui_hook_confirm_callback(parent):
+    """Choose the confirmation callback for pre-GUI hooks based on the auto_accept setting.
+
+    Returns ``None`` (run hooks without prompting) when ``settings.auto_accept`` is enabled,
+    otherwise the standard Qt confirmation dialog from ``qt_hook_confirmation``. Kept as a small
+    helper here (rather than inline in the panel) so the auto_accept branch can be unit-tested
+    headlessly -- the panel module isn't importable outside Houdini.
+    """
+    if str2bool(get_setting("settings.auto_accept")):
+        return None
+
+    from deadline.client.ui.pre_gui_hooks import qt_hook_confirmation
+
+    return qt_hook_confirmation(parent)
+
+
 def callback(kwargs):
     """ROP parameter callback wrapper"""
     function_name = f"{kwargs['parm'].name()}_callback"
