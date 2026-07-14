@@ -10,9 +10,9 @@ from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter impo
 
 @pytest.fixture(scope="function", autouse=True)
 def mock_config_dialog():
-    with mock.patch(
-        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.DeadlineConfigDialog"
-    ) as config_dialog:
+    # settings_callback imports DeadlineConfigDialog lazily, so patch it at its source module
+    # (the name is resolved from deadline.client.ui.dialogs at call time, not on the submitter module).
+    with mock.patch("deadline.client.ui.dialogs.DeadlineConfigDialog") as config_dialog:
         yield config_dialog
 
 
