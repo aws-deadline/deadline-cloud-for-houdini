@@ -131,7 +131,6 @@ Requires a built installer in the repository root. Tests are in `test/installer/
 | `integ-ci` | CI matrix (Houdini 19.5-21.0) | `setup`, `test` |
 | `installer` | Build standalone installer | `build-installer` |
 | `release` | Semantic release | `bump`, `version` |
-| `docs` | MkDocs documentation | `build`, `serve`, `deploy` |
 
 ## Troubleshooting Build/Test Issues
 
