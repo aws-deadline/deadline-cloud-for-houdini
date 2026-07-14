@@ -18,8 +18,8 @@ from deadline.client.job_bundle import create_job_history_bundle_dir
 from deadline.client.job_bundle.parameters import JobParameter
 from deadline.client.config import get_setting
 from deadline.client.config.config_file import str2bool
-from deadline.job_attachments.upload import S3AssetManager
-from deadline.job_attachments.models import JobAttachmentS3Settings
+from deadline.client.ui.dialogs.submit_job_progress_dialog import SubmitJobProgressDialog
+from deadline.client.ui.dialogs import DeadlineConfigDialog, DeadlineLoginDialog
 
 from .queue_parameters import update_queue_parameters, get_queue_parameter_values_as_openjd
 from ._assets import _get_hip_file, _get_evaluated_asset_references, _parse_files
@@ -680,34 +680,8 @@ def submit_callback(kwargs):
             )
             return
 
-        deadline = api.get_boto3_client("deadline")
-
         job_bundle_dir = create_job_history_bundle_dir("houdini", name)
         _create_job_bundle(node, job_bundle_dir, asset_references)
-
-        storage_profile_id = get_setting("settings.storage_profile_id")
-
-        storage_profile = None
-        if storage_profile_id:
-            storage_profile = api.get_storage_profile_for_queue(
-                farm_id, queue_id, storage_profile_id, deadline
-            )
-
-        queue = deadline.get_queue(farmId=farm_id, queueId=queue_id)
-
-        queue_role_session = api.get_queue_user_boto3_session(
-            deadline=deadline,
-            farm_id=farm_id,
-            queue_id=queue_id,
-            queue_display_name=queue["displayName"],
-        )
-
-        asset_manager = S3AssetManager(
-            farm_id=farm_id,
-            queue_id=queue_id,
-            job_attachment_settings=JobAttachmentS3Settings(**queue["jobAttachmentSettings"]),
-            session=queue_role_session,
-        )
 
         api.get_deadline_cloud_library_telemetry_client().record_event(
             event_type="com.amazon.rum.deadline.submission",
@@ -722,15 +696,12 @@ def submit_callback(kwargs):
         from deadline.client.ui.dialogs.submit_job_progress_dialog import SubmitJobProgressDialog
 
         job_progress_dialog = SubmitJobProgressDialog(parent=hou.qt.mainWindow())
-        job_progress_dialog.start_submission(
-            farm_id,
-            queue_id,
-            storage_profile,
-            job_bundle_dir,
-            queue_parameters,
-            asset_manager,
-            deadline,
-            auto_accept=str2bool(get_setting("settings.auto_accept")),
+        job_progress_dialog.setModal(True)
+        job_progress_dialog.show()
+        job_progress_dialog.start_job_submission(
+            job_bundle_dir=job_bundle_dir,
+            job_parameters=queue_parameters,
+            submitter_name="Houdini",
         )
     except Exception as exc:
         api.get_deadline_cloud_library_telemetry_client().record_error(
