@@ -36,11 +36,23 @@ def _build_base_environment(working_directory: Path, dependencies: list[Dependen
     (working_directory / "base_env").mkdir()
     base_env_path = working_directory / "base_env"
     dependencies_for_pip = [d.for_pip() for d in dependencies]
+
+    # Write a constraints file to keep transitive dependencies compatible with the oldest
+    # supported Python (3.9). Several packages use PEP 604 type unions (X | Y) which are syntax
+    # errors on Python 3.9 despite metadata sometimes claiming >=3.9 support:
+    #   - urllib3 2.x uses `bytes | str` syntax
+    #   - boto3/botocore 1.43+ use `str | None` syntax (Requires-Python correctly says >=3.10,
+    #     but pip running on 3.13 resolves them anyway since we don't pass --python-version)
+    constraints_path = working_directory / "constraints.txt"
+    constraints_path.write_text("urllib3<2\n" "boto3<1.43\n" "botocore<1.43\n")
+
     base_env_pip_args = [
         "pip",
         "install",
         "--target",
         str(base_env_path),
+        "--constraint",
+        str(constraints_path),
         "--only-binary=:all:",
         *dependencies_for_pip,
     ]

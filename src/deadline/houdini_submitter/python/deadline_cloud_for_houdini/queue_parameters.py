@@ -139,16 +139,30 @@ def _get_equivalent_bool(original_value: str) -> Optional[bool]:  # pragma: no c
     return original_value in _TRUTHY
 
 
+def get_default_conda_packages() -> str:
+    """Return the default ``CondaPackages`` value pinned to the running Houdini and adaptor versions.
+
+    Single source of truth shared by the queue-parameter UI defaults and the Python panel's
+    ``initial_shared_parameter_values`` so both stay consistent.
+    """
+    houdini_version = ".".join(hou.applicationVersionString().split(".")[:2])
+    adaptor_version = ".".join(str(v) for v in adaptor_version_tuple[:2])
+    return f"houdini={houdini_version}.* houdini-openjd={adaptor_version}.*"
+
+
+def get_default_rez_packages() -> str:
+    """Return the default ``RezPackages`` value pinned to the running Houdini version."""
+    houdini_version = ".".join(hou.applicationVersionString().split(".")[:2])
+    return f"houdini-{houdini_version} deadline_cloud_for_houdini"
+
+
 def _get_default_value(
     param: JobParameter,
 ) -> tuple[Union[str, int, float], ...]:  # pragma: no cover
-    houdini_version = ".".join(hou.applicationVersionString().split(".")[:2])
-    adaptor_version = ".".join(str(v) for v in adaptor_version_tuple[:2])
-
     if param["name"] == "RezPackages":
-        return (f"houdini-{houdini_version} deadline_cloud_for_houdini",)
+        return (get_default_rez_packages(),)
     elif param["name"] == "CondaPackages":
-        return (f"houdini={houdini_version}.* houdini-openjd={adaptor_version}.*",)
+        return (get_default_conda_packages(),)
     elif "default" in param:
         return (param["default"],)
     else:
@@ -328,6 +342,38 @@ def get_queue_parameter_values_as_openjd(
                 )
             result.append({"name": name, "value": value})
     return result
+
+
+def set_queue_parameter_values_from_openjd(
+    node: hou.Node, queue_parameters: list[dict[str, Any]]
+) -> None:  # pragma: no cover
+    """Write queue-parameter values from the shared dialog back onto the node's spare parms.
+
+    Write-side counterpart to ``get_queue_parameter_values_as_openjd``. ``deadline:*`` job
+    parameters and the non-queue params ``HipFile``/``AdaptorWheels`` are skipped: those are
+    handled from the node's base parameters, not the queue-environment spare parms. Parameters
+    without a matching spare parm (e.g. when queue parameters haven't been fetched) are ignored.
+    """
+    for param in queue_parameters:
+        name = param.get("name", "")
+        if name.startswith("deadline:") or name in ("HipFile", "AdaptorWheels"):
+            continue
+        parm = node.parm(_get_prefixed_name(name))
+        if parm is None:
+            continue
+        value = param.get("value")
+        if value is None:
+            continue
+        parm_template = parm.parmTemplate()
+        if (
+            isinstance(parm_template, hou.ToggleParmTemplate)
+            and "allowed_bool_strings" in parm_template.tags()
+        ):
+            bool_value = _get_equivalent_bool(value) if isinstance(value, str) else bool(value)
+            if bool_value is not None:
+                parm.set(bool_value)
+        else:
+            parm.set(value)
 
 
 def _rebuild_queue_parameters_ui(

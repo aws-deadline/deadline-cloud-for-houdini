@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Optional
 
 from _project import CPUArch, get_dependencies, get_git_root, get_pip_platform, get_project_dict
+from pypanel import (
+    get_rendered_path,
+    get_submitter_panel_source_path,
+    get_template_path,
+    render_pypanel,
+)
 
 SUBMITTER_PACKAGE_TEMPLATE = {
     "env": [],
@@ -81,6 +87,32 @@ def _get_houdini_user_prefs_path(major_minor: str) -> Path:
 
 def _get_submitter_src_path() -> Path:
     return get_git_root() / "src" / "deadline" / "houdini_submitter"
+
+
+# The pypanel template (src/deadline/houdini_submitter/python_panels/deadline_cloud.pypanel.template)
+# carries a placeholder token inside its <script> CDATA which is replaced with the contents of
+# submitter_panel.py at install time (see scripts/pypanel.py). This keeps the Python a normal,
+# lintable/typable file while still deploying it embedded in the pypanel.
+def _install_python_panel() -> None:
+    """Render the Python panel from its template + submitter_panel.py, co-located with the template.
+
+    Injects the current submitter_panel.py source into the committed pypanel template and writes
+    the rendered ``deadline_cloud.pypanel`` next to it under the submitter source dir. That dir is
+    the plugin's ``hpath`` (see SUBMITTER_PACKAGE_TEMPLATE), so Houdini discovers the panel via
+    HOUDINI_PATH -- no copy into the Houdini user-prefs ``python_panels`` dir is needed. This
+    mirrors the production installer, which ships the same rendered file under the install dir.
+    """
+    submitter_src = _get_submitter_src_path()
+    rendered = render_pypanel(
+        get_template_path(submitter_src),
+        get_submitter_panel_source_path(submitter_src),
+    )
+
+    destination = get_rendered_path(submitter_src)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    print(f"Installing Houdini python panel to: {destination}")
+    destination.write_text(rendered, encoding="utf-8")
 
 
 def _resolve_dependencies(local_deps: list[Path], python_version: str) -> list[str]:
@@ -188,6 +220,8 @@ def install_submitter_package(
     print(f"Installing Houdini plugin to: {submitter_package_path}")
     with open(submitter_package_path, "w", encoding="utf-8") as f:
         json.dump(submitter_package, f, indent=4)
+
+    _install_python_panel()
 
 
 if __name__ == "__main__":

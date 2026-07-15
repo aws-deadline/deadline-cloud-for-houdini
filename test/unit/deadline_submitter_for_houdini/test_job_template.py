@@ -165,6 +165,82 @@ def test_job_template(mock_get_steps, mock_parm):
     }
 
 
+def test_job_template_applies_host_requirements_to_all_steps(mock_get_steps, mock_parm):
+    mock_node = Mock()
+    mock_node.userData.return_value = None
+    mock_node.name = "Test Job"
+    mock_node.parm = mock_parm
+
+    mock_get_steps.return_value = [
+        {
+            "id": "1",
+            "name": "/mantra-1",
+            "dependency_ids": [],
+            "rop": "/mantra",
+            "wedgenum": "",
+            "wedge_node": "",
+            "start": 1,
+            "end": 5,
+            "step": 1,
+            "render_strategy": RenderStrategy.PARALLEL,
+        },
+        {
+            "id": "2",
+            "name": "/geo-1",
+            "dependency_ids": [],
+            "rop": "/geo",
+            "wedgenum": "",
+            "wedge_node": "",
+            "start": 1,
+            "end": 5,
+            "step": 1,
+            "render_strategy": RenderStrategy.SEQUENTIAL,
+        },
+    ]
+
+    host_requirements = {
+        "amounts": [{"name": "amount.worker.vcpu", "min": 8}],
+        "attributes": [{"name": "attr.worker.os.family", "anyOf": ["linux"]}],
+    }
+
+    template = _get_job_template(mock_node, host_requirements)
+
+    # Every step gets the same requirements block...
+    for step in template["steps"]:
+        assert step["hostRequirements"] == host_requirements
+
+    # ...but as an independent deep copy, not a shared reference (so later mutation of one
+    # step cannot leak into another or back into the caller's dict).
+    assert template["steps"][0]["hostRequirements"] is not host_requirements
+    assert template["steps"][0]["hostRequirements"] is not template["steps"][1]["hostRequirements"]
+
+
+def test_job_template_omits_host_requirements_when_not_provided(mock_get_steps, mock_parm):
+    mock_node = Mock()
+    mock_node.userData.return_value = None
+    mock_node.name = "Test Job"
+    mock_node.parm = mock_parm
+
+    mock_get_steps.return_value = [
+        {
+            "id": "1",
+            "name": "/mantra-1",
+            "dependency_ids": [],
+            "rop": "/mantra",
+            "wedgenum": "",
+            "wedge_node": "",
+            "start": 1,
+            "end": 5,
+            "step": 1,
+            "render_strategy": RenderStrategy.PARALLEL,
+        }
+    ]
+
+    template = _get_job_template(mock_node)
+
+    assert "hostRequirements" not in template["steps"][0]
+
+
 def test_job_template_sequential_node(mock_get_steps, mock_parm):
     mock_node = Mock()
     mock_node.userData.return_value = None

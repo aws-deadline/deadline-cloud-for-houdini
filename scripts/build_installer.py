@@ -13,6 +13,12 @@ from common import EvaluationBuildError, run
 from find_installbuilder import InstallBuilderSelection, get_builder_exe_name
 
 from deps_bundle import build_deps_bundle
+from pypanel import (
+    get_rendered_path,
+    get_submitter_panel_source_path,
+    get_template_path,
+    render_pypanel,
+)
 
 # This is derived from <installerFilename> in installer/DeadlineCloudClient.xml
 # See "Supported Platforms" table in https://releases.installbuilder.com/installbuilder/docs/installbuilder-userguide.html
@@ -64,6 +70,31 @@ def setup_install_builder(
     return install_builder_path
 
 
+def stage_python_panel() -> Path:
+    """Render the Houdini Python panel next to its template for packaging by InstallBuilder.
+
+    Injects submitter_panel.py into the committed ``.pypanel.template`` and writes the rendered
+    ``deadline_cloud.pypanel`` alongside it under ``src/deadline/houdini_submitter/python_panels``.
+    The installer's ``houdini`` component already ships ``src/deadline/houdini_submitter/*`` into
+    ``${houdini_installdir}``, so the rendered panel lands at
+    ``${houdini_installdir}/python_panels/deadline_cloud.pypanel`` and Houdini discovers it via the
+    plugin's hpath on customer installs -- no separate staging dir or installer component needed.
+    Shares path/render logic with the dev installer via scripts/pypanel.py so the two can't drift.
+    """
+    submitter_src = Path(__file__).resolve().parents[1] / "src" / "deadline" / "houdini_submitter"
+
+    rendered = render_pypanel(
+        get_template_path(submitter_src),
+        get_submitter_panel_source_path(submitter_src),
+    )
+
+    destination = get_rendered_path(submitter_src)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(rendered, encoding="utf-8")
+    print(f"Rendered Houdini python panel to: {destination}")
+    return destination
+
+
 def build_installer(
     workdir: Path,
     component_file_path: Path,
@@ -94,6 +125,7 @@ def build_installer(
         raise ValueError(f"Unknown platform '{installer_platform}'")
 
     build_deps_bundle()
+    stage_python_panel()
 
     install_builder_cli = install_builder_location / "bin" / "builder"
     out_dir = workdir / "out"
@@ -178,4 +210,9 @@ def main(
         if output_dir:
             output_dir.mkdir(exist_ok=True)
             output_path = output_dir / output_path
+        if output_path.exists():
+            if output_path.is_dir():
+                shutil.rmtree(output_path)
+            else:
+                output_path.unlink()
         shutil.move(installer_path, output_path)

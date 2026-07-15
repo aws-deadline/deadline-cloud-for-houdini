@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pythonPanelDocument>
+  <!-- This file contains definitions of Python interfaces and the
+ interfaces menu.  It should not be hand-edited when it is being
+ used by the application.  Note, that two definitions of the
+ same interface or of the interfaces menu are not allowed
+ in a single file. -->
+  <interface name="deadline_cloud" label="Deadline Cloud" icon="" showNetworkNavigationBar="false" help_url="">
+    <script><![CDATA[
+# __SUBMITTER_PANEL_SOURCE__
+# The line above is replaced at install time with the contents of
+# src/deadline/houdini_submitter/panel/submitter_panel.py by
+# scripts/install_dev_submitter.py. Edit that file, not this placeholder.
+]]></script>
+    <includeInToolbarMenu menu_position="208" create_separator="false"/>
+    <showInParametersPane optype="Driver/deadline_cloud"/>
+    <help><![CDATA[]]></help>
+  </interface>
+</pythonPanelDocument>

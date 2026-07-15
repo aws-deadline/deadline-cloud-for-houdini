@@ -67,6 +67,12 @@ class SceneSettingsWidget(QWidget):
         self.separate_step_check.setChecked(settings.separate_steps)
         self.include_adaptor_wheels_check.setChecked(settings.include_adaptor_wheels)
         self.adaptor_wheels_directory_picker.setEnabled(settings.include_adaptor_wheels)
+        if settings.adaptor_wheels_dir:
+            self.adaptor_wheels_directory_picker.setText(settings.adaptor_wheels_dir)
+
+        self.auto_unlock_rops_check.setChecked(settings.auto_unlock_rops)
+        self.auto_parse_hip_check.setChecked(settings.auto_parse_hip)
+        self.auto_save_hip_check.setChecked(settings.auto_save_hip)
 
     def _include_adaptor_wheels_changed(self, state):
         self.adaptor_wheels_directory_picker.setEnabled(Qt.CheckState(state) == Qt.Checked)
