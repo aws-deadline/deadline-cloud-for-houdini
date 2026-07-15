@@ -18,8 +18,6 @@ from deadline.client.job_bundle import create_job_history_bundle_dir
 from deadline.client.job_bundle.parameters import JobParameter
 from deadline.client.config import get_setting
 from deadline.client.config.config_file import str2bool
-from deadline.client.ui.dialogs.submit_job_progress_dialog import SubmitJobProgressDialog
-from deadline.client.ui.dialogs import DeadlineConfigDialog, DeadlineLoginDialog
 from deadline.job_attachments.upload import S3AssetManager
 from deadline.job_attachments.models import JobAttachmentS3Settings
 
@@ -719,6 +717,10 @@ def submit_callback(kwargs):
             from_gui=True,
         )
 
+        # Imported lazily so merely importing this module (e.g. the headless job-bundle path
+        # exercised by integ tests in hython) does not pull in deadline-cloud's Qt/PySide UI.
+        from deadline.client.ui.dialogs.submit_job_progress_dialog import SubmitJobProgressDialog
+
         job_progress_dialog = SubmitJobProgressDialog(parent=hou.qt.mainWindow())
         job_progress_dialog.start_submission(
             farm_id,
@@ -748,6 +750,9 @@ def submit_callback(kwargs):
 def settings_callback(kwargs):
     node = kwargs["node"]
     _show_farm_and_queue_as_refreshing(node)
+    # Lazy import: keep deadline-cloud's Qt/PySide UI out of the module-import path (see submit_callback).
+    from deadline.client.ui.dialogs import DeadlineConfigDialog
+
     DeadlineConfigDialog.configure_settings(parent=hou.qt.mainWindow())
     try:
         _apply_farm_and_queue_settings(node)
@@ -763,6 +768,9 @@ def settings_callback(kwargs):
 def login_callback(kwargs):
     node = kwargs["node"]
     _show_farm_and_queue_as_refreshing(node)
+    # Lazy import: keep deadline-cloud's Qt/PySide UI out of the module-import path (see submit_callback).
+    from deadline.client.ui.dialogs import DeadlineLoginDialog
+
     DeadlineLoginDialog.login(parent=hou.qt.mainWindow())
     try:
         _apply_farm_and_queue_settings(node)

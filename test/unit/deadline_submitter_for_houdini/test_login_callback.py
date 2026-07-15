@@ -10,9 +10,9 @@ from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter impo
 
 @pytest.fixture(scope="function", autouse=True)
 def mock_login_dialog():
-    with mock.patch(
-        "deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.DeadlineLoginDialog"
-    ) as login_dialog:
+    # login_callback imports DeadlineLoginDialog lazily, so patch it at its source module
+    # (the name is resolved from deadline.client.ui.dialogs at call time, not on the submitter module).
+    with mock.patch("deadline.client.ui.dialogs.DeadlineLoginDialog") as login_dialog:
         yield login_dialog
 
 
