@@ -150,7 +150,8 @@ To run integration tests:
    ```powershell
    # Python version should be 3.9 for Houdini 19.5,
    # 3.10 for Houdini 20.0,
-   # and 3.11 for Houdini 20.5 & 21.0.
+   # 3.11 for Houdini 20.5 & 21.0,
+   # and 3.13 for Houdini 22.0.
    pip install -r requirements-integ-dcc-env.txt --python-version=3.11 --only-binary=:all: --target="C:\\Program Files\\Side Effects Software\\Houdini 20.5.487\\python311\\lib\\site-packages"
    ```
 1. Run `hatch run integ:test`. **If you are on Windows**, you may need Admin privileges to run the tests.
