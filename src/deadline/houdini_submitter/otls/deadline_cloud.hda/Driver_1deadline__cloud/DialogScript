@@ -722,6 +722,7 @@
             name    "parse_files"
             label   "Parse Files"
             type    button
+            invisible
             default { "0" }
             parmtag { "script_callback" "hou.phm().callback(kwargs)" }
             parmtag { "script_callback_language" "python" }
@@ -816,6 +817,7 @@
         name    "login"
         label   "Login"
         type    button
+        invisible
         joinnext
         default { "0" }
         parmtag { "script_callback" "hou.phm().callback(kwargs)" }
@@ -826,6 +828,7 @@
         name    "logout"
         label   "Logout"
         type    button
+        invisible
         joinnext
         default { "0" }
         parmtag { "script_callback" "hou.phm().callback(kwargs)" }
@@ -836,6 +839,7 @@
         name    "settings"
         label   "Settings"
         type    button
+        invisible
         joinnext
         default { "0" }
         parmtag { "script_callback" "hou.phm().callback(kwargs)" }
@@ -846,6 +850,7 @@
         name    "labelparm"
         label   "Label"
         type    label
+        invisible
         nolabel
         joinnext
         default { "" }
@@ -854,6 +859,7 @@
         name    "save_bundle"
         label   "Save Bundle"
         type    button
+        invisible
         joinnext
         default { "0" }
         parmtag { "script_callback" "hou.phm().callback(kwargs)" }
@@ -864,6 +870,7 @@
         name    "submit"
         label   "Submit"
         type    button
+        invisible
         default { "0" }
         parmtag { "script_callback" "hou.phm().callback(kwargs)" }
         parmtag { "script_callback_language" "python" }

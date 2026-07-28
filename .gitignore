@@ -5,6 +5,10 @@
 /dev_install/
 /wheels/
 
+# Rendered Houdini python panel (generated from deadline_cloud.pypanel.template at install/build
+# time by scripts/pypanel.py); the .template beside it stays tracked.
+/src/deadline/houdini_submitter/python_panels/deadline_cloud.pypanel
+
 # License file for InstallBuilder
 license.xml
 
@@ -32,6 +36,9 @@ houdini_version.txt
 
 # IDE
 .vscode
+
+# AI agent working files
+.sisyphus/
 
 # macOS
 .DS_Store

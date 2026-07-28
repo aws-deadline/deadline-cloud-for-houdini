@@ -44,6 +44,33 @@ def test_get_rop_steps(mock_hou):
 
 
 @patch("deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.hou")
+def test_get_rop_steps_ignores_warnings_with_output(mock_hou):
+    """A non-fatal hscript warning must not abort listing when valid steps were produced."""
+    mock_hou.hscript.return_value = (
+        "1 [ ] /out/mantra1 \t( 1 5 1 )\n",
+        "Warning:     Local variable 'pdg_input' not found.\nLocal variable 'pdg_input' not found.\n",
+    )
+    node = mock_hou.node()
+    node.parm.return_value = None
+
+    steps = _get_rop_steps(node)
+
+    assert len(steps) == 1
+    assert steps[0]["rop"] == "/out/mantra1"
+
+
+@patch("deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.hou")
+def test_get_rop_steps_raises_when_no_output_and_error(mock_hou):
+    """A genuine failure (no output + stderr) must still raise."""
+    mock_hou.hscript.return_value = ("", "render: some fatal error\n")
+    node = mock_hou.node()
+    node.parm.return_value = None
+
+    with pytest.raises(Exception, match="failed to list steps"):
+        _get_rop_steps(node)
+
+
+@patch("deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter.hou")
 def test_get_rop_steps_simulation(mock_hou):
     mock_hou.hscript.return_value = (
         "1 [ ] /out/geo \t( 1 5 1 )\n",
