@@ -2,7 +2,7 @@
 <componentGroup>
     <name>deadline_cloud_for_houdini</name>
     <description>Deadline Cloud for Houdini</description>
-    <detailedDescription>Houdini plugin for submitting jobs to AWS Deadline Cloud. Compatible with Houdini 19.5-21.0</detailedDescription>
+    <detailedDescription>Houdini plugin for submitting jobs to AWS Deadline Cloud. Compatible with Houdini 19.5-22.0</detailedDescription>
     <canBeEdited>1</canBeEdited>
     <selected>0</selected>
     <show>1</show>
@@ -388,6 +388,83 @@
                 </if>
             </postInstallationActionList>
         </component>
+         <component>
+            <name>houdini_22_0</name>
+            <description>Houdini 22.0</description>
+            <selected>0</selected>
+            <parameterList>
+                <directoryParameter>
+                    <name>houdini_22_0_packagedir</name>
+                    <description>Houdini 22.0 Packages Directory</description>
+                    <explanation>Enter the path to the Houdini 22.0 packages directory. For easiest installation, Houdini should be installed before installing Deadline Cloud for Houdini.</explanation>
+                    <allowEmptyValue>0</allowEmptyValue>
+                    <ask>yes</ask>
+                    <cliOptionName>houdini-22-0-package-dir</cliOptionName>
+                    <cliOptionText>Path to the Houdini 22.0 packages directory. When the installer is run, if the HOUDINI_USER_PREF_DIR environment variable is set, this directory will default to the packages subdirectory at that path.</cliOptionText>
+                    <mustBeWritable>yes</mustBeWritable>
+                    <!-- Do not show this parameter on Windows; we will just add the installation directory to HOUDINI_PACKAGE_DIR. -->
+                    <ruleList>
+                        <platformTest type="windows" negate="true"/>
+                    </ruleList>
+                    <!-- For non-Windows, choose an appropriate default based on install scope and OS -->
+                    <preShowPageActionList>
+                        <!-- User (any): Set based on user pref -->
+                        <if>
+                            <conditionRuleEvaluationLogic>and</conditionRuleEvaluationLogic>
+                            <conditionRuleList>
+                                <compareText logic="equals" text="${houdini_22_0_packagedir}" value=""/>
+                                <compareText logic="equals" text="${installscope}" value="user"/>
+                            </conditionRuleList>
+                            <actionList>
+                                <setInstallerVariable name="houdini_22_0_packagedir" value="${houdini_user_pref_dir_default}22.0/packages"/>
+                            </actionList>
+                        </if>
+
+                        <!-- System (any): Set based on default Houdini location for the OS -->
+                        <if>
+                            <conditionRuleEvaluationLogic>and</conditionRuleEvaluationLogic>
+                            <conditionRuleList>
+                                <compareText logic="equals" text="${houdini_22_0_packagedir}" value=""/>
+                                <compareText logic="equals" text="${installscope}" value="system"/>
+                            </conditionRuleList>
+                            <actionList>
+                                <if>
+                                    <conditionRuleList>
+                                        <platformTest type="linux" />   
+                                    </conditionRuleList>
+                                    <actionList>
+                                        <setInstallerVariable name="houdini_22_0_packagedir" value="/opt/hfs22.0/packages" />
+                                    </actionList>
+                                </if>
+                                <if>
+                                    <conditionRuleList>
+                                        <platformTest type="osx" />   
+                                    </conditionRuleList>
+                                    <actionList>
+                                        <setInstallerVariable name="houdini_22_0_packagedir" value="/Applications/Houdini/Current/Frameworks/Houdini.framework/Versions/Current/Resources/packages"/>
+                                    </actionList>
+                                </if>
+                            </actionList>
+                        </if>
+                    </preShowPageActionList>
+                </directoryParameter>
+            </parameterList>
+            <postInstallationActionList>
+                <!-- On Windows, we don't require copying the package file and can just set an environment variable.
+                For macOS and Linux, we must copy the file into the latest Houdini installation. -->
+                <if>
+                    <conditionRuleList>
+                        <platformTest type="windows"/>
+                    </conditionRuleList>
+                    <actionList>
+                        <fnAddPathEnvironmentVariable name="HOUDINI_PACKAGE_DIR" value="${houdini_packagedir}" scope="${installscope}"/>
+                    </actionList>
+                    <elseActionList>
+                        <fnCopyHoudiniPackageFile destinationDir="${houdini_22_0_packagedir}" />
+                    </elseActionList>
+                </if>
+            </postInstallationActionList>
+        </component>
     </componentList>
     <preInitializationActionList>
         <if>
@@ -449,8 +526,8 @@
     </readyToInstallActionList>
     <parameterList>
         <stringParameter name="deadline_cloud_for_houdini_summary" ask="0" cliOptionShow="0">
-            <value>Deadline Cloud for Houdini 19.5-21.0
-- Compatible with Houdini 19.5-21.0
+            <value>Deadline Cloud for Houdini 19.5-22.0
+- Compatible with Houdini 19.5-22.0
 - Install the integrated Houdini submitter files to the installation directory.
 - Copy the plug-in package file to the Houdini packages directory for each version.
 - Register the plug-in package file with Houdini by setting HOUDINI_PACKAGE_DIR on Windows.</value>

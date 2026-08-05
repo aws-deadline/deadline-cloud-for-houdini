@@ -48,7 +48,7 @@ pre-install-commands = [
 ]
 
 [[envs.integ-ci.matrix]]
-houdini = ["19.5.805", "20.0.896", "20.5.613", "21.0.440"]
+houdini = ["19.5.805", "20.0.896", "20.5.613", "21.0.440", "22.0.368"]
 
 [envs.integ-ci.env-vars]
 HOUDINI_VERSION = "{matrix:houdini}"

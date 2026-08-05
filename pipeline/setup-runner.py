@@ -40,6 +40,12 @@ HOUDINI_VERSION_CONFIG = {
         "clang": "clang15.0_14",
         "python": "3.11",
     },
+    "22.0.368": {
+        "gcc": "gcc14.2",
+        "vc": "vc143",
+        "clang": "clang17.0_15",
+        "python": "3.13",
+    },
 }
 
 HOUDINI_CHECKSUMS = {
@@ -62,6 +68,11 @@ HOUDINI_CHECKSUMS = {
         "linux": "a87451f9146d52051a9ba142d535936638351526a48cba0c6156a221f3be58e6",
         "windows": "a78e468e99d1be3476b46062e3a043ecc435751b9a9f92e39bee414ace8ce59e",
         "macos": "3fc918428b22b3c32704d1163a6b1b08723ece71e5e0172e941167549d4d5b25",
+    },
+    "22.0.368": {
+        "linux": "8765335f090a8329768b415b64bc9fb80a0d9963b13f63455ad042e32d353616",
+        "windows": "b72c4ff9fff20e8cc9449ff1dd57dfab4c52421f77b267412fb5c9288b2a3c49",
+        "macos": "a51dedfb764475e1da600432f40d213cd08d628e7ba2f5e3ccf7f8b9ecda6955",
     },
 }
 
