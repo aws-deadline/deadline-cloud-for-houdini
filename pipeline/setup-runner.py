@@ -3,6 +3,7 @@
 #!/usr/bin/env python3
 """Setup runner for Houdini integration tests in CodeBuild."""
 import argparse
+import getpass
 import hashlib
 import os
 import platform
@@ -135,7 +136,9 @@ def setup_linux(houdini_versions):
         == 0
         else "yum"
     )
-    run([pkg_mgr, "install", "-y", "bc"])
+    # bc is required by the Houdini installer; libatomic provides
+    # libatomic.so.1, which Houdini 22.0's hython links against.
+    run([pkg_mgr, "install", "-y", "bc", "libatomic"])
 
     for version in houdini_versions:
         major_minor = ".".join(version.split(".")[:2])
@@ -364,6 +367,13 @@ def setup_macos(houdini_versions):
             sys.exit(1)
 
         houdini_dmg.unlink(missing_ok=True)
+
+    # The sudo Houdini .pkg installer leaves ~/Library/Preferences/houdini/<ver>
+    # root-owned; hand it back to the build user so the non-sudo submitter install
+    # can write its package JSON. Before the loop so it also runs on cached runners.
+    prefs_root = Path("~/Library/Preferences/houdini").expanduser()
+    prefs_root.mkdir(parents=True, exist_ok=True)
+    run(["sudo", "chown", "-R", f"{getpass.getuser()}:staff", str(prefs_root)], check=False)
 
     print("Installing Houdini submitter...")
     for version in houdini_versions:
