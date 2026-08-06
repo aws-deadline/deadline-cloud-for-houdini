@@ -1,5 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
+from dataclasses import dataclass
 from enum import Enum
 import copy
 import os
@@ -7,11 +8,12 @@ import sys
 import yaml
 import json
 import traceback
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 from pathlib import Path
 
 from botocore.exceptions import ClientError
 
+from deadline.client.api import BaseSubmitter, BaseSubmitterSettings
 from deadline.client.job_bundle._yaml import deadline_yaml_dump
 from deadline.client import api
 from deadline.client.job_bundle.submission import AssetReferences
@@ -51,6 +53,258 @@ _REFRESHING_TEXT = "<refreshing>"
 class RenderStrategy(Enum):
     SEQUENTIAL = "SEQUENTIAL"
     PARALLEL = "PARALLEL"
+
+
+@dataclass
+class HoudiniSubmitterSettings(BaseSubmitterSettings):
+    """Houdini-specific submission settings for the unified :class:`BaseSubmitter`.
+
+    The Houdini submitter derives the job's step graph from the live ROP node
+    (via the module-level ``_get_job_template``). Beyond the DCC-agnostic base
+    fields (``job_name``, ``description``, ``priority``, ``initial_status``,
+    ``max_failed_tasks_count``, ``max_retries_per_task``, the asset-reference
+    lists) this carries the ROP node path plus the Houdini-specific
+    adaptor-wheels fields, so the build methods can honor consumer edits to
+    those values rather than silently re-reading the node.
+
+    Note: the *frame range* is intentionally not a settings-driven input. A
+    Houdini job's per-step frames/dependencies are derived from the live ROP
+    network via ``hscript render`` (see ``_get_rop_steps``); a single
+    ``frame_list`` string cannot represent that graph, so ``get_settings``
+    populates ``frame_list`` for information only and the builders take frames
+    from the ROP.
+    """
+
+    rop_node_path: str = ""
+    include_adaptor_wheels: bool = False
+    adaptor_wheels: str = ""
+
+
+class HoudiniSubmitter(BaseSubmitter):
+    """Headless :class:`BaseSubmitter` implementation for Houdini.
+
+    This is the unified-API entry point that host-agnostic consumers (e.g. the
+    AYON bridge, ``get_submitter_for_host("houdini")``) drive, and the same
+    engine the native GUI submitter routes through (see ``_create_job_bundle``).
+    ``get_job_template`` reuses the module-level ``_get_job_template`` for the
+    ROP-derived step graph and overrides the settings-driven fields; parameter
+    values are built from ``settings`` plus the ROP's queue parameters, and
+    asset references come from the ``_assets`` scene scan. The submitter
+    resolves everything from a single ROP node path; call
+    :meth:`set_rop_node_path` (or construct with one) before requesting
+    settings/templates.
+    """
+
+    def __init__(self, rop_node_path: str = "") -> None:
+        self._rop_node_path = rop_node_path
+
+    def set_rop_node_path(self, rop_node_path: str) -> None:
+        """Point the submitter at the Deadline Cloud ROP node to submit.
+
+        Lets external callers (e.g. the AYON create/publish plugins) seed the
+        node without reaching into the private attribute.
+        """
+        self._rop_node_path = rop_node_path
+
+    def _get_rop_node(self) -> Optional["hou.Node"]:
+        if self._rop_node_path:
+            return hou.node(self._rop_node_path)
+        return None
+
+    def _require_rop(self) -> "hou.Node":
+        rop = self._get_rop_node()
+        if rop is None:
+            raise RuntimeError(f"Cannot find ROP node at path: {self._rop_node_path}")
+        return rop
+
+    def get_settings(self, scan_assets: bool = True) -> HoudiniSubmitterSettings:
+        """Collect submission settings from the live scene / ROP node.
+
+        Populates the base-contract fields (job name, frame range, and the
+        input/output asset references discovered by walking the scene) so that
+        consumers reading them off the returned settings — e.g. the AYON create
+        plugin's parameterDefinitions UI and its publish-time job-attachments
+        collection — see real values rather than empty defaults. The scene scan
+        is the same one the native "Parse Files" button uses.
+
+        ``scan_assets`` (default ``True``, so base-contract callers are
+        unchanged) gates the input/output asset-reference scan. Callers that do
+        not read ``settings.input_*``/``output_directories`` — notably the GUI
+        submit/export path, which writes ``asset_references.yaml`` from the
+        dialog-provided references — can pass ``False`` to skip a potentially
+        expensive filesystem + USD walk whose output would be discarded.
+        """
+        settings = HoudiniSubmitterSettings()
+        hip_file = _get_hip_file()
+        settings.job_name = hou.hipFile.basename() or "Untitled"
+        settings.project_path = hou.getenv("HIP", "") or ""
+        # Baseline inputs: the hip file only. Overwritten below by the scene scan
+        # when it runs and succeeds; otherwise this fallback stands (no ROP, scan
+        # skipped, or scan failed).
+        settings.input_filenames = [hip_file] if hip_file else []
+
+        # frame_list from the playbar; refined from the ROP's frame-range tuple
+        # below when a node is available.
+        playbar = hou.playbar.frameRange()
+        settings.frame_list = f"{int(playbar[0])}-{int(playbar[1])}"
+        settings.output_path = settings.project_path
+
+        rop = self._get_rop_node()
+        if rop is not None:
+            settings.rop_node_path = rop.path()
+            if rop.parm("name"):
+                settings.job_name = rop.parm("name").evalAsString() or settings.job_name
+            if rop.parm("priority"):
+                settings.priority = rop.parm("priority").eval()
+            if rop.parm("initial_status"):
+                settings.initial_status = rop.parm("initial_status").evalAsString()
+            if rop.parm("failed_tasks_limit"):
+                settings.max_failed_tasks_count = rop.parm("failed_tasks_limit").eval()
+            if rop.parm("task_retry_limit"):
+                settings.max_retries_per_task = rop.parm("task_retry_limit").eval()
+            if rop.parm("description"):
+                settings.description = rop.parm("description").evalAsString()
+            if rop.parm("include_adaptor_wheels"):
+                settings.include_adaptor_wheels = bool(rop.parm("include_adaptor_wheels").eval())
+            if rop.parm("adaptor_wheels"):
+                settings.adaptor_wheels = rop.parm("adaptor_wheels").evalAsString()
+
+            frame_range = rop.parmTuple("f")
+            if frame_range:
+                start = int(frame_range[0].eval())
+                end = int(frame_range[1].eval())
+                step = int(frame_range[2].eval()) if len(frame_range) > 2 else 1
+                settings.frame_list = f"{start}-{end}:{step}" if step != 1 else f"{start}-{end}"
+
+            # Discover the real input/output asset references by scanning the
+            # scene (same detection as "Parse Files"), so consumers that read
+            # these off the settings get populated directories even when the
+            # ROP's Job Attachments multiparms have not been parsed yet. Skipped
+            # when scan_assets is False (the caller does not read these fields);
+            # on failure the hip-file baseline set above stands.
+            if scan_assets:
+                try:
+                    refs = _get_scene_asset_references(rop)
+                    settings.input_filenames = sorted(refs.input_filenames)
+                    settings.input_directories = sorted(refs.input_directories)
+                    settings.output_directories = sorted(refs.output_directories)
+                    if settings.output_directories:
+                        settings.output_path = settings.output_directories[0]
+                except Exception:
+                    # Scene scan can fail (e.g. missing/locked nodes); keep the
+                    # hip-file baseline rather than breaking settings collection.
+                    pass
+
+        return settings
+
+    def get_job_template(
+        self,
+        settings: BaseSubmitterSettings,
+        host_requirements: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        houdini_settings = cast(HoudiniSubmitterSettings, settings)
+        rop = self._require_rop()
+
+        # The step graph (per-step frames, dependencies, wedges) is derived from
+        # the live ROP network by _get_job_template and cannot be reconstructed
+        # from settings; the job name/description are settings-driven so a
+        # consumer's edits are honored (matching deadline-cloud-for-maya).
+        job_template = _get_job_template(rop, host_requirements)
+
+        if houdini_settings.job_name:
+            job_template["name"] = houdini_settings.job_name
+        if houdini_settings.description:
+            job_template["description"] = houdini_settings.description
+        elif "description" in job_template and not houdini_settings.description:
+            # An explicitly-cleared description should not fall back to the node.
+            del job_template["description"]
+
+        # Reconcile the adaptor-wheels override with settings so the template's
+        # AdaptorWheels parameterDefinition/jobEnvironment stays consistent with
+        # the AdaptorWheels *value* get_parameter_values emits (which is
+        # settings-driven). _get_job_template added the override based on the
+        # node; a headless consumer that edited the wheels settings could
+        # otherwise desync (definition without value, or value without
+        # definition -> CreateJob reject).
+        wheels_enabled = houdini_settings.include_adaptor_wheels and os.path.exists(
+            houdini_settings.adaptor_wheels
+        )
+        _apply_adaptor_wheels_override(job_template, wheels_enabled)
+
+        return job_template
+
+    def get_parameter_values(
+        self,
+        settings: BaseSubmitterSettings,
+        queue_parameters: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        houdini_settings = cast(HoudiniSubmitterSettings, settings)
+        rop = self._require_rop()
+
+        # Scalar job parameters come from settings (honoring consumer edits); the
+        # ROP is still consulted for its per-node queue parameter values and hip
+        # file, which have no settings equivalent.
+        parameter_values: list[dict[str, Any]] = [
+            {"name": "deadline:priority", "value": houdini_settings.priority},
+            {"name": "deadline:targetTaskRunStatus", "value": houdini_settings.initial_status},
+            {
+                "name": "deadline:maxFailedTasksCount",
+                "value": houdini_settings.max_failed_tasks_count,
+            },
+            {"name": "deadline:maxRetriesPerTask", "value": houdini_settings.max_retries_per_task},
+            {"name": "HipFile", "value": _get_hip_file()},
+            *get_queue_parameter_values_as_openjd(rop),
+        ]
+        if houdini_settings.include_adaptor_wheels and os.path.exists(
+            houdini_settings.adaptor_wheels
+        ):
+            parameter_values.append(
+                {"name": "AdaptorWheels", "value": houdini_settings.adaptor_wheels}
+            )
+
+        # Merge caller-supplied queue_parameters with caller-wins precedence.
+        # The node already emits its own queue parameters (CondaPackages,
+        # CondaChannels, ...) via get_queue_parameter_values_as_openjd, and a
+        # headless consumer (e.g. AYON) passes the SAME queue parameters here as
+        # its resolved/edited values -- so the two sets overlap by design. The
+        # caller's value supersedes the node's on a name collision (mirroring how
+        # the GUI's set_queue_parameter_values_from_openjd writes dialog edits
+        # back onto the node before the bundle is read). A plain de-dup also
+        # avoids the duplicate parameterValues that CreateJob rejects.
+        #
+        # An empty/None caller value is treated as "not provided": consumers such
+        # as AYON build this list from get_queue_parameters(), which resolves
+        # every parameter to its queue default -- and a queue whose CondaPackages
+        # default is empty would otherwise clobber the node's computed value
+        # (e.g. "houdini=20.5.* houdini-openjd=0.x.*"). We only let a caller value
+        # win when it actually carries a value, so a bare queue default never
+        # blanks a populated node parameter. Falsy-but-real values (0, False) are
+        # preserved.
+        caller_values = {
+            param["name"]: param["value"]
+            for param in queue_parameters
+            if "value" in param and param["value"] not in (None, "")
+        }
+        merged: list[dict[str, Any]] = [
+            {"name": param["name"], "value": caller_values.get(param["name"], param["value"])}
+            for param in parameter_values
+        ]
+        existing_names = {param["name"] for param in merged}
+        merged.extend(
+            {"name": name, "value": value}
+            for name, value in caller_values.items()
+            if name not in existing_names
+        )
+        return merged
+
+    def get_asset_references(self, settings: BaseSubmitterSettings) -> AssetReferences:
+        rop = self._require_rop()
+        # Scan the scene for the authoritative asset references rather than
+        # reading the ROP's (possibly unparsed) Job Attachments multiparms, so a
+        # headless consumer gets real input/output paths without a prior
+        # "Parse Files" pass. Returns the typed AssetReferences per the
+        # BaseSubmitter contract; callers serialize with .to_dict().
+        return _get_scene_asset_references(rop)
 
 
 def _get_houdini_version() -> str:
@@ -266,34 +520,12 @@ def _get_render_strategy_for_node(node: hou.Node) -> RenderStrategy:
     return render_strategy
 
 
-def _get_parameter_values(node: hou.Node) -> dict[str, Any]:
-    priority = node.parm("priority").eval()
-    initial_status = node.parm("initial_status").evalAsString()
-    failed_tasks_limit = node.parm("failed_tasks_limit").eval()
-    task_retry_limit = node.parm("task_retry_limit").eval()
-    parameter_values = [
-        {"name": "deadline:priority", "value": priority},
-        {"name": "deadline:targetTaskRunStatus", "value": initial_status},
-        {"name": "deadline:maxFailedTasksCount", "value": failed_tasks_limit},
-        {"name": "deadline:maxRetriesPerTask", "value": task_retry_limit},
-        {"name": "HipFile", "value": _get_hip_file()},
-        *get_queue_parameter_values_as_openjd(node),
-    ]
-
-    if node.parm("include_adaptor_wheels").eval():
-        parameter_values.append(
-            {"name": "AdaptorWheels", "value": node.parm("adaptor_wheels").evalAsString()}
-        )
-
-    return {"parameterValues": parameter_values}
-
-
 def read_ui_settings_from_node(node: hou.Node) -> HoudiniSubmitterUISettings:
     """Populate a HoudiniSubmitterUISettings from the Deadline Cloud ROP node's parameters.
 
     This lets the shared SubmitJobToDeadlineDialog (used by the Python panel) open with the
     node's configured values instead of pure dataclass defaults. Parameter names match those
-    defined in the HDA DialogScript and read elsewhere in this module (e.g. _get_parameter_values).
+    defined in the HDA DialogScript and read elsewhere in this module (e.g. get_settings).
 
     Note the deliberate name remapping: the node exposes ``failed_tasks_limit`` /
     ``task_retry_limit``, but deadline-cloud's SharedJobPropertiesWidget reads
@@ -474,6 +706,51 @@ def _get_job_template(
     return job_template
 
 
+def _load_adaptor_override_environment() -> dict[str, Any]:
+    override_file = os.path.join(os.path.dirname(__file__), "adaptor_override_environment.yaml")
+    with open(override_file) as yaml_file:
+        return yaml.safe_load(yaml_file)
+
+
+# Names contributed by adaptor_override_environment.yaml, used to detect/strip
+# the override so the template can be reconciled with the settings-driven state.
+_ADAPTOR_OVERRIDE_PARAM_NAMES = {"AdaptorWheels", "OverrideAdaptorName"}
+_ADAPTOR_OVERRIDE_ENV_NAME = "OverrideAdaptor"
+
+
+def _apply_adaptor_wheels_override(job_template: dict[str, Any], enabled: bool) -> None:
+    """Add or remove the adaptor-wheels override on ``job_template`` in place.
+
+    Idempotent: makes the AdaptorWheels ``parameterDefinition``s and the
+    ``OverrideAdaptor`` ``jobEnvironment`` present when ``enabled`` and absent
+    otherwise, regardless of what the node-driven ``_get_job_template`` already
+    added. This keeps the template consistent with the settings-driven
+    AdaptorWheels parameter *value* emitted by ``get_parameter_values``.
+    """
+    already_present = any(
+        pd.get("name") in _ADAPTOR_OVERRIDE_PARAM_NAMES
+        for pd in job_template.get("parameterDefinitions", [])
+    )
+
+    if enabled and not already_present:
+        override = _load_adaptor_override_environment()
+        job_template.setdefault("parameterDefinitions", []).extend(override["parameterDefinitions"])
+        job_template.setdefault("jobEnvironments", []).append(override["environment"])
+    elif not enabled and already_present:
+        job_template["parameterDefinitions"] = [
+            pd
+            for pd in job_template.get("parameterDefinitions", [])
+            if pd.get("name") not in _ADAPTOR_OVERRIDE_PARAM_NAMES
+        ]
+        job_template["jobEnvironments"] = [
+            env
+            for env in job_template.get("jobEnvironments", [])
+            if env.get("name") != _ADAPTOR_OVERRIDE_ENV_NAME
+        ]
+        if not job_template["jobEnvironments"]:
+            del job_template["jobEnvironments"]
+
+
 def _get_step_template(node: Dict, ignore_input_nodes: bool):
     init_data = {
         "scene_file": "{{Param.HipFile}}",
@@ -567,13 +844,25 @@ def _create_job_bundle(
     asset_references: AssetReferences,
     host_requirements: Optional[Dict[str, Any]] = None,
 ) -> None:
+    # Drive the unified HoudiniSubmitter engine so the GUI submit/export path
+    # and headless consumers (e.g. AYON) build the template + parameter values
+    # through one implementation. Pass the submitter's own get_settings() (read
+    # from this ROP) so the settings-driven builders see the node's real values;
+    # the produced bundle matches what the node configures.
+    # The dialog-provided asset_references are written as-is (they carry the
+    # user's Job Attachments edits) rather than re-scanned, so scan_assets=False
+    # skips get_settings()'s scene/USD asset walk whose output this path would
+    # only discard (the dialog already scanned the scene once when it opened).
+    submitter = HoudiniSubmitter(rop_node.path())
+    settings = submitter.get_settings(scan_assets=False)
+    job_template = submitter.get_job_template(settings, host_requirements)
+    parameter_values = submitter.get_parameter_values(settings, [])
+
     job_bundle_path = Path(job_bundle_dir)
-    job_template = _get_job_template(rop_node, host_requirements)
-    parameter_values = _get_parameter_values(rop_node)
     with open(job_bundle_path / "template.yaml", "w", encoding="utf8") as f:
         deadline_yaml_dump(job_template, f, indent=1)
     with open(job_bundle_path / "parameter_values.yaml", "w", encoding="utf8") as f:
-        deadline_yaml_dump(parameter_values, f, indent=1)
+        deadline_yaml_dump({"parameterValues": parameter_values}, f, indent=1)
     with open(job_bundle_path / "asset_references.yaml", "w", encoding="utf8") as f:
         deadline_yaml_dump(asset_references.to_dict(), f, indent=1)
 
