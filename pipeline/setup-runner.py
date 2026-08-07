@@ -2,8 +2,8 @@
 
 #!/usr/bin/env python3
 """Setup runner for Houdini integration tests in CodeBuild."""
+
 import argparse
-import getpass
 import hashlib
 import os
 import platform
@@ -371,9 +371,12 @@ def setup_macos(houdini_versions):
     # The sudo Houdini .pkg installer leaves ~/Library/Preferences/houdini/<ver>
     # root-owned; hand it back to the build user so the non-sudo submitter install
     # can write its package JSON. Before the loop so it also runs on cached runners.
-    prefs_root = Path("~/Library/Preferences/houdini").expanduser()
+    prefs_root = (
+        Path(os.environ.get("HOME", str(Path.home()))) / "Library" / "Preferences" / "houdini"
+    )
     prefs_root.mkdir(parents=True, exist_ok=True)
-    run(["sudo", "chown", "-R", f"{getpass.getuser()}:staff", str(prefs_root)], check=False)
+    home_owner = prefs_root.parent.parent.parent.owner()
+    run(["sudo", "chown", "-R", f"{home_owner}:staff", str(prefs_root)], check=False)
 
     print("Installing Houdini submitter...")
     for version in houdini_versions:
