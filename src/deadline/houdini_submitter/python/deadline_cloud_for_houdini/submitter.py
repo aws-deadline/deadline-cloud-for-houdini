@@ -1230,6 +1230,7 @@ def submit_callback(kwargs):
             ),
             f=Qt.Tool,
             show_host_requirements_tab=True,
+            use_deadline_cloud_v2_channel=True,
             parent=hou.qt.mainWindow(),
         )
         # Run the pre-submission checks when Submit is clicked, before the dialog opens its modal
