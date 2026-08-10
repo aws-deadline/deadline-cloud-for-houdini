@@ -283,6 +283,7 @@ def onCreateInterface():
         ),
         f=Qt.Tool,
         show_host_requirements_tab=True,
+        use_deadline_cloud_v2_channel=True,
     )
 
     # The shared dialog closes itself after a successful submission
