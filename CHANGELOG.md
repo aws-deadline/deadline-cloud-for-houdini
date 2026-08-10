@@ -1,3 +1,17 @@
+## 0.7.12 (2026-08-10)
+
+### Features
+* Added support for Houdini 22.0. (#381)
+* The submitter now enables the deadline-cloud-v2 Conda channel, fixing package resolution failures when submitting Houdini 22.0 jobs to queues using the deadline-cloud channel. (#386)
+* Added a headless HoudiniSubmitter built on the unified BaseSubmitter, allowing host-agnostic consumers (such as AYON) to drive Houdini submission without a GUI via `get_submitter_for_host("houdini")`. (#360)
+* Migrated the render submitter to the new Qt-based deadline-cloud submitter dialog and the `start_job_submission` API from deadline-cloud 0.60+. (#372)
+* Pre-GUI hooks are now executed in the Houdini render submitter before the submit dialog opens, allowing studios to pre-populate dialog fields from their own pipeline logic via `DEADLINE_HOOKS_DIR`. (#364)
+* USD scene dependency detection now discovers all inputs and outputs of USD scenes, improving automatic asset attachment for jobs. (#343)
+
+### Bug Fixes
+* Fixed a segfault in hython caused by eagerly importing Qt/PySide when only the headless job-bundle code path was needed. Qt UI modules are now lazy-imported. (#366)
+* Fixed incorrect path mapping for USD sublayer nodes. (#355)
+* Fixed an issue where the conda package Houdini version did not match the application Houdini version, which could cause version mismatch errors during rendering. (#353)
 ## 0.7.11 (2026-03-09)
 
 
