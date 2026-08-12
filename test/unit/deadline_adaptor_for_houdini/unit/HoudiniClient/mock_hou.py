@@ -23,3 +23,10 @@ setattr(
 setattr(this_module, "nodeTypeFilter", Mock(name=module_name + ".nodeTypeFilter"))
 setattr(this_module, "parmTemplateType", Mock(name=module_name + ".parmTemplateType"))
 setattr(this_module, "stringParmType", Mock(name=module_name + ".stringParmType"))
+setattr(this_module, "Error", type("Error", (Exception,), {}))
+setattr(
+    this_module, "OperationFailed", type("OperationFailed", (getattr(this_module, "Error"),), {})
+)
+setattr(
+    this_module, "PermissionError", type("PermissionError", (getattr(this_module, "Error"),), {})
+)

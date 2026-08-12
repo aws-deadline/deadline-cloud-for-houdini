@@ -1,0 +1,80 @@
+specificationVersion: jobtemplate-2023-09
+name: test_lop_keyframe_pathmap
+parameterDefinitions:
+- name: HipFile
+  type: PATH
+  objectType: FILE
+  dataFlow: IN
+- name: HoudiniVersion
+  type: STRING
+steps:
+- name: GeoRender
+  stepEnvironments:
+  - name: Houdini
+    description: Runs Houdini in the background.
+    script:
+      embeddedFiles:
+      - name: initData
+        filename: init-data.yaml
+        type: TEXT
+        data: |
+          ignore_input_nodes: true
+          render_node: /out/geo_rop
+          scene_file: '{{Param.HipFile}}'
+          version: '{{Param.HoudiniVersion}}'
+          wedge_node: ''
+          wedgenum: ''
+      actions:
+        onEnter:
+          command: houdini-openjd
+          args:
+          - daemon
+          - start
+          - --path-mapping-rules
+          - file://{{Session.PathMappingRulesFile}}
+          - --connection-file
+          - '{{ Session.WorkingDirectory }}/connection.json'
+          - --init-data
+          - file://{{ Env.File.initData }}
+          cancelation:
+            mode: NOTIFY_THEN_TERMINATE
+          timeout: 400
+        onExit:
+          command: houdini-openjd
+          args:
+          - daemon
+          - stop
+          - --connection-file
+          - '{{ Session.WorkingDirectory }}/connection.json'
+          cancelation:
+            mode: NOTIFY_THEN_TERMINATE
+          timeout: 120
+  script:
+    embeddedFiles:
+    - name: runData
+      filename: run-data.yaml
+      type: TEXT
+      data: |
+        frame_range:
+          end: {{Task.Param.Frame}}
+          start: {{Task.Param.Frame}}
+          step: 1
+        ignore_input_nodes: true
+        render_node: /out/geo_rop
+    actions:
+      onRun:
+        command: houdini-openjd
+        args:
+        - daemon
+        - run
+        - --connection-file
+        - '{{ Session.WorkingDirectory }}/connection.json'
+        - --run-data
+        - file://{{ Task.File.runData }}
+        cancelation:
+          mode: NOTIFY_THEN_TERMINATE
+  parameterSpace:
+    taskParameterDefinitions:
+    - name: Frame
+      range: "1"
+      type: INT

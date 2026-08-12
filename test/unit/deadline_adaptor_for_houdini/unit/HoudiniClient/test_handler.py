@@ -379,3 +379,81 @@ class TestRemapLopFilePaths:
         parm.set.assert_not_called()
         out, _ = capfd.readouterr()
         assert "Error remapping" in out
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    def test_skips_keyframed_parm(self, capfd):
+        """Skips parms whose unexpandedString raises hou.OperationFailed (keyframed)."""
+        handler = HoudiniHandler()
+        parm = self._make_parm("filepath1", hou.stringParmType.FileReference, "/src/asset.usd")
+        parm.unexpandedString.side_effect = hou.OperationFailed("Cannot get unexpanded string")
+        parm.evalAsString.return_value = "/src/asset.usd"
+        self._setup_lop_nodes(parm)
+
+        handler._remap_lop_file_paths()
+
+        parm.set.assert_not_called()
+        out, _ = capfd.readouterr()
+        assert "Skipping LOP parm" in out
+        assert "(keyframed)" in out
+        assert "will not be path-mapped" in out
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    def test_continues_after_keyframed_parm(self, capfd):
+        """Loop continues to remap subsequent parms after one raises OperationFailed."""
+        handler = HoudiniHandler()
+        keyframed_parm = self._make_parm(
+            "filepath1", hou.stringParmType.FileReference, "/src/anim.usd"
+        )
+        keyframed_parm.unexpandedString.side_effect = hou.OperationFailed(
+            "Cannot get unexpanded string"
+        )
+        keyframed_parm.evalAsString.return_value = "/src/anim.usd"
+        normal_parm = self._make_parm(
+            "filepath2", hou.stringParmType.FileReference, "/src/asset.usd"
+        )
+        self._setup_lop_nodes([keyframed_parm, normal_parm])
+        hou.hscript.return_value = ("/dest/asset.usd\n", "")
+
+        handler._remap_lop_file_paths()
+
+        keyframed_parm.set.assert_not_called()
+        normal_parm.set.assert_called_once_with("/dest/asset.usd")
+        out, _ = capfd.readouterr()
+        assert "Skipping LOP parm" in out
+        assert "(keyframed)" in out
+        assert "/src/asset.usd -> /dest/asset.usd" in out
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    def test_skips_locked_parm(self, capfd):
+        """Skips parms whose set() raises hou.PermissionError (locked HDA)."""
+        handler = HoudiniHandler()
+        parm = self._make_parm("filepath1", hou.stringParmType.FileReference, "/src/asset.usd")
+        parm.set.side_effect = hou.PermissionError("Permission denied: locked HDA")
+        self._setup_lop_nodes(parm)
+        hou.hscript.return_value = ("/dest/asset.usd\n", "")
+
+        handler._remap_lop_file_paths()
+
+        out, _ = capfd.readouterr()
+        assert "Skipping LOP parm /stage/node/filepath1" in out
+
+    @patch.dict("os.environ", {"HOUDINI_PATHMAP": '{"/src": "/dest"}'})
+    def test_continues_after_locked_parm(self, capfd):
+        """Loop continues to remap subsequent parms after one raises PermissionError."""
+        handler = HoudiniHandler()
+        locked_parm = self._make_parm(
+            "filepath1", hou.stringParmType.FileReference, "/src/locked.usd"
+        )
+        locked_parm.set.side_effect = hou.PermissionError("Permission denied: locked HDA")
+        normal_parm = self._make_parm(
+            "filepath2", hou.stringParmType.FileReference, "/src/asset.usd"
+        )
+        self._setup_lop_nodes([locked_parm, normal_parm])
+        hou.hscript.return_value = ("/dest/asset.usd\n", "")
+
+        handler._remap_lop_file_paths()
+
+        normal_parm.set.assert_called_once_with("/dest/asset.usd")
+        out, _ = capfd.readouterr()
+        assert "Skipping LOP parm /stage/node/filepath1" in out
+        assert "/src/asset.usd -> /dest/asset.usd" in out
