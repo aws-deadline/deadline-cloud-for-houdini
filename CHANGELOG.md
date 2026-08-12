@@ -1,3 +1,7 @@
+## 0.7.13 (2026-08-12)
+
+### Bug Fixes
+* Fixed a crash during LOP file path remapping when encountering keyframed or locked HDA parameters. Previously, a single uncooperative parameter would abort path mapping for the entire scene. Now such parameters are skipped with a log message, and path mapping continues for the rest of the scene. (#388)
 ## 0.7.12 (2026-08-10)
 
 ### Features
