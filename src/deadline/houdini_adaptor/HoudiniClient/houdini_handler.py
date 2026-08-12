@@ -81,23 +81,40 @@ class HoudiniHandler:
         for node in lop_nodes:
             parms: list[Parm] = node.parms()
             for parm in parms:
-                template: ParmTemplate = parm.parmTemplate()
-                if template.type() != hou.parmTemplateType.String:
-                    continue
-                if (
-                    template.stringType() == hou.stringParmType.FileReference
-                    or parm.name().startswith("filepath")
-                ):
-                    original: str = parm.unexpandedString()
-                    if not original or original.startswith("$") or original.startswith("`"):
+                try:
+                    template: ParmTemplate = parm.parmTemplate()
+                    if template.type() != hou.parmTemplateType.String:
                         continue
-                    mapped, err = hou.hscript(f"pathmap -t '{original}' -c")
-                    mapped = mapped.strip()
-                    if err:
-                        print(f"Error remapping {parm.path()}: {err}")
-                    elif mapped and mapped != original:
-                        parm.set(mapped)
-                        print(f"Remapped LOP parm {parm.path()}: " f"{original} -> {mapped}")
+                    if (
+                        template.stringType() == hou.stringParmType.FileReference
+                        or parm.name().startswith("filepath")
+                    ):
+                        original: str = parm.unexpandedString()
+                        if not original or original.startswith("$") or original.startswith("`"):
+                            continue
+                        mapped, err = hou.hscript(f"pathmap -t '{original}' -c")
+                        mapped = mapped.strip()
+                        if err:
+                            print(f"Error remapping {parm.path()}: {err}")
+                        elif mapped and mapped != original:
+                            parm.set(mapped)
+                            print(f"Remapped LOP parm {parm.path()}: " f"{original} -> {mapped}")
+                except hou.OperationFailed:
+                    # Keyframed/animated parms have no single unexpanded string value, and
+                    # calling parm.set() on them would clobber the animation channel, so skip.
+                    # Report the resolved value so the log says which path will NOT be mapped.
+                    try:
+                        resolved = parm.evalAsString()
+                    except hou.Error:
+                        resolved = "<unresolved>"
+                    print(
+                        f"Skipping LOP parm {parm.path()} (keyframed): "
+                        f"{resolved} will not be path-mapped"
+                    )
+                except hou.Error as exc:
+                    # e.g. hou.PermissionError from parm.set() on a locked HDA parm. Skip this
+                    # parm rather than aborting path mapping for the rest of the scene.
+                    print(f"Skipping LOP parm {parm.path()}: {exc}")
 
     def set_node_settings(self, node):
         # this is a place holder function
