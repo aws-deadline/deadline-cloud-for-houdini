@@ -21,6 +21,7 @@ ability to run Houdini efficiently on your render farm.
 [default-queue-environment]: https://docs.aws.amazon.com/deadline-cloud/latest/userguide/create-queue-environment.html#conda-queue-environment
 [deadline-cloud-submitter]: https://docs.aws.amazon.com/deadline-cloud/latest/userguide/submitter.html
 [deadline-cloud-monitor]: https://docs.aws.amazon.com/deadline-cloud/latest/userguide/monitor-onboarding.html
+[submission-hooks]: https://github.com/aws-deadline/deadline-cloud/blob/mainline/docs/submission-hooks.md
 
 ## Compatibility
 
@@ -103,6 +104,24 @@ hosts do not have any rendering applications pre-installed. The standard way of 
 You can find a list of the versions of Houdini that are available by default
 [in the user guide](https://docs.aws.amazon.com/deadline-cloud/latest/userguide/create-queue-environment.html#conda-queue-environment)
 if you are using the default Conda queue enivonment in your setup.
+
+## Submission Hooks
+
+This submitter supports [Deadline Cloud submission hooks][submission-hooks] — the **pre-GUI** hook
+(pre-populates the submission dialog before it opens) and the **pre-submission** / **post-submission**
+hooks (run at submit time). Hooks are sourced from the directory named by the `DEADLINE_HOOKS_DIR`
+environment variable; enable environment-sourced hooks with:
+
+```
+deadline config set settings.allow_environment_hooks true
+```
+
+For Houdini, pre-GUI hooks run when the Deadline Cloud submission panel opens — i.e. when you select
+the Deadline Cloud ROP in the `/out` network so its panel appears.
+
+See [`docs/submission-hooks.md`][submission-hooks] in the base client library for the rest: the
+`hooks.yaml` format, hook input/output, version requirements, the confirmation prompt, and security
+guidance.
 
 ## Viewing the Job Bundle that will be submitted
 
