@@ -44,6 +44,12 @@ dependencies = [
     # installed and silently not work. The adaptor never takes the console path anyway:
     # it runs on a worker with host-provided credentials. The submitter's dependency
     # bundle requests the extra at build time instead (see scripts/deps_bundle.py).
+    #
+    # No optional-dependencies extra is declared for the console either, deliberately:
+    # `pip install deadline-cloud-for-houdini` is the documented install path for the
+    # adaptor only (see README "Adaptor"). The submitter's documented install paths are
+    # the submitter installer, which ships the dependency bundle built by
+    # scripts/deps_bundle.py, and the DEVELOPMENT.md houdini-package workflow.
     "deadline >= 0.60.4,< 0.61",
     "openjd-adaptor-runtime >= 0.7,< 0.10",
 ]

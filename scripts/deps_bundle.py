@@ -71,6 +71,14 @@ def _build_base_environment(working_directory: Path, dependencies: list[Dependen
     # whatever the extra actually requires -- notably a botocore floor, since the console
     # login provider lives in botocore, not in deadline -- and takes awscrt from the exact
     # version botocore's crt extra pins, rather than resolving it independently and drifting.
+    #
+    # That extra's botocore floor interacts with the boto3/botocore<1.43 cap in the
+    # constraints file below: deadline 0.60.x's console extra needs botocore>=1.42.89,
+    # which sits inside the cap, and every botocore in that window pins awscrt==0.31.2.
+    # There is no quiet-degradation path here: awscrt only ever arrives as botocore's
+    # exact ``==`` pin, never as a range pip could walk back through, so if a future
+    # deadline raised the floor past the cap, pip would fail this build loudly with
+    # ResolutionImpossible rather than resolve an older awscrt.
     dependencies_for_pip = [_add_console_extra(d.for_pip()) for d in dependencies]
 
     # Write a constraints file to keep transitive dependencies compatible with the oldest
