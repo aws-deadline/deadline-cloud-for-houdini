@@ -14,8 +14,17 @@ from _project import get_project_dict, get_dependencies, Dependency
 
 SUPPORTED_PYTHON_VERSIONS = ["3.9", "3.10", "3.11"]
 SUPPORTED_PLATFORMS = ["Windows", "Linux", "Darwin"]
-# Packages with compiled extension modules, fetched once per supported Python version so the
-# bundle carries a loadable artifact for each interpreter.
+# Packages with compiled extension modules, fetched once per version in
+# SUPPORTED_PYTHON_VERSIONS so the bundle carries a loadable artifact for each of those
+# interpreters.
+#
+# Known gap, predating this list of packages: SUPPORTED_PYTHON_VERSIONS stops at 3.11, but
+# Houdini 22.0 embeds Python 3.13 (see scripts/install_dev_submitter.py). awscrt on 3.13
+# is served by the 3.11 tree's abi3 artifact, which is forward compatible; the
+# version-specific packages are served only incidentally, by whatever the build host's
+# base environment resolved (the release pipeline builds on 3.13). Closing that gap means
+# extending SUPPORTED_PYTHON_VERSIONS, which changes the shipped bundle and belongs to a
+# dedicated change.
 #
 # awscrt is here because its wheels are not uniformly abi3: Python 3.9 and 3.10 get
 # _awscrt.cpython-<tag>-<platform>.so while 3.11+ get _awscrt.abi3.so. Resolving it only in
