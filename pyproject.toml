@@ -31,7 +31,20 @@ classifiers = [
 ]
 
 dependencies = [
-    "deadline >= 0.60.2,< 0.61",
+    # 0.60.4 is the floor because AWS Console sign-in landed there and nowhere earlier:
+    # 0.60.1 through 0.60.3 have no AWS_CONSOLE_LOGIN credentials source, and do not
+    # declare a `console` extra at all.
+    #
+    # The console extra is deliberately NOT requested here. It is only needed by the
+    # submitter, and it pulls awscrt, a compiled wheel. These base dependencies are
+    # resolved into the adaptor package by scripts/create_adaptor_packaging_artifact.sh
+    # with --only-binary=:all: --platform <tag>, and no awscrt wheel satisfying the
+    # 0.28.4 floor exists for the macosx_10_9_x86_64 tag that script uses -- pip walks
+    # back to a release with no usable crypto support, so console sign-in would appear
+    # installed and silently not work. The adaptor never takes the console path anyway:
+    # it runs on a worker with host-provided credentials. The submitter's dependency
+    # bundle requests the extra at build time instead (see scripts/deps_bundle.py).
+    "deadline >= 0.60.4,< 0.61",
     "openjd-adaptor-runtime >= 0.7,< 0.10",
 ]
 
