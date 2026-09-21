@@ -45,17 +45,92 @@ def _get_package_version(package: str, install_path: Path) -> str:
     raise Exception(f"Could not find version for package {package}")
 
 
+_REQUIREMENT_PATTERN = re.compile(
+    r"(?P<name>[A-Za-z0-9._-]+)(?:\[(?P<extras>[^\]]*)\])?(?P<spec>.*)"
+)
+
+
+def _parse_requirement(requirement: str) -> tuple[str, list[str], str] | None:
+    """Split a requirement into (name, extras, specifier), or None if it doesn't match the
+    `name[extras]spec` shape.
+    """
+    match = _REQUIREMENT_PATTERN.fullmatch(requirement)
+    if not match:
+        return None
+    extras = [extra for extra in (match.group("extras") or "").split(",") if extra]
+    return match.group("name"), extras, match.group("spec")
+
+
 def _add_console_extra(requirement: str) -> str:
     """Add deadline's `console` extra to a requirement string, preserving its specifier."""
-    match = re.fullmatch(
-        r"(?P<name>[A-Za-z0-9._-]+)(?:\[(?P<extras>[^\]]*)\])?(?P<spec>.*)", requirement
-    )
-    if not match or match.group("name").lower() != "deadline":
+    parsed = _parse_requirement(requirement)
+    if not parsed or parsed[0].lower() != "deadline":
         return requirement
-    extras = [extra for extra in (match.group("extras") or "").split(",") if extra]
+    name, extras, spec = parsed
     if "console" not in extras:
-        extras.append("console")
-    return f"{match.group('name')}[{','.join(extras)}]{match.group('spec')}"
+        extras = [*extras, "console"]
+    return f"{name}[{','.join(extras)}]{spec}"
+
+
+def _requests_console_extra(requirement: str) -> bool:
+    """Whether a requirement is a `deadline` requirement whose extras include `console`."""
+    parsed = _parse_requirement(requirement)
+    return parsed is not None and parsed[0].lower() == "deadline" and "console" in parsed[1]
+
+
+def _release_tuple(version: str) -> tuple[int, ...]:
+    """The leading numeric release segment of a version, for ordering comparisons.
+
+    Hand-rolled rather than using packaging.Version: this script runs in the bare installer
+    build environment, where the only installed distributions are the project's own runtime
+    dependencies, and none of them pulls packaging.
+    """
+    release = []
+    for part in version.split("."):
+        match = re.match(r"\d+", part)
+        if not match:
+            break
+        release.append(int(match.group()))
+    if not release:
+        raise Exception(f"Could not read a release version from {version!r}")
+    return tuple(release)
+
+
+def _requirement_floor(requirement: str) -> tuple[int, ...] | None:
+    """The lowest version a requirement's `>=` specifier allows, or None if it declares no
+    floor.
+    """
+    parsed = _parse_requirement(requirement)
+    if not parsed:
+        return None
+    match = re.search(r">=\s*(?P<version>[0-9][^,;\s]*)", parsed[2])
+    return _release_tuple(match.group("version")) if match else None
+
+
+def _verify_console_resolution(base_env: Path, dependencies_for_pip: list[str]) -> None:
+    """Fail the build if pip resolved the console extra's closure into something unusable.
+
+    Pip exits 0 in both cases this guards. `deadline` is requested as a range, so a
+    transitive conflict -- notably the console extra's botocore floor being pushed past the
+    `botocore<1.43` cap in the constraints file -- makes pip backtrack to an older patch
+    inside that range rather than fail. awscrt reaches the bundle only through the extra, so
+    its absence means the extra was never applied; NATIVE_DEPENDENCIES is load-bearing for
+    that check and must keep listing it.
+    """
+    for requirement in dependencies_for_pip:
+        if not _requests_console_extra(requirement):
+            continue
+        floor = _requirement_floor(requirement)
+        if floor is None:
+            continue
+        resolved = _get_package_version("deadline", base_env)
+        if _release_tuple(resolved) < floor:
+            raise Exception(
+                f"deadline resolved to {resolved}, below the floor {'.'.join(map(str, floor))} "
+                f"required by {requirement} -- pip backtracked instead of failing"
+            )
+    # Raises if absent.
+    _get_package_version("awscrt", base_env)
 
 
 def _build_base_environment(working_directory: Path, dependencies: list[Dependency]) -> Path:
@@ -66,8 +141,17 @@ def _build_base_environment(working_directory: Path, dependencies: list[Dependen
     # Requesting the extra rather than pinning awscrt directly keeps the bundle on the
     # botocore floor the extra needs (the console login provider lives in botocore) and takes
     # awscrt from the exact version botocore's crt extra pins. That floor (>=1.42.89 for
-    # deadline 0.60.x) has to stay inside the botocore cap in the constraints file below.
+    # deadline 0.60.x) has to stay inside the botocore cap in the constraints file below;
+    # _verify_console_resolution fails the build if it stops fitting.
     dependencies_for_pip = [_add_console_extra(d.for_pip()) for d in dependencies]
+    if not any(_requests_console_extra(d) for d in dependencies_for_pip):
+        # Checks that something requests the extra, not that _add_console_extra changed
+        # anything: it is idempotent, so a `deadline[console]` already in project.dependencies
+        # is valid input this guard must accept.
+        raise Exception(
+            "no dependency requests deadline's `console` extra after _add_console_extra; "
+            f"expected a requirement on `deadline` in: {[d.for_pip() for d in dependencies]}"
+        )
 
     # Write a constraints file to keep transitive dependencies compatible with the oldest
     # supported Python (3.9). Several packages use PEP 604 type unions (X | Y) which are syntax
@@ -89,6 +173,7 @@ def _build_base_environment(working_directory: Path, dependencies: list[Dependen
         *dependencies_for_pip,
     ]
     subprocess.run(base_env_pip_args, check=True)
+    _verify_console_resolution(base_env_path, dependencies_for_pip)
     return base_env_path
 
 

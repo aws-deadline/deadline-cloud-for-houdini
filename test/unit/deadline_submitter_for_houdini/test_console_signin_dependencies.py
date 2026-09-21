@@ -10,15 +10,25 @@ Reads ``pyproject.toml`` directly rather than installed distribution metadata, s
 ``importlib.metadata`` would not see an edit until the environment is reinstalled.
 """
 
+import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from packaging.requirements import Requirement
 
 if sys.version_info >= (3, 11):
     import tomllib
 else:  # pragma: no cover - exercised on Python 3.9 and 3.10 only
     import tomli as tomllib
+
+SCRIPTS_DIR = Path(__file__).parents[3] / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    # Appended, not prepended: scripts/ holds generically named modules (common.py) that
+    # would otherwise shadow same-named imports for the rest of the session.
+    sys.path.append(str(SCRIPTS_DIR))
+
+import deps_bundle  # noqa: E402
 
 PYPROJECT = Path(__file__).parents[3] / "pyproject.toml"
 
@@ -27,11 +37,15 @@ PYPROJECT = Path(__file__).parents[3] / "pyproject.toml"
 HIGHEST_DEADLINE_WITHOUT_CONSOLE_SIGNIN = "0.60.3"
 
 
-def _base_dependencies() -> list[Requirement]:
+def _raw_dependencies() -> list[str]:
     node = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
     assert "project" in node, "pyproject.toml has no project table"
     assert "dependencies" in node["project"], "pyproject.toml has no project.dependencies"
-    return [Requirement(r) for r in node["project"]["dependencies"]]
+    return node["project"]["dependencies"]
+
+
+def _base_dependencies() -> list[Requirement]:
+    return [Requirement(r) for r in _raw_dependencies()]
 
 
 def test_deadline_floor_excludes_releases_without_console_signin():
@@ -43,3 +57,103 @@ def test_deadline_floor_excludes_releases_without_console_signin():
             f"allows deadline {HIGHEST_DEADLINE_WITHOUT_CONSOLE_SIGNIN}, which has no "
             f"console sign-in support: {req}"
         )
+
+
+@pytest.mark.parametrize(
+    "requirement, expected",
+    [
+        ("deadline>=0.60.4,<0.61", "deadline[console]>=0.60.4,<0.61"),
+        ("deadline[gui]>=0.60.4", "deadline[gui,console]>=0.60.4"),
+        ("deadline[console]>=0.60.4", "deadline[console]>=0.60.4"),
+        ("openjd-adaptor-runtime>=0.7,<0.10", "openjd-adaptor-runtime>=0.7,<0.10"),
+    ],
+)
+def test_add_console_extra_pins_behavior(requirement, expected):
+    """Pins _add_console_extra's contract: preserve extras, be idempotent, ignore others."""
+    assert deps_bundle._add_console_extra(requirement) == expected
+
+
+def test_add_console_extra_changes_the_real_base_dependencies():
+    """Pins that the injection reaches pyproject.toml's real dependencies.
+
+    _add_console_extra no-ops on anything it does not recognise as `deadline`, so a rename or
+    a re-spelling would leave the bundle with no console extra while the parametrized test
+    above kept passing.
+    """
+    dependencies_for_pip = [
+        deps_bundle._add_console_extra(deps_bundle.Dependency(dep).for_pip())
+        for dep in _raw_dependencies()
+    ]
+    assert any(deps_bundle._requests_console_extra(dep) for dep in dependencies_for_pip), (
+        "no dependency requests deadline's `console` extra after _add_console_extra: "
+        f"{dependencies_for_pip}"
+    )
+
+
+def test_build_base_environment_requires_something_to_request_the_console_extra(
+    tmp_path, monkeypatch
+):
+    """The postcondition fails the build when nothing requests the extra."""
+    monkeypatch.setattr(deps_bundle.subprocess, "run", lambda args, **kwargs: None)
+
+    with pytest.raises(Exception, match="console"):
+        deps_bundle._build_base_environment(tmp_path, [deps_bundle.Dependency("not-deadline>=1")])
+
+
+def test_build_base_environment_accepts_an_already_declared_console_extra(tmp_path, monkeypatch):
+    """_add_console_extra is idempotent, so a declared `deadline[console]` is valid input."""
+    recorded: list[list[str]] = []
+
+    def record(args, **kwargs):
+        recorded.append(args)
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setattr(deps_bundle.subprocess, "run", record)
+    monkeypatch.setattr(deps_bundle, "_verify_console_resolution", lambda *args: None)
+
+    deps_bundle._build_base_environment(
+        tmp_path, [deps_bundle.Dependency("deadline[console]>=0.60.4,<0.61")]
+    )
+
+    assert any("deadline[console]>=0.60.4,<0.61" in args for args in recorded)
+
+
+def test_verify_console_resolution_rejects_a_backtracked_deadline(tmp_path, monkeypatch):
+    """A resolve that backtracks `deadline` below its floor must fail the build.
+
+    Pip exits 0 when it backtracks, so nothing else catches the console extra's botocore
+    floor being pushed outside the constraints file's cap.
+    """
+    monkeypatch.setattr(
+        deps_bundle,
+        "_get_package_version",
+        lambda package, install_path: "0.60.2" if package == "deadline" else "0.31.2",
+    )
+
+    with pytest.raises(Exception, match="backtracked"):
+        deps_bundle._verify_console_resolution(tmp_path, ["deadline[console]>=0.60.4,<0.61"])
+
+
+def test_verify_console_resolution_accepts_a_compliant_resolution(tmp_path, monkeypatch):
+    """The floor is satisfied and awscrt is present, so the build proceeds."""
+    monkeypatch.setattr(
+        deps_bundle,
+        "_get_package_version",
+        lambda package, install_path: "0.60.7" if package == "deadline" else "0.31.2",
+    )
+
+    deps_bundle._verify_console_resolution(tmp_path, ["deadline[console]>=0.60.4,<0.61"])
+
+
+def test_verify_console_resolution_requires_awscrt(tmp_path, monkeypatch):
+    """awscrt reaches the bundle only through the extra, so its absence fails the build."""
+
+    def version(package, install_path):
+        if package == "awscrt":
+            raise Exception("Could not find version for package awscrt")
+        return "0.60.7"
+
+    monkeypatch.setattr(deps_bundle, "_get_package_version", version)
+
+    with pytest.raises(Exception, match="awscrt"):
+        deps_bundle._verify_console_resolution(tmp_path, ["deadline[console]>=0.60.4,<0.61"])
