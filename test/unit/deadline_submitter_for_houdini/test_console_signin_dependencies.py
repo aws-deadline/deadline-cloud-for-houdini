@@ -163,22 +163,82 @@ def test_build_deps_bundle_passes_a_reiterable_dependency_collection(monkeypatch
     assert second_pass == first_pass, "the collection is one-shot; a second reader sees nothing"
 
 
+def _pip_list_output(*packages: str) -> bytes:
+    rows = "".join(f"{package}   1.2.3\n" for package in packages)
+    return f"Package  Version\n-------- -------\n{rows}".encode()
+
+
 def test_build_base_environment_accepts_an_already_declared_console_extra(tmp_path, monkeypatch):
-    """_add_console_extra is idempotent, so a declared `deadline[console]` is valid input."""
+    """_add_console_extra is idempotent, so a declared `deadline[console]` is valid input.
+
+    Only the process boundary is stubbed, so the verification step runs for real against the
+    reported closure.
+    """
     recorded: list[list[str]] = []
 
     def record(args, **kwargs):
         recorded.append(args)
-        return subprocess.CompletedProcess(args, 0)
+        return subprocess.CompletedProcess(args, 0, stdout=_pip_list_output("awscrt"))
 
     monkeypatch.setattr(deps_bundle.subprocess, "run", record)
-    monkeypatch.setattr(deps_bundle, "_verify_console_resolution", lambda *args: None)
 
     deps_bundle._build_base_environment(
         tmp_path, [deps_bundle.Dependency("deadline[console]>=0.60.4,<0.61")]
     )
 
     assert any("deadline[console]>=0.60.4,<0.61" in args for args in recorded)
+    assert [
+        args for args in recorded if args[:2] == ["pip", "list"]
+    ], "the build must verify the resolved closure"
+    assert any(
+        str(tmp_path / "base_env") in args for args in recorded if args[:2] == ["pip", "list"]
+    ), "the verification must read the base environment it just built"
+
+
+def test_build_base_environment_injects_the_console_extra_into_the_pip_call(tmp_path, monkeypatch):
+    """The extra has to reach pip from a bare `deadline` requirement.
+
+    Asserted at the call site: every other test of the injection either calls
+    _add_console_extra directly or passes a requirement that already declares the extra, so
+    dropping the call from the build would not fail them.
+    """
+    recorded: list[list[str]] = []
+
+    def record(args, **kwargs):
+        recorded.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout=_pip_list_output("awscrt"))
+
+    monkeypatch.setattr(deps_bundle.subprocess, "run", record)
+
+    deps_bundle._build_base_environment(
+        tmp_path, [deps_bundle.Dependency("deadline >= 0.60.4,< 0.61")]
+    )
+
+    installs = [args for args in recorded if args[:2] == ["pip", "install"]]
+    assert installs, "the build must install the base environment"
+    assert any("deadline[console]>=0.60.4,<0.61" in args for args in installs)
+
+
+def test_build_base_environment_verifies_the_resolved_closure(tmp_path, monkeypatch):
+    """The guard has to run as a build step, not only when called directly.
+
+    Pip exits 0 on a closure that lost the extra, so if the call site goes away the build
+    stops checking for awscrt and nothing else fails.
+    """
+    monkeypatch.setattr(
+        deps_bundle.subprocess,
+        "run",
+        lambda args, **kwargs: subprocess.CompletedProcess(
+            args, 0, stdout=_pip_list_output("boto3", "botocore")
+        ),
+    )
+
+    with pytest.raises(Exception, match="console") as raised:
+        deps_bundle._build_base_environment(
+            tmp_path, [deps_bundle.Dependency("deadline[console]>=0.60.4,<0.61")]
+        )
+
+    assert "awscrt" in str(raised.value)
 
 
 def test_verify_console_resolution_accepts_a_resolution_carrying_awscrt(tmp_path, monkeypatch):
