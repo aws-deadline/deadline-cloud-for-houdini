@@ -189,3 +189,18 @@ def test_get_package_version_matches_pip_list_casing(monkeypatch):
     )
 
     assert deps_bundle._get_package_version("pyyaml", Path("/unused")) == "6.0.3"
+
+
+def test_get_package_version_raises_package_not_installed_when_absent(monkeypatch):
+    """The absent case needs its own type: _verify_console_resolution catches exactly it, and
+    would stop diagnosing anything if this widened back to a bare Exception.
+    """
+    output = b"Package  Version\n-------- -------\nxxhash   3.6.0\n"
+    monkeypatch.setattr(
+        deps_bundle.subprocess,
+        "run",
+        lambda args, **kwargs: subprocess.CompletedProcess(args, 0, stdout=output),
+    )
+
+    with pytest.raises(deps_bundle._PackageNotInstalled, match="awscrt"):
+        deps_bundle._get_package_version("awscrt", Path("/unused"))

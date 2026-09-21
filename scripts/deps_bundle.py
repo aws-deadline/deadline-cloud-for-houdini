@@ -28,6 +28,14 @@ SUPPORTED_PLATFORMS = ["Windows", "Linux", "Darwin"]
 NATIVE_DEPENDENCIES = ["xxhash", "psutil", "awscrt", "pyyaml"]
 
 
+class _PackageNotInstalled(Exception):
+    """`pip list` ran and the package was not in its output.
+
+    Distinct from the invocation failing, so a caller can diagnose an absent package without
+    also claiming that for a `pip list` that never reported anything.
+    """
+
+
 def _get_package_version_regex(package: str) -> re.Pattern:
     # Case-insensitive: `pip list` prints the distribution's own casing (`pyyaml` -> `PyYAML`).
     # The required whitespace keeps a prefix sibling like `pyyaml-env-tag` from matching.
@@ -42,7 +50,7 @@ def _get_package_version(package: str, install_path: Path) -> str:
         match = version_regex.match(line)
         if match:
             return match.group(1)
-    raise Exception(f"Could not find version for package {package}")
+    raise _PackageNotInstalled(f"Could not find version for package {package}")
 
 
 # The specifier excludes brackets so that a requirement whose extras do not directly follow
@@ -104,7 +112,10 @@ def _verify_console_resolution(base_env: Path) -> None:
     """
     try:
         _get_package_version("awscrt", base_env)
-    except Exception as missing_awscrt:
+    except _PackageNotInstalled as missing_awscrt:
+        # Only this one failure means "pip resolved, and awscrt is not there". Anything else
+        # -- a pip that could not run, output that would not decode -- propagates untouched
+        # rather than being reported as a lost extra.
         raise Exception(
             "the resolved base environment carries no awscrt, so deadline's `console` extra "
             "(and through it botocore's `crt` extra) did not reach the closure; the bundle "

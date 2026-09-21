@@ -256,7 +256,7 @@ def test_verify_console_resolution_requires_awscrt(tmp_path, monkeypatch):
     """
 
     def version(package, install_path):
-        raise Exception(f"Could not find version for package {package}")
+        raise deps_bundle._PackageNotInstalled(f"Could not find version for package {package}")
 
     monkeypatch.setattr(deps_bundle, "_get_package_version", version)
 
@@ -268,6 +268,22 @@ def test_verify_console_resolution_requires_awscrt(tmp_path, monkeypatch):
     assert isinstance(raised.value.__cause__, Exception), "the original lookup must be chained"
 
 
+def test_verify_console_resolution_propagates_a_failed_pip_list(tmp_path, monkeypatch):
+    """A `pip list` that could not run is not evidence about the extra.
+
+    Reporting it as a lost console extra would send a maintainer to audit the extra and the
+    botocore cap when nothing was ever resolved to inspect.
+    """
+
+    def version(package, install_path):
+        raise subprocess.CalledProcessError(1, ["pip", "list"], stderr=b"pip: not found")
+
+    monkeypatch.setattr(deps_bundle, "_get_package_version", version)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        deps_bundle._verify_console_resolution(tmp_path)
+
+
 def test_verify_console_resolution_does_not_read_native_dependencies(tmp_path, monkeypatch):
     """The guard must not derive its lookup from NATIVE_DEPENDENCIES.
 
@@ -277,7 +293,7 @@ def test_verify_console_resolution_does_not_read_native_dependencies(tmp_path, m
     monkeypatch.setattr(deps_bundle, "NATIVE_DEPENDENCIES", ["xxhash", "psutil", "pyyaml"])
 
     def version(package, install_path):
-        raise Exception(f"Could not find version for package {package}")
+        raise deps_bundle._PackageNotInstalled(f"Could not find version for package {package}")
 
     monkeypatch.setattr(deps_bundle, "_get_package_version", version)
 
