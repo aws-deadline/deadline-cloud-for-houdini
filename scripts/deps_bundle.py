@@ -94,17 +94,22 @@ def _requests_console_extra(requirement: str) -> bool:
 
 
 def _verify_console_resolution(base_env: Path) -> None:
-    """Fail the build if the resolved closure carries no awscrt.
+    """Fail the build, naming the cause, if the resolved closure carries no awscrt.
 
-    This is the one console-extra failure pip reports success for. A resolve that cannot
-    satisfy the `deadline` specifier exits non-zero on its own, and every version in that
-    range requests the same botocore floor, so there is no version pip can silently settle
-    on that drops it. What pip does accept is a closure with no awscrt at all -- it arrives
-    only through botocore's `crt` extra, which only deadline's `console` extra requests, so
-    losing the extra still installs cleanly and ships a bundle whose sign-in fails a
-    pre-flight check. NATIVE_DEPENDENCIES keeping awscrt is load-bearing for the same reason.
+    This is the one console-extra failure pip reports success for: awscrt arrives only
+    through botocore's `crt` extra, which only deadline's `console` extra requests, so a
+    closure that lost the extra installs cleanly and ships a bundle whose sign-in fails a
+    pre-flight check. _download_native_dependencies looks awscrt up too, but only for as long
+    as awscrt stays in NATIVE_DEPENDENCIES, and reports a missing package without a cause.
     """
-    _get_package_version("awscrt", base_env)
+    try:
+        _get_package_version("awscrt", base_env)
+    except Exception as missing_awscrt:
+        raise Exception(
+            "the resolved base environment carries no awscrt, so deadline's `console` extra "
+            "(and through it botocore's `crt` extra) did not reach the closure; the bundle "
+            "would ship with AWS Console sign-in silently broken"
+        ) from missing_awscrt
 
 
 def _build_base_environment(working_directory: Path, dependencies: list[Dependency]) -> Path:

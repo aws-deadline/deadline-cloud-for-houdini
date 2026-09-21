@@ -191,7 +191,8 @@ def test_verify_console_resolution_accepts_a_resolution_carrying_awscrt(tmp_path
 def test_verify_console_resolution_requires_awscrt(tmp_path, monkeypatch):
     """awscrt reaches the bundle only through the extra, so its absence fails the build.
 
-    This is the one case pip exits 0 for: a closure that lost the extra installs cleanly.
+    Asserts on the explanation, not just the package name: a bare presence check raises the
+    same generic "could not find version" that _download_native_dependencies already would.
     """
 
     def version(package, install_path):
@@ -199,5 +200,26 @@ def test_verify_console_resolution_requires_awscrt(tmp_path, monkeypatch):
 
     monkeypatch.setattr(deps_bundle, "_get_package_version", version)
 
-    with pytest.raises(Exception, match="awscrt"):
+    with pytest.raises(Exception, match="console") as raised:
+        deps_bundle._verify_console_resolution(tmp_path)
+
+    message = str(raised.value)
+    assert "awscrt" in message and "crt" in message
+    assert isinstance(raised.value.__cause__, Exception), "the original lookup must be chained"
+
+
+def test_verify_console_resolution_does_not_read_native_dependencies(tmp_path, monkeypatch):
+    """The guard must not derive its lookup from NATIVE_DEPENDENCIES.
+
+    That list is what _download_native_dependencies checks awscrt through, so a guard sharing
+    it would disappear along with it.
+    """
+    monkeypatch.setattr(deps_bundle, "NATIVE_DEPENDENCIES", ["xxhash", "psutil", "pyyaml"])
+
+    def version(package, install_path):
+        raise Exception(f"Could not find version for package {package}")
+
+    monkeypatch.setattr(deps_bundle, "_get_package_version", version)
+
+    with pytest.raises(Exception, match="console"):
         deps_bundle._verify_console_resolution(tmp_path)
