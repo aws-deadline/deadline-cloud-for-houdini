@@ -241,11 +241,33 @@ def test_build_base_environment_verifies_the_resolved_closure(tmp_path, monkeypa
     assert "awscrt" in str(raised.value)
 
 
+def _only_awscrt_present(package, install_path):
+    """A _get_package_version stub in which awscrt is the only package that resolves.
+
+    The mirror of _only_awscrt_missing: a guard that looks something else up fails here rather
+    than passing on an unrelated lookup.
+    """
+    if package == "awscrt":
+        return "0.31.2"
+    raise deps_bundle._PackageNotInstalled(f"Could not find version for package {package}")
+
+
 def test_verify_console_resolution_accepts_a_resolution_carrying_awscrt(tmp_path, monkeypatch):
     """awscrt resolved, so the closure carries the console extra and the build proceeds."""
-    monkeypatch.setattr(deps_bundle, "_get_package_version", lambda package, path: "0.31.2")
+    monkeypatch.setattr(deps_bundle, "_get_package_version", _only_awscrt_present)
 
     deps_bundle._verify_console_resolution(tmp_path)
+
+
+def _only_awscrt_missing(package, install_path):
+    """A _get_package_version stub in which every package but awscrt resolves.
+
+    Discriminating on the name is what makes a guard that looks up something else -- or that
+    derives the name from NATIVE_DEPENDENCIES -- fail rather than raise for the wrong reason.
+    """
+    if package != "awscrt":
+        return "1.2.3"
+    raise deps_bundle._PackageNotInstalled(f"Could not find version for package {package}")
 
 
 def test_verify_console_resolution_requires_awscrt(tmp_path, monkeypatch):
@@ -254,18 +276,17 @@ def test_verify_console_resolution_requires_awscrt(tmp_path, monkeypatch):
     Asserts on the explanation, not just the package name: a bare presence check raises the
     same generic "could not find version" that _download_native_dependencies already would.
     """
-
-    def version(package, install_path):
-        raise deps_bundle._PackageNotInstalled(f"Could not find version for package {package}")
-
-    monkeypatch.setattr(deps_bundle, "_get_package_version", version)
+    monkeypatch.setattr(deps_bundle, "_get_package_version", _only_awscrt_missing)
 
     with pytest.raises(Exception, match="console") as raised:
         deps_bundle._verify_console_resolution(tmp_path)
 
     message = str(raised.value)
-    assert "awscrt" in message and "crt" in message
-    assert isinstance(raised.value.__cause__, Exception), "the original lookup must be chained"
+    assert "awscrt" in message
+    assert "botocore" in message, "the message must name the extra awscrt arrives through"
+    assert isinstance(
+        raised.value.__cause__, deps_bundle._PackageNotInstalled
+    ), "the original lookup must be chained"
 
 
 def test_verify_console_resolution_propagates_a_failed_pip_list(tmp_path, monkeypatch):
@@ -291,11 +312,7 @@ def test_verify_console_resolution_does_not_read_native_dependencies(tmp_path, m
     it would disappear along with it.
     """
     monkeypatch.setattr(deps_bundle, "NATIVE_DEPENDENCIES", ["xxhash", "psutil", "pyyaml"])
-
-    def version(package, install_path):
-        raise deps_bundle._PackageNotInstalled(f"Could not find version for package {package}")
-
-    monkeypatch.setattr(deps_bundle, "_get_package_version", version)
+    monkeypatch.setattr(deps_bundle, "_get_package_version", _only_awscrt_missing)
 
     with pytest.raises(Exception, match="console"):
         deps_bundle._verify_console_resolution(tmp_path)
