@@ -31,25 +31,17 @@ classifiers = [
 ]
 
 dependencies = [
-    # 0.60.4 is the floor because AWS Console sign-in landed there and nowhere earlier:
-    # 0.60.1 through 0.60.3 have no AWS_CONSOLE_LOGIN credentials source, and do not
-    # declare a `console` extra at all.
+    # 0.60.4 is the floor: AWS Console sign-in landed there, and 0.60.1-0.60.3 declare no
+    # `console` extra at all.
     #
-    # The console extra is deliberately NOT requested here. It is only needed by the
-    # submitter, and it pulls awscrt, a compiled wheel. These base dependencies are
-    # resolved into the adaptor package by scripts/create_adaptor_packaging_artifact.sh
-    # with --only-binary=:all: --platform <tag>, and no awscrt wheel satisfying the
-    # 0.28.4 floor exists for the macosx_10_9_x86_64 tag that script uses -- pip walks
-    # back to a release with no usable crypto support, so console sign-in would appear
-    # installed and silently not work. The adaptor never takes the console path anyway:
-    # it runs on a worker with host-provided credentials. The submitter's dependency
-    # bundle requests the extra at build time instead (see scripts/deps_bundle.py).
+    # The console extra is deliberately NOT requested here: these base dependencies resolve
+    # into the adaptor package under a platform tag with no usable awscrt wheel, so console
+    # sign-in would appear installed and silently not work. The adaptor never takes the
+    # console path anyway -- it runs on a worker with host-provided credentials. The
+    # submitter's dependency bundle (scripts/deps_bundle.py) requests it instead.
     #
-    # No optional-dependencies extra is declared for the console either, deliberately:
-    # `pip install deadline-cloud-for-houdini` is the documented install path for the
-    # adaptor only (see README "Adaptor"). The submitter's documented install paths are
-    # the submitter installer, which ships the dependency bundle built by
-    # scripts/deps_bundle.py, and the DEVELOPMENT.md houdini-package workflow.
+    # There is no optional-dependencies extra either: pip install is the documented path for
+    # the adaptor only, while the submitter ships via the installer bundle or DEVELOPMENT.md.
     "deadline >= 0.60.4,< 0.61",
     "openjd-adaptor-runtime >= 0.7,< 0.10",
 ]

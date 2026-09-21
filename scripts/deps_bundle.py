@@ -15,32 +15,22 @@ from _project import get_project_dict, get_dependencies, Dependency
 SUPPORTED_PYTHON_VERSIONS = ["3.9", "3.10", "3.11"]
 SUPPORTED_PLATFORMS = ["Windows", "Linux", "Darwin"]
 # Packages with compiled extension modules, fetched once per version in
-# SUPPORTED_PYTHON_VERSIONS so the bundle carries a loadable artifact for each of those
-# interpreters.
+# SUPPORTED_PYTHON_VERSIONS so the bundle carries a loadable artifact for each.
 #
-# Known gap, predating this list of packages: SUPPORTED_PYTHON_VERSIONS stops at 3.11, but
-# Houdini 22.0 embeds Python 3.13 (see scripts/install_dev_submitter.py). awscrt on 3.13
-# is served by the 3.11 tree's abi3 artifact, which is forward compatible; the
-# version-specific packages are served only incidentally, by whatever the build host's
-# base environment resolved (the release pipeline builds on 3.13). Closing that gap means
-# extending SUPPORTED_PYTHON_VERSIONS, which changes the shipped bundle and belongs to a
-# dedicated change.
+# awscrt: wheels are not uniformly abi3 -- 3.9/3.10 get a version-specific
+# _awscrt.cpython-<tag>-<platform>.so, 3.11+ get the shared _awscrt.abi3.so.
+# pyyaml: ships a version-specific `_yaml` extension module and silently falls back to a
+# pure-Python parser when the artifact doesn't match, masking the same failure mode.
 #
-# awscrt is here because its wheels are not uniformly abi3: Python 3.9 and 3.10 get
-# _awscrt.cpython-<tag>-<platform>.so while 3.11+ get _awscrt.abi3.so. Resolving it only in
-# the base environment would ship whichever the build host produced, so any Houdini whose
-# interpreter that single artifact does not cover would fail to import awscrt and AWS
-# Console sign-in would break there.
-# pyyaml is here because it ships a version-specific `_yaml` extension module: resolved only
-# in the base environment it lands built for a single interpreter, and pyyaml hides that by
-# falling back to its pure-Python parser on the other two.
+# Gap predating this list: it stops at 3.11, but Houdini 22.0 embeds 3.13 (see
+# scripts/install_dev_submitter.py), which only the base environment covers. Extending it
+# changes the shipped bundle, so that is its own change.
 NATIVE_DEPENDENCIES = ["xxhash", "psutil", "awscrt", "pyyaml"]
 
 
 def _get_package_version_regex(package: str) -> re.Pattern:
-    # Case-insensitive because `pip list` prints the distribution's own casing, which need not
-    # match how the requirement is spelled -- `pyyaml` is reported as `PyYAML`. The required
-    # whitespace keeps a prefix sibling like `pyyaml-env-tag` from matching.
+    # Case-insensitive: `pip list` prints the distribution's own casing (`pyyaml` -> `PyYAML`).
+    # The required whitespace keeps a prefix sibling like `pyyaml-env-tag` from matching.
     return re.compile(rf"^{re.escape(package)}\s+(\S+)\s*$", re.IGNORECASE)
 
 
@@ -71,23 +61,12 @@ def _add_console_extra(requirement: str) -> str:
 def _build_base_environment(working_directory: Path, dependencies: list[Dependency]) -> Path:
     (working_directory / "base_env").mkdir()
     base_env_path = working_directory / "base_env"
-    # The bundle is the submitter, which needs AWS Console sign-in. The console extra is
-    # requested here rather than declared in project.dependencies, because those are also
-    # resolved into the adaptor package, where a compiled awscrt wheel is both unusable and
-    # unavailable for one of the platform tags that build targets (see pyproject.toml).
-    #
-    # Requesting the extra rather than installing awscrt directly means the bundle tracks
-    # whatever the extra actually requires -- notably a botocore floor, since the console
-    # login provider lives in botocore, not in deadline -- and takes awscrt from the exact
-    # version botocore's crt extra pins, rather than resolving it independently and drifting.
-    #
-    # That extra's botocore floor interacts with the boto3/botocore<1.43 cap in the
-    # constraints file below: deadline 0.60.x's console extra needs botocore>=1.42.89,
-    # which sits inside the cap, and every botocore in that window pins awscrt==0.31.2.
-    # There is no quiet-degradation path here: awscrt only ever arrives as botocore's
-    # exact ``==`` pin, never as a range pip could walk back through, so if a future
-    # deadline raised the floor past the cap, pip would fail this build loudly with
-    # ResolutionImpossible rather than resolve an older awscrt.
+    # Requested here (not in project.dependencies) because those also resolve into the
+    # adaptor package under a platform tag with no usable awscrt wheel (see pyproject.toml).
+    # Requesting the extra rather than pinning awscrt directly keeps the bundle on the
+    # botocore floor the extra needs (the console login provider lives in botocore) and takes
+    # awscrt from the exact version botocore's crt extra pins. That floor (>=1.42.89 for
+    # deadline 0.60.x) has to stay inside the botocore cap in the constraints file below.
     dependencies_for_pip = [_add_console_extra(d.for_pip()) for d in dependencies]
 
     # Write a constraints file to keep transitive dependencies compatible with the oldest
@@ -137,12 +116,9 @@ def _download_native_dependencies(working_directory: Path, base_env: Path) -> li
             "--python-version",
             version,
             "--only-binary=:all:",
-            # These trees exist only for their compiled artifacts, and they overwrite the
-            # base environment during the merge. Without --no-deps each tree would carry the
-            # packages' full transitive closures, resolved independently of the base
-            # environment's, and clobber whatever it had resolved for anything they share.
-            # Today none of NATIVE_DEPENDENCIES has runtime dependencies, but that is a
-            # property of the current graph, not of this code.
+            # These trees exist only for their compiled artifacts and overwrite the base
+            # environment during the merge; --no-deps keeps each tree from resolving (and
+            # clobbering) full dependency closures independently.
             "--no-deps",
             *versioned_native_dependencies,
         ]
@@ -153,24 +129,16 @@ def _download_native_dependencies(working_directory: Path, base_env: Path) -> li
 def _copy_native_to_base_env(base_env: Path, native_dependency_paths: list[Path]) -> None:
     """Flatten the per-version native trees into the bundle, lowest version first.
 
-    ``native_dependency_paths`` is ordered by ascending Python version and the first tree
-    to supply a path wins, overwriting the base environment. The base environment resolved
-    these packages for whatever interpreter the build host happens to run, which need not
-    be a version the bundle targets, so it must not decide which artifact ships.
+    ``native_dependency_paths`` is ascending by Python version; the first tree to supply a
+    path wins a filename collision, overwriting the base environment -- which resolved these
+    packages for the build host's interpreter, not necessarily one the bundle targets.
 
-    Which artifacts survive follows from how the wheels name their extension modules, so no
-    rule is needed per package. A version-specific name is unique per version and so cannot
-    collide: ``xxhash`` ships one wheel per version and every interpreter keeps its own
-    ``_xxhash.cpython-<tag>-<platform>.so``, and ``pyyaml`` is the same case, one wheel per
-    version installing ``yaml/_yaml.cpython-<tag>-<platform>.so``; ``awscrt``'s wheels for
-    Python 3.9 and 3.10 are version-specific too. An abi3 name is the same for every
-    version and so collides, and there the two cases differ. ``psutil`` publishes a single
-    abi3 wheel that serves all of them, so every tree holds identical bytes and the
-    collision is a no-op. ``awscrt`` publishes a separate abi3 wheel per Python from 3.11
-    up, each installing ``_awscrt.abi3.so``, so the copies differ and only one can ship;
-    abi3 is forward compatible, which makes the one built for the lowest supported abi3
-    Python the only copy that loads on all of them, and taking the first tree is what
-    keeps it.
+    A version-specific name (xxhash's ``_xxhash.cpython-<tag>-*``, pyyaml's
+    ``yaml/_yaml.cpython-<tag>-*``, awscrt's 3.9/3.10 wheels) is unique per version and never
+    collides. An abi3 name is identical across versions and always collides: psutil's single
+    abi3 wheel makes that a no-op, while awscrt publishes one abi3 wheel per Python from 3.11
+    up. abi3 is forward-compatible only, so taking the first (lowest-version) tree is what
+    keeps the one copy every supported interpreter can load.
     """
     copied: set[Path] = set()
     for native_dependency_path in native_dependency_paths:

@@ -2,16 +2,12 @@
 
 """Guards the dependency floor that AWS Console sign-in depends on.
 
-Console sign-in is not exercised by the integration tests: it needs an interactive
-browser OAuth handshake and Deadline Cloud Monitor, while CI authenticates by
-assuming a role, so credentials are host-provided and the console path is never
-taken. What can break silently is the dependency declaration, which is what this
-test pins.
+Console sign-in is not exercised by the integration tests: CI authenticates by assuming a
+role, so the console path is never taken there. What can break silently is the dependency
+declaration, which is what this test pins.
 
-The test reads ``pyproject.toml`` rather than installed distribution metadata.
-``importlib.metadata`` reflects what was captured at install time, so an edit to
-``pyproject.toml`` would not be seen until the environment is reinstalled -- and
-"somebody edited that line" is precisely the regression being guarded.
+Reads ``pyproject.toml`` directly rather than installed distribution metadata, since
+``importlib.metadata`` would not see an edit until the environment is reinstalled.
 """
 
 import sys
@@ -26,9 +22,8 @@ else:  # pragma: no cover - exercised on Python 3.9 and 3.10 only
 
 PYPROJECT = Path(__file__).parents[3] / "pyproject.toml"
 
-# Console sign-in landed in deadline 0.60.4 and nowhere earlier: 0.60.1 through
-# 0.60.3 have no AWS_CONSOLE_LOGIN credentials source and do not declare a
-# `console` extra at all. 0.60.3 is the highest version that must be excluded.
+# 0.60.1-0.60.3 have no AWS_CONSOLE_LOGIN credentials source and declare no `console`
+# extra; 0.60.3 is the highest version that must stay excluded.
 HIGHEST_DEADLINE_WITHOUT_CONSOLE_SIGNIN = "0.60.3"
 
 
@@ -40,14 +35,7 @@ def _base_dependencies() -> list[Requirement]:
 
 
 def test_deadline_floor_excludes_releases_without_console_signin():
-    """Guards the floor itself, not whatever a resolver happened to select.
-
-    An installed-version check cannot do this: with a loosened ">= 0.60.1"
-    requirement, pip still resolves the newest 0.60.x, so the regression passes
-    unnoticed. Below 0.60.4 there is also no `console` extra, so the bundler's
-    request for deadline[console] would make pip backtrack past the extra, drop
-    awscrt, warn once, and exit 0.
-    """
+    """Pins the declared deadline floor, independent of whatever a resolver selects."""
     deadline_reqs = [r for r in _base_dependencies() if r.name == "deadline"]
     assert deadline_reqs, "pyproject.toml declares no requirement on deadline"
     for req in deadline_reqs:
