@@ -37,6 +37,10 @@ PYPROJECT = Path(__file__).parents[3] / "pyproject.toml"
 HIGHEST_DEADLINE_WITHOUT_CONSOLE_SIGNIN = "0.60.3"
 
 
+class _StopBuild(Exception):
+    """Cuts build_deps_bundle short once the assertion's subject has been captured."""
+
+
 def _raw_dependencies() -> list[str]:
     node = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
     assert "project" in node, "pyproject.toml has no project table"
@@ -66,11 +70,32 @@ def test_deadline_floor_excludes_releases_without_console_signin():
         ("deadline[gui]>=0.60.4", "deadline[gui,console]>=0.60.4"),
         ("deadline[console]>=0.60.4", "deadline[console]>=0.60.4"),
         ("openjd-adaptor-runtime>=0.7,<0.10", "openjd-adaptor-runtime>=0.7,<0.10"),
+        # Extra names normalize per PEP 685, so a re-spelling is still recognised as present
+        # rather than duplicated.
+        ("deadline[Console]>=0.60.4", "deadline[console]>=0.60.4"),
+        ("deadline[CONSOLE]>=0.60.4", "deadline[console]>=0.60.4"),
+        ("deadline[Gui]>=0.60.4", "deadline[gui,console]>=0.60.4"),
+        ("Deadline>=0.60.4", "Deadline[console]>=0.60.4"),
     ],
 )
 def test_add_console_extra_pins_behavior(requirement, expected):
     """Pins _add_console_extra's contract: preserve extras, be idempotent, ignore others."""
     assert deps_bundle._add_console_extra(requirement) == expected
+
+
+@pytest.mark.parametrize(
+    "requirement",
+    ["deadline[console]>=0.60.4", "deadline[Console]>=0.60.4", "Deadline[CONSOLE]>=0.60.4"],
+)
+def test_requests_console_extra_ignores_spelling(requirement):
+    """The guard reads normalized extras, so a re-spelling still counts as requesting it."""
+    assert deps_bundle._requests_console_extra(requirement)
+
+
+def test_parse_requirement_rejects_detached_extras():
+    """Extras that do not directly follow the name would rebuild into an invalid requirement."""
+    assert deps_bundle._parse_requirement("deadline [gui]>=1") is None
+    assert deps_bundle._add_console_extra("deadline [gui]>=1") == "deadline [gui]>=1"
 
 
 def test_add_console_extra_changes_the_real_base_dependencies():
@@ -90,23 +115,52 @@ def test_add_console_extra_changes_the_real_base_dependencies():
     )
 
 
-@pytest.mark.parametrize("materialise", [list, iter], ids=["list", "iterator"])
 def test_build_base_environment_requires_something_to_request_the_console_extra(
-    tmp_path, monkeypatch, materialise
+    tmp_path, monkeypatch
 ):
-    """The postcondition fails the build when nothing requests the extra.
-
-    Covers a one-shot iterator as well as a list: the caller passed a lazy `filter`, and
-    formatting the diagnostic from a second pass over it rendered an empty list, hiding the
-    requirements that were rejected.
+    """The postcondition fails the build when nothing requests the extra, and names what it
+    rejected.
     """
     monkeypatch.setattr(deps_bundle.subprocess, "run", lambda args, **kwargs: None)
-    dependencies = materialise([deps_bundle.Dependency("not-deadline>=1")])
 
     with pytest.raises(Exception, match="console") as raised:
-        deps_bundle._build_base_environment(tmp_path, dependencies)
+        deps_bundle._build_base_environment(tmp_path, [deps_bundle.Dependency("not-deadline>=1")])
 
     assert "not-deadline>=1" in str(raised.value)
+
+
+def test_build_deps_bundle_passes_a_reiterable_dependency_collection(monkeypatch):
+    """The dependencies handed to _build_base_environment must survive a second pass.
+
+    They were a lazy `filter`, which anything reading them twice would see as empty.
+    """
+    monkeypatch.setattr(deps_bundle, "get_project_dict", lambda: {"project": {}})
+    monkeypatch.setattr(
+        deps_bundle,
+        "get_dependencies",
+        lambda project_dict: [
+            deps_bundle.Dependency("deadline[console] >= 0.60.4,< 0.61"),
+            deps_bundle.Dependency("openjd-adaptor-runtime >= 0.7,< 0.10"),
+        ],
+    )
+
+    captured: list = []
+
+    def capture(working_directory, dependencies):
+        captured.append(dependencies)
+        raise _StopBuild
+
+    monkeypatch.setattr(deps_bundle, "_build_base_environment", capture)
+
+    with pytest.raises(_StopBuild):
+        deps_bundle.build_deps_bundle()
+
+    dependencies = captured[0]
+    first_pass = [dep.for_pip() for dep in dependencies]
+    second_pass = [dep.for_pip() for dep in dependencies]
+
+    assert first_pass == ["deadline[console]>=0.60.4,<0.61"], "openjd must be filtered out"
+    assert second_pass == first_pass, "the collection is one-shot; a second reader sees nothing"
 
 
 def test_build_base_environment_accepts_an_already_declared_console_extra(tmp_path, monkeypatch):

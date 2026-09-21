@@ -45,26 +45,41 @@ def _get_package_version(package: str, install_path: Path) -> str:
     raise Exception(f"Could not find version for package {package}")
 
 
+# The specifier excludes brackets so that a requirement whose extras do not directly follow
+# the name (`deadline [gui]>=1`) fails to match rather than parsing as a name plus a spec of
+# " [gui]>=1", which would rebuild into the invalid `deadline[console] [gui]>=1`.
 _REQUIREMENT_PATTERN = re.compile(
-    r"(?P<name>[A-Za-z0-9._-]+)(?:\[(?P<extras>[^\]]*)\])?(?P<spec>.*)"
+    r"(?P<name>[A-Za-z0-9._-]+)(?:\[(?P<extras>[^\]]*)\])?(?P<spec>[^\[\]]*)"
 )
 
 
+def _canonicalize(name: str) -> str:
+    """The normalized form of a package or extra name, for comparison.
+
+    PEP 503 and PEP 685 share one algorithm: fold runs of `-`, `_` and `.` to a single `-`
+    and lowercase. Hand-rolled because packaging is a test dependency, and this script runs
+    in the bare installer build environment where nothing pulls it in.
+    """
+    return re.sub(r"[-_.]+", "-", name.strip()).lower()
+
+
 def _parse_requirement(requirement: str) -> tuple[str, list[str], str] | None:
-    """Split a requirement into (name, extras, specifier), or None if it doesn't match the
-    `name[extras]spec` shape.
+    """Split a requirement into (name, canonicalized extras, specifier), or None if it doesn't
+    match the `name[extras]spec` shape.
     """
     match = _REQUIREMENT_PATTERN.fullmatch(requirement)
     if not match:
         return None
-    extras = [extra for extra in (match.group("extras") or "").split(",") if extra]
+    extras = [
+        _canonicalize(extra) for extra in (match.group("extras") or "").split(",") if extra.strip()
+    ]
     return match.group("name"), extras, match.group("spec")
 
 
 def _add_console_extra(requirement: str) -> str:
     """Add deadline's `console` extra to a requirement string, preserving its specifier."""
     parsed = _parse_requirement(requirement)
-    if not parsed or parsed[0].lower() != "deadline":
+    if not parsed or _canonicalize(parsed[0]) != "deadline":
         return requirement
     name, extras, spec = parsed
     if "console" not in extras:
@@ -75,7 +90,7 @@ def _add_console_extra(requirement: str) -> str:
 def _requests_console_extra(requirement: str) -> bool:
     """Whether a requirement is a `deadline` requirement whose extras include `console`."""
     parsed = _parse_requirement(requirement)
-    return parsed is not None and parsed[0].lower() == "deadline" and "console" in parsed[1]
+    return parsed is not None and _canonicalize(parsed[0]) == "deadline" and "console" in parsed[1]
 
 
 def _verify_console_resolution(base_env: Path) -> None:
