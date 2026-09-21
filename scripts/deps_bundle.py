@@ -14,11 +14,24 @@ from _project import get_project_dict, get_dependencies, Dependency
 
 SUPPORTED_PYTHON_VERSIONS = ["3.9", "3.10", "3.11"]
 SUPPORTED_PLATFORMS = ["Windows", "Linux", "Darwin"]
-NATIVE_DEPENDENCIES = ["xxhash", "psutil"]
+# Packages with compiled extension modules, fetched once per version in
+# SUPPORTED_PYTHON_VERSIONS so the bundle carries a loadable artifact for each.
+#
+# awscrt: wheels are not uniformly abi3 -- 3.9/3.10 get a version-specific
+# _awscrt.cpython-<tag>-<platform>.so, 3.11+ get the shared _awscrt.abi3.so.
+# pyyaml: ships a version-specific `_yaml` extension module and silently falls back to a
+# pure-Python parser when the artifact doesn't match, masking the same failure mode.
+#
+# Gap predating this list: it stops at 3.11, but Houdini 22.0 embeds 3.13 (see
+# scripts/install_dev_submitter.py), which only the base environment covers. Extending it
+# changes the shipped bundle, so that is its own change.
+NATIVE_DEPENDENCIES = ["xxhash", "psutil", "awscrt", "pyyaml"]
 
 
 def _get_package_version_regex(package: str) -> re.Pattern:
-    return re.compile(rf"^{re.escape(package)} *(.*)$")
+    # Case-insensitive: `pip list` prints the distribution's own casing (`pyyaml` -> `PyYAML`).
+    # The required whitespace keeps a prefix sibling like `pyyaml-env-tag` from matching.
+    return re.compile(rf"^{re.escape(package)}\s+(\S+)\s*$", re.IGNORECASE)
 
 
 def _get_package_version(package: str, install_path: Path) -> str:
@@ -32,10 +45,29 @@ def _get_package_version(package: str, install_path: Path) -> str:
     raise Exception(f"Could not find version for package {package}")
 
 
+def _add_console_extra(requirement: str) -> str:
+    """Add deadline's `console` extra to a requirement string, preserving its specifier."""
+    match = re.fullmatch(
+        r"(?P<name>[A-Za-z0-9._-]+)(?:\[(?P<extras>[^\]]*)\])?(?P<spec>.*)", requirement
+    )
+    if not match or match.group("name").lower() != "deadline":
+        return requirement
+    extras = [extra for extra in (match.group("extras") or "").split(",") if extra]
+    if "console" not in extras:
+        extras.append("console")
+    return f"{match.group('name')}[{','.join(extras)}]{match.group('spec')}"
+
+
 def _build_base_environment(working_directory: Path, dependencies: list[Dependency]) -> Path:
     (working_directory / "base_env").mkdir()
     base_env_path = working_directory / "base_env"
-    dependencies_for_pip = [d.for_pip() for d in dependencies]
+    # Requested here (not in project.dependencies) because those also resolve into the
+    # adaptor package under a platform tag with no usable awscrt wheel (see pyproject.toml).
+    # Requesting the extra rather than pinning awscrt directly keeps the bundle on the
+    # botocore floor the extra needs (the console login provider lives in botocore) and takes
+    # awscrt from the exact version botocore's crt extra pins. That floor (>=1.42.89 for
+    # deadline 0.60.x) has to stay inside the botocore cap in the constraints file below.
+    dependencies_for_pip = [_add_console_extra(d.for_pip()) for d in dependencies]
 
     # Write a constraints file to keep transitive dependencies compatible with the oldest
     # supported Python (3.9). Several packages use PEP 604 type unions (X | Y) which are syntax
@@ -60,13 +92,19 @@ def _build_base_environment(working_directory: Path, dependencies: list[Dependen
     return base_env_path
 
 
+def _python_version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
+
+
 def _download_native_dependencies(working_directory: Path, base_env: Path) -> list[Path]:
     versioned_native_dependencies = [
         f"{package_name}=={_get_package_version(package_name, base_env)}"
         for package_name in NATIVE_DEPENDENCIES
     ]
     native_dependency_paths = []
-    for version in SUPPORTED_PYTHON_VERSIONS:
+    # Ascending order is load-bearing: _copy_native_to_base_env resolves a filename
+    # collision in favour of the tree it sees first.
+    for version in sorted(SUPPORTED_PYTHON_VERSIONS, key=_python_version_key):
         native_dependency_path = working_directory / "native" / f"{version.replace('.', '_')}"
         native_dependency_paths.append(native_dependency_path)
         native_dependency_path.mkdir(parents=True)
@@ -78,6 +116,10 @@ def _download_native_dependencies(working_directory: Path, base_env: Path) -> li
             "--python-version",
             version,
             "--only-binary=:all:",
+            # These trees exist only for their compiled artifacts and overwrite the base
+            # environment during the merge; --no-deps keeps each tree from resolving (and
+            # clobbering) full dependency closures independently.
+            "--no-deps",
             *versioned_native_dependencies,
         ]
         subprocess.run(native_dependency_pip_args, check=True)
@@ -85,14 +127,30 @@ def _download_native_dependencies(working_directory: Path, base_env: Path) -> li
 
 
 def _copy_native_to_base_env(base_env: Path, native_dependency_paths: list[Path]) -> None:
+    """Flatten the per-version native trees into the bundle, lowest version first.
+
+    ``native_dependency_paths`` is ascending by Python version; the first tree to supply a
+    path wins a filename collision, overwriting the base environment -- which resolved these
+    packages for the build host's interpreter, not necessarily one the bundle targets.
+
+    A version-specific name (xxhash's ``_xxhash.cpython-<tag>-*``, pyyaml's
+    ``yaml/_yaml.cpython-<tag>-*``, awscrt's 3.9/3.10 wheels) is unique per version and never
+    collides. An abi3 name is identical across versions and always collides: psutil's single
+    abi3 wheel makes that a no-op, while awscrt publishes one abi3 wheel per Python from 3.11
+    up. abi3 is forward-compatible only, so taking the first (lowest-version) tree is what
+    keeps the one copy every supported interpreter can load.
+    """
+    copied: set[Path] = set()
     for native_dependency_path in native_dependency_paths:
         for file in native_dependency_path.rglob("*"):
             if file.is_file():
                 relative = file.relative_to(native_dependency_path)
+                if relative in copied:
+                    continue
                 in_base_env = base_env / relative
-                if not in_base_env.exists():
-                    in_base_env.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy(str(file), str(in_base_env))
+                in_base_env.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(str(file), str(in_base_env))
+                copied.add(relative)
 
 
 def _get_zip_path(working_directory: Path, project_dict: dict[str, Any]) -> Path:

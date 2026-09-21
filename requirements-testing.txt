@@ -10,3 +10,6 @@ pytest-xdist == 3.*
 ruff == 0.15.*
 twine == 6.*
 types-pyyaml == 6.*
+# Both are used by test_console_signin_dependencies.py, which parses pyproject.toml.
+packaging >= 24.0
+tomli == 2.*; python_version < "3.11"

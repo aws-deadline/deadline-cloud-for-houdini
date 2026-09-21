@@ -31,7 +31,18 @@ classifiers = [
 ]
 
 dependencies = [
-    "deadline >= 0.60.2,< 0.61",
+    # 0.60.4 is the floor: AWS Console sign-in landed there, and 0.60.1-0.60.3 declare no
+    # `console` extra at all.
+    #
+    # The console extra is deliberately NOT requested here: these base dependencies resolve
+    # into the adaptor package under a platform tag with no usable awscrt wheel, so console
+    # sign-in would appear installed and silently not work. The adaptor never takes the
+    # console path anyway -- it runs on a worker with host-provided credentials. The
+    # submitter's dependency bundle (scripts/deps_bundle.py) requests it instead.
+    #
+    # There is no optional-dependencies extra either: pip install is the documented path for
+    # the adaptor only, while the submitter ships via the installer bundle or DEVELOPMENT.md.
+    "deadline >= 0.60.4,< 0.61",
     "openjd-adaptor-runtime >= 0.7,< 0.10",
 ]
 
