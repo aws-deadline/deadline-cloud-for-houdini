@@ -90,14 +90,23 @@ def test_add_console_extra_changes_the_real_base_dependencies():
     )
 
 
+@pytest.mark.parametrize("materialise", [list, iter], ids=["list", "iterator"])
 def test_build_base_environment_requires_something_to_request_the_console_extra(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, materialise
 ):
-    """The postcondition fails the build when nothing requests the extra."""
-    monkeypatch.setattr(deps_bundle.subprocess, "run", lambda args, **kwargs: None)
+    """The postcondition fails the build when nothing requests the extra.
 
-    with pytest.raises(Exception, match="console"):
-        deps_bundle._build_base_environment(tmp_path, [deps_bundle.Dependency("not-deadline>=1")])
+    Covers a one-shot iterator as well as a list: the caller passed a lazy `filter`, and
+    formatting the diagnostic from a second pass over it rendered an empty list, hiding the
+    requirements that were rejected.
+    """
+    monkeypatch.setattr(deps_bundle.subprocess, "run", lambda args, **kwargs: None)
+    dependencies = materialise([deps_bundle.Dependency("not-deadline>=1")])
+
+    with pytest.raises(Exception, match="console") as raised:
+        deps_bundle._build_base_environment(tmp_path, dependencies)
+
+    assert "not-deadline>=1" in str(raised.value)
 
 
 def test_build_base_environment_accepts_an_already_declared_console_extra(tmp_path, monkeypatch):
@@ -118,42 +127,23 @@ def test_build_base_environment_accepts_an_already_declared_console_extra(tmp_pa
     assert any("deadline[console]>=0.60.4,<0.61" in args for args in recorded)
 
 
-def test_verify_console_resolution_rejects_a_backtracked_deadline(tmp_path, monkeypatch):
-    """A resolve that backtracks `deadline` below its floor must fail the build.
+def test_verify_console_resolution_accepts_a_resolution_carrying_awscrt(tmp_path, monkeypatch):
+    """awscrt resolved, so the closure carries the console extra and the build proceeds."""
+    monkeypatch.setattr(deps_bundle, "_get_package_version", lambda package, path: "0.31.2")
 
-    Pip exits 0 when it backtracks, so nothing else catches the console extra's botocore
-    floor being pushed outside the constraints file's cap.
-    """
-    monkeypatch.setattr(
-        deps_bundle,
-        "_get_package_version",
-        lambda package, install_path: "0.60.2" if package == "deadline" else "0.31.2",
-    )
-
-    with pytest.raises(Exception, match="backtracked"):
-        deps_bundle._verify_console_resolution(tmp_path, ["deadline[console]>=0.60.4,<0.61"])
-
-
-def test_verify_console_resolution_accepts_a_compliant_resolution(tmp_path, monkeypatch):
-    """The floor is satisfied and awscrt is present, so the build proceeds."""
-    monkeypatch.setattr(
-        deps_bundle,
-        "_get_package_version",
-        lambda package, install_path: "0.60.7" if package == "deadline" else "0.31.2",
-    )
-
-    deps_bundle._verify_console_resolution(tmp_path, ["deadline[console]>=0.60.4,<0.61"])
+    deps_bundle._verify_console_resolution(tmp_path)
 
 
 def test_verify_console_resolution_requires_awscrt(tmp_path, monkeypatch):
-    """awscrt reaches the bundle only through the extra, so its absence fails the build."""
+    """awscrt reaches the bundle only through the extra, so its absence fails the build.
+
+    This is the one case pip exits 0 for: a closure that lost the extra installs cleanly.
+    """
 
     def version(package, install_path):
-        if package == "awscrt":
-            raise Exception("Could not find version for package awscrt")
-        return "0.60.7"
+        raise Exception(f"Could not find version for package {package}")
 
     monkeypatch.setattr(deps_bundle, "_get_package_version", version)
 
     with pytest.raises(Exception, match="awscrt"):
-        deps_bundle._verify_console_resolution(tmp_path, ["deadline[console]>=0.60.4,<0.61"])
+        deps_bundle._verify_console_resolution(tmp_path)

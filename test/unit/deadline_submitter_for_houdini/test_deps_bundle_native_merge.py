@@ -61,10 +61,10 @@ def supported_versions() -> list[str]:
 @pytest.fixture
 def abi3_versions(supported_versions) -> list[str]:
     versions = [v for v in supported_versions if _version_key(v) >= FIRST_ABI3_PYTHON]
-    assert versions and len(versions) < len(supported_versions), (
-        "FIRST_ABI3_PYTHON needs supported versions on both sides of it, or these tests stop "
-        "covering one of the two naming schemes"
-    )
+    # Only the lower bound is required. An all-abi3 support matrix is a valid configuration
+    # here: every tree then supplies the colliding name, which the merge still has to resolve,
+    # and the version-specific scheme stays covered by xxhash and pyyaml.
+    assert versions, "no supported version gets an abi3 awscrt wheel; FIRST_ABI3_PYTHON is stale"
     return versions
 
 
