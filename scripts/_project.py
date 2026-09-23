@@ -69,23 +69,38 @@ def get_git_root() -> Path:
     return Path(__file__).parents[1].resolve()
 
 
-def get_pip_platform(system_platform: str, cpu_arch: CPUArch = CPUArch.X86_64) -> str:
+def get_uv_platform(system_platform: str, cpu_arch: CPUArch = CPUArch.X86_64) -> str:
+    """Target triple for uv's `--python-platform`, used when resolving for another Python.
+
+    uv takes a target triple, not a wheel platform tag, and derives the compatible wheel tags
+    from it rather than letting the caller state them.
+
+    On macOS that means the minimum OS version is uv's choice and cannot be set: both
+    `*-apple-darwin` triples accept `macosx_12_0` wheels (verified against
+    PySide6-Essentials 6.8.3, whose only macOS wheel is `macosx_12_0_universal2`). That is a
+    higher floor than the `macosx_10_9_x86_64` / `macosx_11_0_arm64` tags this repo used with
+    pip, so resolving for a Mac older than 12.0 can now yield wheels that install and then
+    fail to import. uv exposes no deployment-target flag to pin this back down.
+
+    On Linux `manylinux2014` is the older alias of the `manylinux_2_17` tags used previously --
+    the same glibc 2.17 floor, so no change in practice.
+    """
     if system_platform == "Windows":
         if cpu_arch in [CPUArch.AMD64, CPUArch.X86_64]:
-            return "win_amd64"
+            return "x86_64-pc-windows-msvc"
         if cpu_arch is CPUArch.ARM64:
-            return "win_arm64"
+            return "aarch64-pc-windows-msvc"
 
     if system_platform == "Darwin":
         if cpu_arch is CPUArch.X86_64:
-            return "macosx_10_9_x86_64"
+            return "x86_64-apple-darwin"
         if cpu_arch is CPUArch.ARM64:
-            return "macosx_11_0_arm64"
+            return "aarch64-apple-darwin"
 
     if system_platform == "Linux":
         if cpu_arch is CPUArch.X86_64:
-            return "manylinux_2_17_x86_64"
+            return "x86_64-manylinux2014"
         if cpu_arch is CPUArch.ARM64:
-            return "manylinux_2_17_aarch64"
+            return "aarch64-manylinux2014"
 
     raise Exception(f"Unsupported platform/archicture: {system_platform}, {cpu_arch}")

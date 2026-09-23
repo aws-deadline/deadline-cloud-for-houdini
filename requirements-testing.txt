@@ -13,3 +13,7 @@ types-pyyaml == 6.*
 # Both are used by test_console_signin_dependencies.py, which parses pyproject.toml.
 packaging >= 24.0
 tomli == 2.*; python_version < "3.11"
+# install_dev_submitter.py resolves dependencies for a Python other than the one running
+# it; uv is used there because pip does not evaluate environment markers against
+# --python-version. See _build_deps_env.
+uv == 0.10.*
