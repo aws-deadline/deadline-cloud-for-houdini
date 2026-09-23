@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from _project import CPUArch, get_dependencies, get_git_root, get_project_dict, get_uv_platform
+from uv import find_uv_bin
 from pypanel import (
     get_rendered_path,
     get_submitter_panel_source_path,
@@ -160,7 +161,12 @@ def _build_deps_env(
 
     def uv_pip_install(*install_args: str) -> None:
         args = [
-            "uv",
+            # find_uv_bin(), not "uv": a globally installed uv (standalone installer, Homebrew,
+            # pipx) usually precedes the hatch env on PATH, which would silently ignore the
+            # uv pin in requirements-testing.txt. The --python-platform triples below are
+            # version-sensitive surface, so an older global uv fails with an opaque
+            # "invalid value for --python-platform" instead.
+            find_uv_bin(),
             "pip",
             "install",
             "--upgrade",
@@ -179,12 +185,12 @@ def _build_deps_env(
 
     # Install dependencies from requirements file on Windows
     if platform.system() == "Windows":
-        # requirements-integ-dcc-env.txt, not requirements-dcc-env.txt: the latter has never
-        # existed, and the exists() guard below made the miss silent, so pywin32 was never
-        # installed into plugin_env_* on Windows. Same filename pipeline/setup-runner.py uses.
-        requirements_file = get_git_root() / "requirements-integ-dcc-env.txt"
-        if requirements_file.exists():
-            uv_pip_install("-r", str(requirements_file))
+        # requirements-integ-dcc-env.txt (pywin32), the name pipeline/setup-runner.py already
+        # uses. This read was requirements-dcc-env.txt, which has never existed, and an
+        # exists() guard made the miss silent -- so pywin32 was never installed into
+        # plugin_env_*. Unguarded now: the file is tracked at the repo root, so the only thing
+        # a guard can do is hide the next rename the same way.
+        uv_pip_install("-r", str(get_git_root() / "requirements-integ-dcc-env.txt"))
 
     # Install resolved dependencies
     uv_pip_install(*resolved_dependencies)
