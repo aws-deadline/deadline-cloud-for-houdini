@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from _project import CPUArch, get_dependencies, get_git_root, get_pip_platform, get_project_dict
+from _project import CPUArch, get_dependencies, get_git_root, get_project_dict, get_uv_platform
 from pypanel import (
     get_rendered_path,
     get_submitter_panel_source_path,
@@ -147,45 +147,44 @@ def _build_deps_env(
 
     resolved_dependencies = _resolve_dependencies(local_deps, python_version)
 
-    pip_platform = get_pip_platform(platform.system(), cpu_arch)
+    # uv, not pip, because this installs for a Python other than the one running us. pip's
+    # --python-version only selects wheels by tag; it still evaluates environment markers
+    # against the interpreter running pip, so every branch of a conditional dependency is
+    # demanded at once. `deadline` declares click>=8.1.7 for python_version < "3.10" and
+    # click>=8.3.3 for >= "3.10", so a Houdini 19.5 (Python 3.9) target resolved by a 3.10+
+    # runner asks for click>=8.3.3, which publishes no 3.9-compatible wheel, and pip exits
+    # ResolutionImpossible. uv evaluates markers against --python-version, so 3.9 correctly
+    # gets click 8.1.8. A `click<8.3` constraint does not help: pip has already dropped the
+    # marker, so it still sees click>=8.3.3 and fails the same way.
+    uv_platform = get_uv_platform(platform.system(), cpu_arch)
+
+    def uv_pip_install(*install_args: str) -> None:
+        args = [
+            "uv",
+            "pip",
+            "install",
+            "--upgrade",
+            "--target",
+            str(destination),
+            "--python-platform",
+            uv_platform,
+            "--python-version",
+            python_version,
+            "--only-binary",
+            ":all:",
+            *install_args,
+        ]
+        print(f"Running: {' '.join(args)}")
+        subprocess.run(args, check=True)
 
     # Install dependencies from requirements file on Windows
     if platform.system() == "Windows":
         requirements_file = get_git_root() / "requirements-dcc-env.txt"
         if requirements_file.exists():
-            args = [
-                "pip",
-                "install",
-                "--upgrade",
-                "--target",
-                str(destination),
-                "--platform",
-                pip_platform,
-                "--python-version",
-                python_version,
-                "--only-binary=:all:",
-                "-r",
-                str(requirements_file),
-            ]
-            print(f"Running: {' '.join(args)}")
-            subprocess.run(args, check=True)
+            uv_pip_install("-r", str(requirements_file))
 
     # Install resolved dependencies
-    args = [
-        "pip",
-        "install",
-        "--upgrade",
-        "--target",
-        str(destination),
-        "--platform",
-        pip_platform,
-        "--python-version",
-        python_version,
-        "--only-binary=:all:",
-        *resolved_dependencies,
-    ]
-    print(f"Running: {' '.join(args)}")
-    subprocess.run(args, check=True)
+    uv_pip_install(*resolved_dependencies)
 
 
 def install_submitter_package(

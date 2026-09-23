@@ -89,3 +89,32 @@ def get_pip_platform(system_platform: str, cpu_arch: CPUArch = CPUArch.X86_64) -
             return "manylinux_2_17_aarch64"
 
     raise Exception(f"Unsupported platform/archicture: {system_platform}, {cpu_arch}")
+
+
+def get_uv_platform(system_platform: str, cpu_arch: CPUArch = CPUArch.X86_64) -> str:
+    """uv's `--python-platform` equivalent of get_pip_platform's wheel tag.
+
+    uv takes a target triple rather than a wheel platform tag, so the two cannot share a
+    string. Kept deliberately parallel to get_pip_platform so the supported combinations stay
+    in step; the manylinux2014 targets correspond to pip's manylinux_2_17 tags (same glibc
+    2.17 floor, older alias).
+    """
+    if system_platform == "Windows":
+        if cpu_arch in [CPUArch.AMD64, CPUArch.X86_64]:
+            return "x86_64-pc-windows-msvc"
+        if cpu_arch is CPUArch.ARM64:
+            return "aarch64-pc-windows-msvc"
+
+    if system_platform == "Darwin":
+        if cpu_arch is CPUArch.X86_64:
+            return "x86_64-apple-darwin"
+        if cpu_arch is CPUArch.ARM64:
+            return "aarch64-apple-darwin"
+
+    if system_platform == "Linux":
+        if cpu_arch is CPUArch.X86_64:
+            return "x86_64-manylinux2014"
+        if cpu_arch is CPUArch.ARM64:
+            return "aarch64-manylinux2014"
+
+    raise Exception(f"Unsupported platform/archicture: {system_platform}, {cpu_arch}")
