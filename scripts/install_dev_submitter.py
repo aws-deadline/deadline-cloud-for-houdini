@@ -179,7 +179,10 @@ def _build_deps_env(
 
     # Install dependencies from requirements file on Windows
     if platform.system() == "Windows":
-        requirements_file = get_git_root() / "requirements-dcc-env.txt"
+        # requirements-integ-dcc-env.txt, not requirements-dcc-env.txt: the latter has never
+        # existed, and the exists() guard below made the miss silent, so pywin32 was never
+        # installed into plugin_env_* on Windows. Same filename pipeline/setup-runner.py uses.
+        requirements_file = get_git_root() / "requirements-integ-dcc-env.txt"
         if requirements_file.exists():
             uv_pip_install("-r", str(requirements_file))
 
