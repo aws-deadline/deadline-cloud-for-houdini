@@ -61,7 +61,10 @@ def supported_versions() -> list[str]:
 @pytest.fixture
 def abi3_versions(supported_versions) -> list[str]:
     versions = [v for v in supported_versions if _version_key(v) >= FIRST_ABI3_PYTHON]
-    assert versions, "no supported version gets an abi3 awscrt wheel; the fixture is stale"
+    # Only the lower bound is required. An all-abi3 support matrix is a valid configuration
+    # here: every tree then supplies the colliding name, which the merge still has to resolve,
+    # and the version-specific scheme stays covered by xxhash and pyyaml.
+    assert versions, "no supported version gets an abi3 awscrt wheel; FIRST_ABI3_PYTHON is stale"
     return versions
 
 
@@ -104,6 +107,31 @@ def test_colliding_abi3_artifact_comes_from_the_lowest_supported_abi(merged_bund
         f"{ABI3_ARTIFACT} was built for Python {shipped}, so it cannot be imported by "
         f"Python {lowest_abi3_version}; the copy built for the lowest supported abi3 "
         f"version is the one every supported interpreter can load"
+    )
+
+
+def test_abi3_collision_between_trees_keeps_the_lowest_version(tmp_path):
+    """The merge's first-tree-wins rule, over a name more than one tree supplies.
+
+    SUPPORTED_PYTHON_VERSIONS currently has a single version at or above FIRST_ABI3_PYTHON,
+    so the fixture above cannot produce an abi3 collision between two trees; this drives the
+    rule directly rather than depending on the shipped list ever having two.
+    """
+    base_env = tmp_path / "base_env"
+    _write(base_env / ABI3_ARTIFACT, BASE_ENV_SENTINEL)
+
+    abi3_only_versions = ["3.11", "3.12", "3.13"]
+    native_paths = []
+    for version in abi3_only_versions:
+        tree = tmp_path / "native" / _tag(version)
+        native_paths.append(tree)
+        _write(tree / ABI3_ARTIFACT, version)
+
+    deps_bundle._copy_native_to_base_env(base_env, native_paths)
+
+    assert (base_env / ABI3_ARTIFACT).read_text() == abi3_only_versions[0], (
+        f"{ABI3_ARTIFACT} must come from the lowest abi3 tree; a later tree's copy does not "
+        "load on the interpreters below it"
     )
 
 
@@ -161,3 +189,18 @@ def test_get_package_version_matches_pip_list_casing(monkeypatch):
     )
 
     assert deps_bundle._get_package_version("pyyaml", Path("/unused")) == "6.0.3"
+
+
+def test_get_package_version_raises_package_not_installed_when_absent(monkeypatch):
+    """The absent case needs its own type: _verify_console_resolution catches exactly it, and
+    would stop diagnosing anything if this widened back to a bare Exception.
+    """
+    output = b"Package  Version\n-------- -------\nxxhash   3.6.0\n"
+    monkeypatch.setattr(
+        deps_bundle.subprocess,
+        "run",
+        lambda args, **kwargs: subprocess.CompletedProcess(args, 0, stdout=output),
+    )
+
+    with pytest.raises(deps_bundle._PackageNotInstalled, match="awscrt"):
+        deps_bundle._get_package_version("awscrt", Path("/unused"))
