@@ -183,14 +183,21 @@ def _build_deps_env(
         print(f"Running: {' '.join(args)}")
         subprocess.run(args, check=True)
 
-    # Install dependencies from requirements file on Windows
-    if platform.system() == "Windows":
-        # requirements-integ-dcc-env.txt (pywin32), the name pipeline/setup-runner.py already
-        # uses. This read was requirements-dcc-env.txt, which has never existed, and an
-        # exists() guard made the miss silent -- so pywin32 was never installed into
-        # plugin_env_*. Unguarded now: the file is tracked at the repo root, so the only thing
-        # a guard can do is hide the next rename the same way.
-        uv_pip_install("-r", str(get_git_root() / "requirements-integ-dcc-env.txt"))
+    # No pywin32 install here. There used to be a Windows branch reading
+    # requirements-dcc-env.txt, a filename that has never existed in this repo, behind an
+    # exists() guard that made the miss silent. Correcting it to the tracked name
+    # (requirements-integ-dcc-env.txt) would not help: pywin32 cannot be installed into a
+    # --target directory. Its extension modules live in subpackages (win32/win32security.pyd,
+    # win32/lib/, Pythonwin/) and are only reachable because pywin32.pth at the distribution
+    # root appends those directories to sys.path. `site` processes .pth files only inside a
+    # real site-packages, and this tree is placed on PYTHONPATH instead, so the .pth is inert
+    # -- including its `import pywin32_bootstrap` fallback -- and `import win32security` fails
+    # with the files present on disk.
+    #
+    # pywin32 is genuinely needed on Windows: deadline.client.config.config_file imports
+    # win32security when resetting config directory permissions, and does not declare pywin32
+    # as a dependency. The install mode that works is Houdini's own site-packages, which
+    # pipeline/setup-runner.py already does and DEVELOPMENT.md documents for the manual path.
 
     # Install resolved dependencies
     uv_pip_install(*resolved_dependencies)
