@@ -1,3 +1,11 @@
+## 0.7.14 (2026-09-23)
+
+### Bug Fixes
+* Fixed an issue where the `HOUDINI_USER_PREF_DIR` environment variable was not being honored for the Houdini 22.0 packages directory. The packages directory now correctly defaults to the `packages` subdirectory at that path when the variable is set, matching the behavior for other Houdini versions. (#392)
+* Fixed AWS Console sign-in failing to authenticate from the submitter. The minimum `deadline` dependency has been raised to 0.60.4, the first version that declares the `console` extra (0.60.1-0.60.3 do not), and the submitter bundle now ships an `awscrt` that is loadable by the bundled Python. The `console` extra is requested only when building the submitter bundle, not by this package's own dependencies, so installing `deadline-cloud-for-houdini` with `pip` continues not to pull in console support. (#394)
+* Improved the license error message when Houdini license issues are detected. The error now includes actionable remediation guidance with links to the licensing guide and service quotas page, and correctly surfaces the detected error cause instead of showing a generic message. (#393)
+* Fixed the dev submitter installation script failing to resolve dependencies correctly for Python 3.9 targets by switching to `uv` for dependency resolution. (#396)
+* Fixed the bundle build to enforce that the `deadline[console]` extra is always included, preventing silent failures where console support could be missing from the built bundle. (#395)
 ## 0.7.13 (2026-08-12)
 
 ### Bug Fixes
