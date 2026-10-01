@@ -11,7 +11,7 @@ ruff == 0.15.*
 twine == 6.*
 types-pyyaml == 6.*
 # Both are used by test_console_signin_dependencies.py, which parses pyproject.toml.
-packaging >= 24.0
+packaging >= 26.3
 tomli == 2.*; python_version < "3.11"
 # install_dev_submitter.py resolves dependencies for a Python other than the one running
 # it; uv is used there because pip does not evaluate environment markers against
