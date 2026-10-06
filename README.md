@@ -104,6 +104,10 @@ You can find a list of the versions of Houdini that are available by default
 [in the user guide](https://docs.aws.amazon.com/deadline-cloud/latest/userguide/create-queue-environment.html#conda-queue-environment)
 if you are using the default Conda queue enivonment in your setup.
 
+## Houdini PDG (experimental)
+
+A PDG scheduler that cooks a TOP network as one Deadline Cloud job is under development, it is experimental and not yet functional. It is not installed by default; see the [PDG README](src/deadline/houdini_pdg/README.md) for its status.
+
 ## Viewing the Job Bundle that will be submitted
 
 To submit a job, the submitter first generates a [Job Bundle][job-bundle], and then uses functionality from the
