@@ -1,0 +1,29 @@
+# Both triggers use trusted base-branch code; PR code is never checked out or executed.
+name: Installer Coordination
+
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] -- trusted central tooling only; no PR checkout or execution
+    branches: [mainline]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  issue_comment:
+    types: [created, edited, deleted]
+
+permissions: {}
+
+concurrency:
+  group: installer-coordination-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  coordination:
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event.issue.pull_request && github.event.comment.user.type != 'Bot')
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+      statuses: write
+    uses: aws-deadline/.github/.github/workflows/reusable_installer_coordination.yml@mainline
+    with:
+      pr_number: ${{ format('{0}', github.event.pull_request.number || github.event.issue.number) }}
