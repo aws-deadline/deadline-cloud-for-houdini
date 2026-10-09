@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '0 8 * * MON'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   Scan:
     name: Scan

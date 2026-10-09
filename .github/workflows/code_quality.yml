@@ -3,6 +3,7 @@ name: Code Quality
 on:
   pull_request:
     branches: [ mainline, release, 'patch_*' ]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     # Run on mainline pushes to populate the Actions cache that PRs restore from.
     branches: [ mainline ]
@@ -15,10 +16,18 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   Test:
     name: Python
+    # Skip the heavy matrix on draft PRs. workflow_call has no PR context so
+    # draft is null and this job still runs when invoked as a reusable workflow.
+    if: github.event.pull_request.draft != true
     strategy:
+      fail-fast: true
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
