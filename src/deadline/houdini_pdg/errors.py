@@ -30,7 +30,7 @@ class GraphRefusedError(PDGSchedulerError):
 
     def __init__(self, verdict: Verdict) -> None:
         self.verdict = verdict
-        lines = [f"{r.subject}: {r.detail}" for r in verdict.refusals]
+        lines = [f"{r.subject}: {r.detail} {r.remedy}" for r in verdict.refusals]
         super().__init__(f"The graph was refused ({len(lines)} refusal(s)): " + "; ".join(lines))
 
 

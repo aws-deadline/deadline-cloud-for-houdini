@@ -97,16 +97,23 @@ class JobStatus:
     task_run_status_counts: Mapping[str, int] = field(default_factory=dict)
 
 
+class TaskStatus(Enum):
+    """A final state of a task on the farm. The values are the service's run statuses."""
+
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    CANCELED = "CANCELED"
+
+
 @dataclass(frozen=True)
 class TaskOutcome:
     """A task that reached a final state.
 
-    ``status`` is ``SUCCEEDED``, ``FAILED``, or ``CANCELED``. A failure the farm will
-    retry is not final, and is never an outcome.
+    A failure the farm will retry is not final, and is never an outcome.
     """
 
     key: TaskKey
-    status: str
+    status: TaskStatus
     ended_at: Optional[datetime] = None
 
 
@@ -138,6 +145,8 @@ class CookSummary:
     """How a cook ended."""
 
     cook_id: str
+    #: The phase the cook was in when it stopped. It is ``IDLE`` only for a cook
+    #: that never started.
     final_phase: CookPhase
     job_id: str = ""
     step_count: int = 0
@@ -150,6 +159,8 @@ class CookSummary:
     #: Items PDG satisfied from its cache. They count as complete.
     cached: int = 0
     refusals: Tuple[RefusalScenario, ...] = ()
+    #: The artist canceled the cook. There is no canceled phase: ``final_phase``
+    #: keeps the phase the cook had reached.
     stopped_by_user: bool = False
 
 
@@ -205,11 +216,17 @@ class FarmJob(Protocol):
         ...
 
     def release(self, key: TaskKey) -> None:
-        """Let the task run once every step it depends on has succeeded on the farm. Never blocks."""
+        """Queue the task. :meth:`poll` activates it once every step it depends on has succeeded on the farm.
+
+        Makes no API call, and never blocks.
+        """
         ...
 
     def poll(self) -> List[TaskOutcome]:
-        """Run the released tasks that may now run, and return the outcomes not returned before. Never raises."""
+        """Activate the queued tasks whose dependencies have succeeded, then return the outcomes not returned before.
+
+        Activating a task marks it ready, so the farm schedules it. Never raises.
+        """
         ...
 
     def status(self) -> JobStatus:

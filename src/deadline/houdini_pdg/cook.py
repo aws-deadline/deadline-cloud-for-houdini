@@ -40,11 +40,16 @@ class ScheduleResult(Enum):
 
 
 def _allowed(*phases: CookPhase) -> FrozenSet[CookPhase]:
-    # onStopCook may close a cook from any phase.
+    # PDG may call onStopCook at any moment, so every phase can close.
     return frozenset(phases) | {CookPhase.IDLE}
 
 
 #: The phases each phase may move to. DONE, REFUSED, and FAILED hold until the cook stops.
+#:
+#: Every phase may move to IDLE, because stopping closes the cook. A closed cook is
+#: never reused: the scheduler builds a new one for the next cook, and
+#: :attr:`~deadline.houdini_pdg.ports.CookSummary.final_phase` keeps the phase it
+#: closed from. An artist's cancel is a stop, not a phase.
 ALLOWED_TRANSITIONS: Mapping[CookPhase, FrozenSet[CookPhase]] = MappingProxyType(
     {
         CookPhase.IDLE: _allowed(CookPhase.CONNECTED, CookPhase.DONE, CookPhase.FAILED),
