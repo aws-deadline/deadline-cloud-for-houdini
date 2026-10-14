@@ -77,6 +77,7 @@ destinations = [
   "src/deadline/houdini_adaptor",
   "src/deadline/houdini_submitter",
   "src/deadline/houdini_submitter/python/deadline_cloud_for_houdini",
+  "src/deadline/houdini_pdg",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -146,7 +147,12 @@ markers = [
 source_pkgs = [ "deadline/houdini_adaptor", "deadline/houdini_submitter" ]
 branch = true
 parallel = true
-omit = [ "**/__main__.py", "**/_version.py" ]
+omit = [
+    "**/__main__.py",
+    "**/_version.py",
+    # The experimental PDG worker actions have no tests yet.
+    "**/houdini_adaptor/pdg_actions.py",
+]
 
 [tool.coverage.paths]
 source =  [

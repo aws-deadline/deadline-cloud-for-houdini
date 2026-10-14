@@ -1,0 +1,15 @@
+Operator:     deadlinecloudscheduler
+Label:        Deadline Cloud Scheduler (Experimental)
+Path:         oplib:/Top/deadlinecloudscheduler?Top/deadlinecloudscheduler
+Icon:         opdef:/Driver/deadline_cloud?IconSVG
+Table:        Top
+License:      
+Extra:        pdgtype='scheduler' subtype=deadlinecloudscheduler visibleoutputs=0 
+User:         
+Inputs:       0 to 0
+Outputs:      0
+Subnet:       false
+Python:       false
+Empty:        false
+Modified:     Mon Oct 05 12:00:00 2026
+
