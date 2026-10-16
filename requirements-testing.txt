@@ -1,6 +1,7 @@
 black == 25.12.*; python_version >= "3.10"
 black == 25.11.*; python_version < "3.10"
 coverage[toml] == 7.*
+hypothesis == 6.*
 mypy == 1.*
 pipgrip == 0.*
 pytest == 9.*; python_version >= "3.10"
