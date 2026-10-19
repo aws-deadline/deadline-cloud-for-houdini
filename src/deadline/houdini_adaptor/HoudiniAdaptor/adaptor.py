@@ -43,6 +43,18 @@ _OPTIONAL_HOUDINI_INIT_KEYS = {
     "wedge_node",
 }
 
+_LICENSE_GUIDANCE = (
+    "If you are using bring your own license (BYOL), check your license configuration "
+    "and availability.\n"
+    "If you are using usage-based licensing (UBL) from AWS Deadline Cloud and need a "
+    "higher 'License sessions per license endpoint' limit, contact the AWS Deadline Cloud "
+    "team to request an increase.\n"
+    "For more information on UBL and BYOL: "
+    "https://docs.aws.amazon.com/deadline-cloud/latest/developerguide/license.html\n"
+    "For service quotas: "
+    "https://docs.aws.amazon.com/deadline-cloud/latest/userguide/deadline-cloud-quotas.html\n"
+)
+
 
 def _check_for_exception(func: Callable) -> Callable:
     """
@@ -266,7 +278,9 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
             match (re.Match): The match object from the regex pattern that was matched in the
                               message
         """
-        self._exc_info = RuntimeError(f"Houdini encountered a license error: {match.group(0)}")
+        self._exc_info = RuntimeError(
+            f"Houdini encountered a license error: {match.group(0)}\n" f"{_LICENSE_GUIDANCE}"
+        )
 
     def _handle_error(self, match: re.Match) -> None:
         """
@@ -486,6 +500,10 @@ class HoudiniAdaptor(Adaptor[AdaptorConfiguration]):
         )
 
         if len(self._action_queue) > 0:
+            # A recorded exception names an actual cause, so prefer it over the
+            # generic message below.
+            if self._exc_info is not None:
+                raise self._exc_info
             raise RuntimeError(
                 "Houdini encountered an error and was not able to complete initialization actions."
             )

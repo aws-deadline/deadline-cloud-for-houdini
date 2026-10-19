@@ -122,6 +122,9 @@ the Deadline Cloud ROP in the `/out` network so its panel appears.
 See [`docs/submission-hooks.md`][submission-hooks] in the base client library for the rest: the
 `hooks.yaml` format, hook input/output, version requirements, the confirmation prompt, and security
 guidance.
+## Houdini PDG (experimental)
+
+A PDG scheduler that cooks a TOP network as one Deadline Cloud job is under development, it is experimental and not yet functional. It is not installed by default; see the [PDG README](src/deadline/houdini_pdg/README.md) for its status.
 
 ## Viewing the Job Bundle that will be submitted
 

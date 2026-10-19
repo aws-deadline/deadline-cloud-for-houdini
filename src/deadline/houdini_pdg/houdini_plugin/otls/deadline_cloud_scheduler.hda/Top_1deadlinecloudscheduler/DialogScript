@@ -1,0 +1,9 @@
+{
+    name	deadlinecloudscheduler
+    script	deadlinecloudscheduler
+    label	"Deadline Cloud Scheduler (Experimental)"
+
+    help {
+	""
+    }
+}

@@ -608,7 +608,48 @@ class TestHoudiniAdaptor_on_cleanup:
         # THEN
         assert match
         assert isinstance(adaptor._exc_info, RuntimeError)
-        assert str(adaptor._exc_info) == f"Houdini encountered a license error: {stdout}"
+        assert str(adaptor._exc_info) == (
+            f"Houdini encountered a license error: {stdout}\n" f"{adaptor_module._LICENSE_GUIDANCE}"
+        )
+
+    @patch.object(HoudiniAdaptor, "_houdini_is_running", False)
+    @patch(
+        "deadline.houdini_adaptor.HoudiniAdaptor.adaptor.HoudiniAdaptor._get_deadline_telemetry_client"
+    )
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.ActionsQueue.__len__", return_value=1)
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.LoggingSubprocess")
+    @patch("deadline.houdini_adaptor.HoudiniAdaptor.adaptor.AdaptorServer")
+    def test_houdini_init_fail_reports_recorded_exception(
+        self,
+        mock_server: Mock,
+        mock_logging_subprocess: Mock,
+        mock_actions_queue: Mock,
+        mock_telemetry_client: Mock,
+        init_data: dict,
+    ) -> None:
+        """
+        Tests that a recorded exception is raised in preference to the generic
+        initialization failure, so a detected cause is not discarded.
+
+        The wait loop short-circuits on _houdini_is_running before it evaluates
+        _has_exception, so a recorded exception is only surfaced by the check
+        after the loop. That is why _houdini_is_running is patched False here.
+        """
+        # GIVEN
+        adaptor = HoudiniAdaptor(init_data)
+        mock_server.return_value.server_path = "/tmp/9999"
+        recorded = RuntimeError(
+            "Houdini encountered a license error: No licenses could be found to "
+            "run this application."
+        )
+        adaptor._exc_info = recorded
+
+        with pytest.raises(RuntimeError) as exc_info:
+            # WHEN
+            adaptor.on_start()
+
+        # THEN
+        assert exc_info.value is recorded
 
     def test_handle_version(self, init_data: dict):
         """Tests that the _handle_houdini_version method reports the version correctly"""

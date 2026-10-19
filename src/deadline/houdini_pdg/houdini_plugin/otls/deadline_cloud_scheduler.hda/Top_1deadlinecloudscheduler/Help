@@ -1,0 +1,19 @@
+#type:     node
+#context:  top
+#internal: deadlinecloudscheduler
+
+= Deadline Cloud Scheduler (Experimental) =
+
+"""The PDG scheduler for AWS Deadline Cloud. Experimental: not functional in this build."""
+
+WARNING:
+    This node is experimental and is not functional in this build. Starting a
+    cook with it fails. Do not use it in production scenes.
+
+== Overview ==
+
+This scheduler cooks a TOP network as one AWS Deadline Cloud job. Each
+schedulable TOP node becomes a step, and each work item becomes a task.
+
+The integration is under active development. Its behavior, parameters, and the
+graphs it supports will change before release.

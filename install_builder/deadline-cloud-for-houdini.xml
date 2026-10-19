@@ -480,6 +480,7 @@
                 <setInstallerVariable name="houdini_20_0_packagedir" value="${env(HOUDINI_USER_PREF_DIR)}/packages"/>
                 <setInstallerVariable name="houdini_20_5_packagedir" value="${env(HOUDINI_USER_PREF_DIR)}/packages"/>
                 <setInstallerVariable name="houdini_21_0_packagedir" value="${env(HOUDINI_USER_PREF_DIR)}/packages"/>
+                <setInstallerVariable name="houdini_22_0_packagedir" value="${env(HOUDINI_USER_PREF_DIR)}/packages"/>
             </actionList>
         </if>
         <if>
