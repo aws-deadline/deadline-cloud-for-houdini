@@ -18,7 +18,7 @@ from enum import Enum
 from typing import Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from .graph import PDG_DIR_TOKEN, PDG_TOKEN_PREFIX, GraphSnapshot, NodeInfo, WorkItemSpec
-from .scene_reads import ReadReport
+from .scene_reads import ReadReport, ReadVerdict, SceneRead
 
 _logger: logging.Logger = logging.getLogger(__name__)
 
@@ -174,6 +174,31 @@ def _examples(values: Sequence[str], limit: int = 3) -> str:
     return shown
 
 
+def _parm_subject(step: str, node_path: str, parm: str) -> str:
+    """How a parm finding names its subject: the node path and parm, or the step if the node is unknown."""
+    return f"{node_path or step} parm '{parm}'"
+
+
+def _skipped(scenario: RefusalScenario, what: str) -> Verdict:
+    """Advise that a path check could not run because the scene walk did not run.
+
+    Saying so beats returning an empty verdict, which would read as a clean result
+    for a fault the cook would not report either.
+    """
+    return Verdict(
+        advisories=(
+            Advisory(
+                scenario=scenario,
+                subject="the scene's file references",
+                detail=(
+                    f"The scene's file references could not be read, so {what} was not "
+                    "checked. A fault of that kind would not be reported before the cook."
+                ),
+            ),
+        )
+    )
+
+
 # -- paths --------------------------------------------------------------------
 
 #: ``$NAME`` or ``${NAME}``.
@@ -181,6 +206,21 @@ _VARIABLE: "re.Pattern[str]" = re.compile(r"\$\{(\w+)\}|\$(\w+)")
 
 _OUTSIDE_WORKING_DIR: str = "outside the working directory"
 _UNEXPANDED_VARIABLE: str = "unexpanded variable"
+
+# Variables whose value follows the session, so a path built on one resolves on a
+# worker too: the scene's directory, PDG's directories, and the Houdini install
+# and scratch roots a worker sets up. A read under one of these is reachable.
+_SESSION_VARIABLES: Tuple[str, ...] = ("HIP", "PDG_DIR", "PDG_TEMP")
+_WORKER_VARIABLES: Tuple[str, ...] = ("HFS", "HH", "HHP", "HOUDINI_TEMP_DIR", "TEMP", "TMP")
+
+# Matches a value beginning with one of those variables as a whole token, or with a
+# PDG token. ``$HIP`` and ``${HIP}`` count; ``$HIPNAME`` does not.
+_REACHABLE_PREFIX: "re.Pattern[str]" = re.compile(
+    r"|".join(
+        [rf"\$(?:{name})(?!\w)|\$\{{{name}\}}" for name in _SESSION_VARIABLES + _WORKER_VARIABLES]
+        + [re.escape(PDG_TOKEN_PREFIX)]
+    )
+)
 
 
 def _expand(path: str, env: Optional[Mapping[str, str]]) -> str:
@@ -582,7 +622,7 @@ def _node_file_uses(node: NodeInfo) -> List[str]:
     return uses
 
 
-def _check_in_process_nodes(ctx: ValidationContext) -> Verdict:
+def _check_non_step_file_use(ctx: ValidationContext) -> Verdict:
     """Refuse a node that is not a step, has a step above it, and touches a step's files.
 
     Such a node runs on this machine, not on a worker, so a file it reads from a
@@ -820,6 +860,323 @@ def _check_cached_outputs(ctx: ValidationContext) -> Verdict:
     return Verdict(refusals=tuple(refusals))
 
 
+# -- the scene's file references ----------------------------------------------
+
+
+def _check_undeliverable_outputs(ctx: ValidationContext) -> Verdict:
+    """Refuse a step whose outputs cannot reach the sessions that need them.
+
+    A consumed step starves the steps below it, so it is refused; a leaf breaks
+    nothing downstream but silently leaves no files, so it is advised.
+    """
+    leaves: Set[str] = set(ctx.snapshot.leaf_steps())
+    refusals: List[Refusal] = []
+    advisories: List[Advisory] = []
+    for step in ctx.snapshot.steps:
+        # Each declared output whose resolved path cannot reach a worker, with why.
+        # An empty list means the step delivers everything it writes.
+        offenders: List[Tuple[str, str]] = [
+            (declared.path, reason)
+            for item in step.items
+            for declared in item.declared_outputs
+            if (reason := _undeliverable_reason(declared.path, ctx.working_dir, ctx.env))
+        ]
+        if not offenders:
+            continue
+        example, reason = offenders[0]
+        resolved: str = _resolve(example, ctx.working_dir, ctx.env)
+        root: str = ctx.working_dir or "the working directory, which is not set"
+        detail: str = (
+            f"{len(offenders)} of this step's declared output path(s) are {reason}, for "
+            f"example '{example}', which resolves to '{resolved}'. The job's root is "
+            f"'{root}'."
+        )
+        # A leaf's missing files break nothing downstream, so it is only advised.
+        if step.name in leaves:
+            advisories.append(
+                Advisory(
+                    scenario=RefusalScenario.OUTPUT_OUTSIDE_COOK,
+                    subject=step.name,
+                    detail=(
+                        f"{detail} Nothing downstream needs them, so the cook will report "
+                        "success and leave no files for this step."
+                    ),
+                )
+            )
+            continue
+        # A consumed step is refused: the step below would fail on a missing input.
+        # An unexpanded variable takes a different remedy than a path simply outside
+        # the delivered tree.
+        refusals.append(
+            Refusal(
+                scenario=RefusalScenario.OUTPUT_OUTSIDE_COOK,
+                subject=step.name,
+                detail=(
+                    f"{detail} Those tasks would write the files, report success, and lose "
+                    "them with the session, and the steps below would fail on a missing input."
+                ),
+                remedy=(
+                    "Give the variable a real path instead of another variable, or use $HIP."
+                    if reason == _UNEXPANDED_VARIABLE
+                    else (
+                        "Point the working directory at the tree these nodes write to, which "
+                        "is usually $HIP, or change the nodes to write under it."
+                    )
+                ),
+            )
+        )
+    return Verdict(refusals=tuple(refusals), advisories=tuple(advisories))
+
+
+def _check_unportable_paths(ctx: ValidationContext) -> Verdict:
+    """Refuse a write parm that names this workstation, and advise about a read.
+
+    This check reads the parm, not the declared output, because the divergence lives
+    there: a literal path agrees with PDG here and parts company on a worker.
+    """
+    # Without the scene walk there are no parms to read, so say so rather than
+    # passing silently.
+    if ctx.reads is None:
+        return _skipped(RefusalScenario.OUTPUT_OUTSIDE_COOK, "where each node writes")
+
+    refusals: List[Refusal] = []
+    advisories: List[Advisory] = []
+    for read in ctx.reads.unportable:
+        subject: str = _parm_subject(read.step, read.node_path, read.parm)
+        where: str = (
+            f"The parm is '{read.raw}', which resolves to '{read.path}', inside the working "
+            "directory on this machine. Path mapping rewrites paths, not Houdini variables, "
+            "so the value does not follow the session."
+        )
+        # A write is refused, because the renderer re-evaluates the parm on the
+        # worker where that directory is absent. A read is advised, because PDG
+        # usually substitutes the upstream item's real output first.
+        if read.is_output:
+            refusals.append(
+                Refusal(
+                    scenario=RefusalScenario.OUTPUT_OUTSIDE_COOK,
+                    subject=subject,
+                    detail=f"{where} The renderer re-evaluates the parm on the worker, where "
+                    "that directory does not exist.",
+                    remedy="Author the path under $HIP, $PDG_DIR, or $PDG_TEMP.",
+                )
+            )
+        else:
+            advisories.append(
+                Advisory(
+                    scenario=RefusalScenario.OUTPUT_OUTSIDE_COOK,
+                    subject=subject,
+                    detail=(
+                        f"{where} It is harmless only while PDG supplies this input from the "
+                        "upstream work item. Prefer $HIP or $PDG_DIR."
+                    ),
+                )
+            )
+    return Verdict(refusals=tuple(refusals), advisories=tuple(advisories))
+
+
+def _check_scene_directory(ctx: ValidationContext) -> Verdict:
+    """Advise when the scene and the working directory are in different trees.
+
+    The working directory is the only tree the job carries, so a node writing a
+    path relative to $HIP writes outside it. The output check refuses that, so this
+    only names the cause.
+    """
+    scene_dir: str = (ctx.env or {}).get("HIP", "")
+    # With no scene directory or no working directory there is nothing to compare.
+    if not scene_dir or not ctx.working_dir:
+        return Verdict()
+    scene: str = os.path.normpath(scene_dir)
+    root: str = os.path.normpath(ctx.working_dir)
+    # When the scene sits under the working directory, $HIP paths are delivered.
+    if _is_below(scene, root):
+        return Verdict()
+    return Verdict(
+        advisories=(
+            Advisory(
+                scenario=RefusalScenario.OUTPUT_OUTSIDE_COOK,
+                subject=scene,
+                detail=(
+                    f"The scene is in '{scene}' and the working directory is '{root}'. The "
+                    "working directory is the only tree the job carries, so any node writing "
+                    "a path relative to $HIP writes outside it and its files cannot reach a "
+                    "step below. Set the working directory to $HIP unless every node already "
+                    "declares session-relative outputs."
+                ),
+            ),
+        )
+    )
+
+
+def _check_attribute_variables(ctx: ValidationContext) -> Verdict:
+    """Refuse a write parm that spells a work item attribute as a Houdini variable.
+
+    An exported attribute is an environment variable on the worker only, so ``$NAME``
+    resolves there and to nothing here, where PDG records the declared output path.
+    """
+    # Without the scene walk there are no parms to read, so say so rather than
+    # passing silently.
+    if ctx.reads is None:
+        return _skipped(RefusalScenario.ATTRIBUTE_AS_VARIABLE, "how write parms spell attributes")
+
+    return Verdict(
+        refusals=tuple(
+            Refusal(
+                scenario=RefusalScenario.ATTRIBUTE_AS_VARIABLE,
+                subject=_parm_subject(use.step, use.node_path, use.parm),
+                detail=(
+                    f"The parm is '{use.raw}'. '${use.variable}' is the work item attribute "
+                    f"'{use.attribute}', which this step exports to the environment, not a "
+                    "Houdini variable: it resolves on the worker and to nothing here, where "
+                    "PDG records the path it will report."
+                ),
+                remedy=(
+                    f"Use `@{use.attribute}` instead of ${use.variable}, so the value is "
+                    "substituted when the work items are generated and both sides agree."
+                ),
+            )
+            for use in ctx.reads.attribute_variables
+        )
+    )
+
+
+def _check_runtime_files(ctx: ValidationContext) -> Verdict:
+    """Refuse an input file that no task produces and that is not on disk.
+
+    Such a file would be written mid-cook by a node that runs here, and nothing
+    carries it: it is no task's output and did not exist when the job was created.
+    """
+    snapshot: GraphSnapshot = ctx.snapshot
+    # Every path some task declares as an output, so a matching input is carried
+    # along a step dependency and is not a runtime file.
+    produced: Set[str] = {
+        declared.path
+        for step in snapshot.steps
+        for item in step.items
+        for declared in item.declared_outputs
+    }
+    # Each unproduced input path, with the steps that read it, so one missing file
+    # is reported once and names every reader.
+    consumers: Dict[str, List[str]] = {}
+    for step in snapshot.steps:
+        for item in step.items:
+            for declared in item.declared_inputs:
+                if declared.path in produced:
+                    continue
+                readers: List[str] = consumers.setdefault(declared.path, [])
+                if step.name not in readers:
+                    readers.append(step.name)
+
+    refusals: List[Refusal] = []
+    for path, readers in sorted(consumers.items()):
+        resolved: str = _resolve(path, ctx.working_dir, ctx.env)
+        # A path that still holds a PDG token or a variable has no definite location
+        # here, so a worker resolves it and it is not a missing runtime file.
+        if PDG_TOKEN_PREFIX in resolved or "$" in resolved:
+            continue
+        try:
+            # A file already on disk is carried in the job's attachments.
+            if ctx.exists(resolved):
+                continue
+        except Exception:
+            # An unanswerable path is not evidence of a fault.
+            _logger.debug("Could not test whether '%s' exists.", resolved, exc_info=True)
+            continue
+        refusals.append(
+            Refusal(
+                scenario=RefusalScenario.RUNTIME_FILE_UNPRODUCED,
+                subject=path,
+                detail=(
+                    f"Step(s) {_examples(readers)} read this file, no task in this job writes "
+                    f"it, and it is not on disk at '{resolved}'. A node that cooks here would "
+                    "write it mid-cook, where nothing can carry it to a worker."
+                ),
+                remedy=(
+                    "Give the node that writes it a type that runs on a worker, or create the "
+                    "file before cooking so the job carries it."
+                ),
+            )
+        )
+    return Verdict(refusals=tuple(refusals))
+
+
+def _check_unreachable_local_files(ctx: ValidationContext) -> Verdict:
+    """Refuse a read that no step produces, lies outside the cook, and is not on disk.
+
+    What is left after producer matching is the scene's own assets. One that exists
+    travels in the attachments; one that does not exists nowhere a worker can look.
+    """
+    # Without the scene walk there are no reads to judge, so say so rather than
+    # passing silently.
+    if ctx.reads is None:
+        return _skipped(RefusalScenario.LOCAL_FILE_UNREACHABLE, "where the scene reads its assets")
+
+    root: str = os.path.normpath(ctx.working_dir) if ctx.working_dir else ""
+    missing: List[SceneRead] = []
+    # Per step, the reachable assets outside the working directory, so a step that
+    # carries several large files is advised once.
+    attached: Dict[str, List[str]] = {}
+    for match in ctx.reads.matches:
+        read: SceneRead = match.read
+        # Only a read no step produces, and not a write, is a candidate: a step's
+        # own or a dependency's output reaches the worker along the job's edges.
+        if match.verdict is not ReadVerdict.EXTERNAL or read.is_output:
+            continue
+        # A path that follows the session, or still holds a PDG token, resolves on
+        # a worker, so it is not unreachable.
+        if _REACHABLE_PREFIX.match((read.raw or "").strip()) or PDG_TOKEN_PREFIX in read.path:
+            continue
+        resolved: str = os.path.normpath(_expand(read.path, ctx.env))
+        # A surviving variable, a relative path, or a path inside the working
+        # directory is unanswerable or already carried, so it is skipped.
+        if "$" in resolved or not os.path.isabs(resolved) or _is_below(resolved, root):
+            continue
+        try:
+            reachable: bool = ctx.exists(resolved)
+        except Exception:
+            # An unanswerable path is not evidence of a fault.
+            _logger.debug("Could not test whether '%s' exists.", resolved, exc_info=True)
+            continue
+        if reachable:
+            attached.setdefault(read.step, []).append(resolved)
+        else:
+            missing.append(read)
+
+    # A file nothing on disk holds and no step writes is refused: the task opens a
+    # file that is not there.
+    refusals: Tuple[Refusal, ...] = tuple(
+        Refusal(
+            scenario=RefusalScenario.LOCAL_FILE_UNREACHABLE,
+            subject=_parm_subject(read.step, read.node_path, read.parm),
+            detail=(
+                f"The parm is '{read.raw}', which resolves to '{read.path}', outside the "
+                "working directory and not on disk. No step in this job writes it, so the "
+                "job has nothing to carry and the task opens a missing file."
+            ),
+            remedy=(
+                "Author the path under $HIP or the working directory, or create the file "
+                "before cooking so the job carries it."
+            ),
+        )
+        for read in missing
+    )
+    # A file that does exist is carried in the attachments, which costs upload time
+    # on every cook, so a step that reads several is advised.
+    advisories: Tuple[Advisory, ...] = tuple(
+        Advisory(
+            scenario=RefusalScenario.LOCAL_FILE_UNREACHABLE,
+            subject=step,
+            detail=(
+                f"This step reads {len(paths)} file(s) outside the working directory, for "
+                f"example {_examples(paths)}. They reach the worker only in the job's "
+                "attachments, so a large one costs upload time on every cook."
+            ),
+        )
+        for step, paths in sorted(attached.items())
+    )
+    return Verdict(refusals=refusals, advisories=advisories)
+
+
 # Every check, with the scenario it reports. A new refusal is a new function and a
 # new row: no other check and no part of ``validate`` changes.
 _CHECKS: Tuple[Tuple[RefusalScenario, Callable[[ValidationContext], Verdict]], ...] = (
@@ -828,8 +1185,14 @@ _CHECKS: Tuple[Tuple[RefusalScenario, Callable[[ValidationContext], Verdict]], .
     (RefusalScenario.ROP_BATCH, _check_rop_batch),
     (RefusalScenario.QUOTA_EXCEEDED, _check_quotas),
     (RefusalScenario.STEP_WITHOUT_ITEMS, _check_steps_without_items),
-    (RefusalScenario.IN_PROCESS_NODE, _check_in_process_nodes),
+    (RefusalScenario.IN_PROCESS_NODE, _check_non_step_file_use),
     (RefusalScenario.SERVICE_NODE, _check_service_nodes),
     (RefusalScenario.MULTIPLE_SCHEDULERS, _check_schedulers),
+    (RefusalScenario.OUTPUT_OUTSIDE_COOK, _check_undeliverable_outputs),
+    (RefusalScenario.OUTPUT_OUTSIDE_COOK, _check_unportable_paths),
+    (RefusalScenario.OUTPUT_OUTSIDE_COOK, _check_scene_directory),
+    (RefusalScenario.ATTRIBUTE_AS_VARIABLE, _check_attribute_variables),
+    (RefusalScenario.RUNTIME_FILE_UNPRODUCED, _check_runtime_files),
     (RefusalScenario.CACHED_OUTPUTS, _check_cached_outputs),
+    (RefusalScenario.LOCAL_FILE_UNREACHABLE, _check_unreachable_local_files),
 )

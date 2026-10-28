@@ -1,6 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
-"""Tests for the validation module's public surface and its graph and node-kind checks.
+"""Tests for the checks that decide whether a PDG graph can be cooked.
 
 The module is pure, so every test builds its input value types directly, and the
 property tests check against independent models rather than a copy of the code.
@@ -25,6 +25,14 @@ from deadline.houdini_pdg.graph import (
     NodeInfo,
     RawItem,
     synthesize,
+)
+from deadline.houdini_pdg.scene_reads import (
+    AttributeVariableUse,
+    ReadMatch,
+    ReadReport,
+    ReadVerdict,
+    SceneRead,
+    match_reads,
 )
 from deadline.houdini_pdg.validation import (
     Advisory,
@@ -1228,3 +1236,631 @@ def test_cached_output_returns_an_empty_string_when_nothing_is_on_disk() -> None
         [_node("a")], working_dir=WORKING_DIR, env={}, exists=lambda path: False
     )
     assert validation._cached_output(item, ctx) == ""
+
+
+# -- outputs that cannot be delivered ------------------------------------------
+
+
+@given(nodes=step_dags(), prefix=st.sampled_from(_PREFIXES), env=st.sampled_from(_ENVS))
+def test_an_undeliverable_output_is_refused_when_consumed_and_advised_on_a_leaf(
+    nodes: List[NodeInfo], prefix: str, env: Mapping[str, str]
+) -> None:
+    """A consumed step with an undeliverable output is refused, a leaf advised, never both."""
+    # Give every item one output under the drawn prefix, so whole steps are
+    # offenders or not, then validate with a non-skipped report.
+    with_outputs: List[NodeInfo] = [
+        replace(
+            node,
+            items=tuple(
+                replace(
+                    item,
+                    declared_outputs=(DeclaredFile(f"{prefix}/{node.name}/{item.name}.exr", ""),),
+                )
+                for item in node.items
+            ),
+        )
+        for node in nodes
+    ]
+    snapshot: GraphSnapshot = synthesize(with_outputs)
+    verdict: Verdict = validate(
+        _ctx(with_outputs, snapshot=snapshot, reads=ReadReport(), working_dir=WORKING_DIR, env=env)
+    )
+
+    refused: Set[str] = _subjects(verdict, RefusalScenario.OUTPUT_OUTSIDE_COOK)
+    advised: Set[str] = _advised(verdict, RefusalScenario.OUTPUT_OUTSIDE_COOK)
+    # A step is never both refused and advised for the same scenario.
+    assert not refused & advised
+
+    # Independent model: a step offends when any declared output is undeliverable;
+    # a consumed offender is refused, a leaf offender is advised.
+    leaves: Set[str] = set(snapshot.leaf_steps())
+    offenders: Set[str] = {
+        step.name
+        for step in snapshot.steps
+        if any(
+            validation._undeliverable_reason(f.path, WORKING_DIR, env)
+            for item in step.items
+            for f in item.declared_outputs
+        )
+    }
+    assert refused == offenders - leaves
+    assert advised == offenders & leaves
+
+
+def test_an_undeliverable_refusal_names_the_resolved_path_and_the_expected_root() -> None:
+    """The refusal detail carries the authored path, its resolved form, and the job's root."""
+    outside: str = os.path.normpath("/elsewhere/a.exr")
+    nodes: List[NodeInfo] = [
+        _node("a", items=(_item("a_0", 0, declared_outputs=(DeclaredFile(outside, ""),)),)),
+        _node("b", ["a"]),
+    ]
+    verdict: Verdict = validate(_ctx(nodes, working_dir=WORKING_DIR))
+    (refusal,) = [r for r in verdict.refusals if r.scenario is RefusalScenario.OUTPUT_OUTSIDE_COOK]
+    assert refusal.subject == "a"
+    assert outside in refusal.detail and WORKING_DIR in refusal.detail
+    assert "outside the working directory" in refusal.detail
+
+
+def test_an_unexpanded_variable_gets_its_own_remedy() -> None:
+    """A path left with a ``$`` after expansion names the variable fault and its own remedy."""
+    nodes: List[NodeInfo] = [
+        _node("a", items=(_item("a_0", 0, declared_outputs=(DeclaredFile("$DATA/a.exr", ""),)),)),
+        _node("b", ["a"]),
+    ]
+    verdict: Verdict = validate(_ctx(nodes, working_dir=WORKING_DIR, env={"DATA": "$HIP"}))
+    (refusal,) = [r for r in verdict.refusals if r.scenario is RefusalScenario.OUTPUT_OUTSIDE_COOK]
+    assert "unexpanded variable" in refusal.detail
+    assert "another variable" in refusal.remedy
+
+
+# -- unportable paths ----------------------------------------------------------
+
+
+def _read(
+    step: str,
+    raw: str,
+    *,
+    parm: str = "sopoutput",
+    is_output: bool = True,
+    working_dir: str = WORKING_DIR,
+    env: Optional[Mapping[str, str]] = None,
+) -> SceneRead:
+    """A scene read whose resolved path is the authored one with the session tokens filled in."""
+    expanded: str = raw.replace("$HIP", working_dir).replace("$PDG_DIR", working_dir)
+    for name, value in (env or {}).items():
+        expanded = expanded.replace("$" + name, value)
+    return SceneRead(
+        step=step,
+        node_path=f"/obj/topnet1/{step}/{parm}_node",
+        parm=parm,
+        raw=raw,
+        path=os.path.normpath(expanded),
+        is_output=is_output,
+    )
+
+
+def _parm_subject(read: SceneRead) -> str:
+    """How a parm-level finding names the read, so a test can compare subjects."""
+    return f"{read.node_path} parm '{read.parm}'"
+
+
+@given(
+    raws=st.lists(
+        st.sampled_from(
+            [
+                "$HIP/render/a.exr",
+                "${PDG_DIR}/render/a.exr",
+                "__PDG_DIR__/render/a.exr",
+                WORKING_DIR + "/render/a.exr",
+                "$HIPNAME/render/a.exr",
+                os.path.normpath("/elsewhere") + "/render/a.exr",
+            ]
+        ),
+        min_size=1,
+        max_size=4,
+    ),
+    outputs=st.lists(st.booleans(), min_size=1, max_size=4),
+    working_dir=st.sampled_from([WORKING_DIR, ""]),
+)
+def test_an_unportable_write_is_refused_and_an_unportable_read_advised(
+    raws: List[str], outputs: List[bool], working_dir: str
+) -> None:
+    """Each unportable write is refused and each read advised, by the report's own set."""
+    nodes: List[NodeInfo] = [_node("a")]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    reads: List[SceneRead] = [
+        _read("a", raw, parm=f"p{i}", is_output=outputs[i % len(outputs)])
+        for i, raw in enumerate(raws)
+    ]
+    report: ReadReport = match_reads(snapshot, reads, working_dir)
+    verdict: Verdict = validate(
+        _ctx(nodes, snapshot=snapshot, reads=report, working_dir=working_dir, env={"HIPNAME": ""})
+    )
+
+    offenders: Set[SceneRead] = set(report.unportable)
+    # With no working directory nothing is unportable.
+    if not working_dir:
+        assert not offenders
+    assert _subjects(verdict, RefusalScenario.OUTPUT_OUTSIDE_COOK) == {
+        _parm_subject(r) for r in offenders if r.is_output
+    }
+    assert _advised(verdict, RefusalScenario.OUTPUT_OUTSIDE_COOK) >= {
+        _parm_subject(r) for r in offenders if not r.is_output
+    }
+
+
+def test_an_unportable_write_refusal_names_the_parm_and_the_portable_prefixes() -> None:
+    """The unportable write refusal names the parm and the portable prefixes."""
+    nodes: List[NodeInfo] = [_node("a")]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = _read("a", WORKING_DIR + "/render/a.exr")
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    verdict: Verdict = validate(
+        _ctx(nodes, snapshot=snapshot, reads=report, working_dir=WORKING_DIR)
+    )
+    (refusal,) = [r for r in verdict.refusals if r.scenario is RefusalScenario.OUTPUT_OUTSIDE_COOK]
+    assert refusal.subject == _parm_subject(read)
+    assert "$HIP" in refusal.remedy and "$PDG_DIR" in refusal.remedy
+
+
+def test_the_path_checks_say_so_when_the_scene_walk_did_not_run() -> None:
+    """With no scene-walk report the three scene-walk checks advise rather than passing silently."""
+    verdict: Verdict = validate(_ctx([_node("a")], working_dir=WORKING_DIR))
+    assert verdict.accepted()
+    skipped: Set[RefusalScenario] = {
+        a.scenario for a in verdict.advisories if a.subject == "the scene's file references"
+    }
+    assert skipped == {
+        RefusalScenario.OUTPUT_OUTSIDE_COOK,
+        RefusalScenario.ATTRIBUTE_AS_VARIABLE,
+        RefusalScenario.LOCAL_FILE_UNREACHABLE,
+    }
+
+
+def test_an_empty_report_is_not_treated_as_a_walk_that_did_not_run() -> None:
+    """An empty report is a walk that found nothing, not one that failed, so nothing is skipped."""
+    verdict: Verdict = validate(_ctx([_node("a")], reads=ReadReport(), working_dir=WORKING_DIR))
+    assert not any(a.subject == "the scene's file references" for a in verdict.advisories)
+
+
+# -- the scene directory -------------------------------------------------------
+
+
+def test_a_scene_outside_the_working_directory_is_advised() -> None:
+    """A scene in a different tree than the working directory is advised, naming the scene."""
+    verdict: Verdict = validate(
+        _ctx([_node("a")], working_dir=WORKING_DIR, env={"HIP": os.path.normpath("/other/scene")})
+    )
+    assert verdict.accepted()
+    assert os.path.normpath("/other/scene") in _advised(
+        verdict, RefusalScenario.OUTPUT_OUTSIDE_COOK
+    )
+
+
+def test_a_scene_inside_the_working_directory_is_not_advised() -> None:
+    """A scene under the working directory delivers its $HIP paths, so nothing is advised."""
+    verdict: Verdict = validate(
+        _ctx(
+            [_node("a")],
+            reads=ReadReport(),
+            working_dir=WORKING_DIR,
+            env={"HIP": WORKING_DIR + "/scenes"},
+        )
+    )
+    assert not verdict.advisories
+
+
+# -- attributes written as variables -------------------------------------------
+
+
+@given(
+    variable=st.sampled_from(["WEDGEINDEX", "wedgeindex", "WedgeIndex"]),
+    attribute=st.sampled_from(["wedgeindex", "WEDGEINDEX"]),
+    is_output=st.booleans(),
+    other_only=st.booleans(),
+)
+def test_a_write_parm_that_spells_its_own_steps_attribute_is_refused(
+    variable: str, attribute: str, is_output: bool, other_only: bool
+) -> None:
+    """A write parm spelling the step's own exported attribute as a variable is refused."""
+    owner, other = ("b", "a") if other_only else ("a", "b")
+    nodes: List[NodeInfo] = [
+        _node("a", exported_attribute_names=(attribute,) if owner == "a" else ()),
+        _node("b", exported_attribute_names=(attribute,) if owner == "b" else ()),
+    ]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = _read("a", f"$HIP/render/v${variable}/a.exr", is_output=is_output)
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    verdict: Verdict = validate(
+        _ctx(nodes, snapshot=snapshot, reads=report, working_dir=WORKING_DIR)
+    )
+
+    refused: Set[str] = _subjects(verdict, RefusalScenario.ATTRIBUTE_AS_VARIABLE)
+    # Flagged only when the parm is a write on step "a", which owns the attribute.
+    assert refused == ({_parm_subject(read)} if is_output and owner == "a" else set())
+    assert other in {"a", "b"}
+
+
+def test_an_attribute_refusal_quotes_the_variable_and_the_attribute_casing() -> None:
+    """The refusal quotes the variable as written and the attribute in PDG's casing, with `@attr`."""
+    nodes: List[NodeInfo] = [_node("a", exported_attribute_names=("wedgeindex",))]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = _read("a", "$HIP/render/v$WEDGEINDEX/a.exr")
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    verdict: Verdict = validate(
+        _ctx(nodes, snapshot=snapshot, reads=report, working_dir=WORKING_DIR)
+    )
+    (refusal,) = [
+        r for r in verdict.refusals if r.scenario is RefusalScenario.ATTRIBUTE_AS_VARIABLE
+    ]
+    assert "$WEDGEINDEX" in refusal.detail and "'wedgeindex'" in refusal.detail
+    assert "`@wedgeindex`" in refusal.remedy
+
+
+def test_an_attribute_variable_is_reported_even_without_a_scene_walk_report() -> None:
+    """The use is carried on the report, so it is refused from a report with no matches."""
+    nodes: List[NodeInfo] = [_node("a", exported_attribute_names=("wedgeindex",))]
+    report: ReadReport = ReadReport(
+        attribute_variables=(
+            AttributeVariableUse(
+                step="a",
+                node_path="/obj/topnet1/a/ropmantra1",
+                parm="vm_picture",
+                raw="$HIP/v$WEDGEINDEX/a.exr",
+                variable="WEDGEINDEX",
+                attribute="wedgeindex",
+            ),
+        )
+    )
+    verdict: Verdict = validate(_ctx(nodes, reads=report, working_dir=WORKING_DIR))
+    assert _subjects(verdict, RefusalScenario.ATTRIBUTE_AS_VARIABLE) == {
+        "/obj/topnet1/a/ropmantra1 parm 'vm_picture'"
+    }
+
+
+# -- runtime files with no producer --------------------------------------------
+
+
+@given(
+    nodes=step_dags(max_nodes=4),
+    inputs=st.lists(st.sampled_from(["f0", "f1", "f2"]), max_size=3),
+    on_disk=st.sets(st.sampled_from(["f0", "f1", "f2"])),
+    declare_as_output=st.booleans(),
+)
+def test_an_input_no_task_produces_and_no_disk_holds_is_refused(
+    nodes: List[NodeInfo], inputs: List[str], on_disk: Set[str], declare_as_output: bool
+) -> None:
+    """An input no task writes and no disk holds is refused, by an independent set model."""
+    paths: Dict[str, str] = {
+        name: os.path.normpath(f"/elsewhere/{name}.bgeo.sc") for name in ["f0", "f1", "f2"]
+    }
+    declared: Tuple[DeclaredFile, ...] = tuple(DeclaredFile(paths[name], "") for name in inputs)
+    # The first step reads the files; optionally a second declares them as outputs,
+    # which must take them out of the unproduced set.
+    wired: List[NodeInfo] = [
+        replace(
+            node,
+            items=tuple(
+                replace(
+                    item,
+                    declared_inputs=declared if index == 0 else (),
+                    declared_outputs=declared if declare_as_output and index == 1 else (),
+                )
+                for item in node.items
+            ),
+        )
+        for index, node in enumerate(nodes)
+    ]
+    snapshot: GraphSnapshot = synthesize(wired)
+    exists: Set[str] = {paths[name] for name in on_disk}
+    verdict: Verdict = validate(
+        _ctx(wired, snapshot=snapshot, exists=lambda path: path in exists, env={})
+    )
+
+    produced: Set[str] = {
+        f.path for step in snapshot.steps for item in step.items for f in item.declared_outputs
+    }
+    wanted: Set[str] = {
+        f.path for step in snapshot.steps for item in step.items for f in item.declared_inputs
+    }
+    expected: Set[str] = {path for path in wanted - produced if path not in exists}
+    assert _subjects(verdict, RefusalScenario.RUNTIME_FILE_UNPRODUCED) == expected
+
+
+def test_a_runtime_file_refusal_names_the_file_and_the_consuming_step() -> None:
+    """The runtime-file refusal names the missing file and the step that reads it."""
+    missing: str = os.path.normpath("/elsewhere/merged.bgeo.sc")
+    nodes: List[NodeInfo] = [
+        _node("distort", items=(_item("d_0", 0, declared_inputs=(DeclaredFile(missing, ""),)),))
+    ]
+    verdict: Verdict = validate(_ctx(nodes, exists=lambda path: False, env={}))
+    (refusal,) = [
+        r for r in verdict.refusals if r.scenario is RefusalScenario.RUNTIME_FILE_UNPRODUCED
+    ]
+    assert refusal.subject == missing
+    assert "distort" in refusal.detail
+
+
+def test_a_declared_input_is_resolved_against_the_working_directory_before_it_is_tested() -> None:
+    """The input path is resolved, with the PDG token filled in, before ``exists`` sees it."""
+    seen: List[str] = []
+    nodes: List[NodeInfo] = [
+        _node(
+            "a",
+            items=(_item("a_0", 0, declared_inputs=(DeclaredFile("__PDG_DIR__/in.bgeo.sc", ""),)),),
+        )
+    ]
+
+    def record(path: str) -> bool:
+        """An exists that records the resolved path, to prove the token was expanded."""
+        seen.append(path)
+        return True
+
+    validate(_ctx(nodes, working_dir=WORKING_DIR, exists=record))
+    assert seen == [os.path.join(WORKING_DIR, "in.bgeo.sc")]
+
+
+def test_a_file_many_steps_read_names_only_the_first_few() -> None:
+    """One missing file read by many steps is refused once, naming the first few readers."""
+    missing: str = os.path.normpath("/elsewhere/merged.bgeo.sc")
+    nodes: List[NodeInfo] = [
+        _node(f"s{i}", items=(_item(f"s{i}_0", 0, declared_inputs=(DeclaredFile(missing, ""),)),))
+        for i in range(5)
+    ]
+    verdict: Verdict = validate(_ctx(nodes, exists=lambda path: False, env={}))
+    (refusal,) = [
+        r for r in verdict.refusals if r.scenario is RefusalScenario.RUNTIME_FILE_UNPRODUCED
+    ]
+    assert "s0, s1, s2, and 2 more" in refusal.detail
+
+
+def test_a_path_that_cannot_be_tested_is_not_a_refusal() -> None:
+    """An ``exists`` that raises on a path is not evidence of a fault, so nothing refuses."""
+
+    def explode(path: str) -> bool:
+        """An exists that always raises, to prove the path checks swallow the error."""
+        raise OSError("name too long")
+
+    missing: str = os.path.normpath("/elsewhere/a.bgeo.sc")
+    nodes: List[NodeInfo] = [
+        _node("a", items=(_item("a_0", 0, declared_inputs=(DeclaredFile(missing, ""),)),))
+    ]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = _read("a", missing, parm="file", is_output=False)
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    verdict: Verdict = validate(
+        _ctx(nodes, snapshot=snapshot, reads=report, working_dir=WORKING_DIR, exists=explode)
+    )
+    assert verdict.accepted()
+
+
+@pytest.mark.parametrize("path", ["__PDG_TEMP__/x.bgeo.sc", "$UNSET/x.bgeo.sc"])
+def test_a_runtime_input_that_cannot_be_resolved_here_is_not_tested(path: str) -> None:
+    """A runtime input that still holds a token or a variable is neither tested nor refused."""
+    seen: List[str] = []
+
+    def record(candidate: str) -> bool:
+        """An exists that records every path it is asked about, to prove none was tested."""
+        seen.append(candidate)
+        return False
+
+    nodes: List[NodeInfo] = [
+        _node("a", items=(_item("a_0", 0, declared_inputs=(DeclaredFile(path, ""),)),))
+    ]
+    verdict: Verdict = validate(_ctx(nodes, working_dir=WORKING_DIR, env={}, exists=record))
+    assert not _subjects(verdict, RefusalScenario.RUNTIME_FILE_UNPRODUCED)
+    assert not seen
+
+
+# -- unreachable local files ---------------------------------------------------
+
+
+def _absolute(*parts: str) -> str:
+    """An absolute path on every platform: on Windows, a path with no drive is not absolute."""
+    return os.path.abspath(os.path.join(os.sep, *parts))
+
+
+def test_a_read_outside_the_cook_that_is_not_on_disk_is_refused() -> None:
+    """A read outside the cook that no step writes and the disk does not hold is refused."""
+    nodes: List[NodeInfo] = [_node("a")]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = _read("a", _absolute("assets", "tree.bgeo.sc"), parm="file", is_output=False)
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    verdict: Verdict = validate(
+        _ctx(
+            nodes,
+            snapshot=snapshot,
+            reads=report,
+            working_dir=WORKING_DIR,
+            exists=lambda path: False,
+        )
+    )
+    assert _subjects(verdict, RefusalScenario.LOCAL_FILE_UNREACHABLE) == {_parm_subject(read)}
+
+
+def test_a_read_outside_the_cook_that_exists_is_only_advised() -> None:
+    """A read outside the cook that does exist is carried in attachments, so it is only advised."""
+    nodes: List[NodeInfo] = [_node("a")]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = _read("a", _absolute("assets", "tree.bgeo.sc"), parm="file", is_output=False)
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    verdict: Verdict = validate(
+        _ctx(nodes, snapshot=snapshot, reads=report, working_dir=WORKING_DIR)
+    )
+    assert not _subjects(verdict, RefusalScenario.LOCAL_FILE_UNREACHABLE)
+    assert _advised(verdict, RefusalScenario.LOCAL_FILE_UNREACHABLE) == {"a"}
+
+
+def _unreachable_subjects(
+    raw: str, path: str, *, working_dir: str = WORKING_DIR, env: Optional[Mapping[str, str]] = None
+) -> Set[str]:
+    """The unreachable-file refusals for one external read that is not on disk.
+
+    ``exists`` answers False for every path, so a read the check does not skip is
+    refused, and a test can tell a skipped read from a judged one.
+    """
+    # One step with no outputs reads the file, so producer matching leaves the
+    # read external and only the unreachable-file check's own skips decide it.
+    nodes: List[NodeInfo] = [_node("a")]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = SceneRead(
+        step="a", node_path="/obj/topnet1/a/file1", parm="file", raw=raw, path=path
+    )
+    report: ReadReport = match_reads(snapshot, [read], working_dir)
+    verdict: Verdict = validate(
+        _ctx(
+            nodes,
+            snapshot=snapshot,
+            reads=report,
+            working_dir=working_dir,
+            env=env if env is not None else {},
+            exists=lambda candidate: False,
+        )
+    )
+    return _subjects(verdict, RefusalScenario.LOCAL_FILE_UNREACHABLE)
+
+
+# The scene's directory, outside the working directory, so a read under $HIP is
+# skipped only because of how it is authored and not because it lies in the cook.
+_SCENE_DIR: str = _absolute("scenes", "shot")
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "$HIP/assets/tree.bgeo.sc",
+        "${HIP}/assets/tree.bgeo.sc",
+        "  $HIP/assets/tree.bgeo.sc",
+        "$PDG_DIR/assets/tree.bgeo.sc",
+        "$PDG_TEMP/assets/tree.bgeo.sc",
+        "$HFS/assets/tree.bgeo.sc",
+        "$HH/assets/tree.bgeo.sc",
+        "$HHP/assets/tree.bgeo.sc",
+        "$HOUDINI_TEMP_DIR/assets/tree.bgeo.sc",
+        "$TEMP/assets/tree.bgeo.sc",
+        "$TMP/assets/tree.bgeo.sc",
+        "__PDG_DIR__/assets/tree.bgeo.sc",
+    ],
+)
+def test_a_path_the_worker_provides_is_never_unreachable(raw: str) -> None:
+    """A read authored against a session or worker variable follows the session, never refused.
+
+    The resolved path is outside the working directory and not on disk, so only the
+    authored prefix keeps the read from being refused. Each case fails if its
+    variable, the ``${NAME}`` spelling, or leading whitespace before the variable
+    stops being recognized.
+    """
+    path: str = os.path.join(_SCENE_DIR, "assets", "tree.bgeo.sc")
+    assert not _unreachable_subjects(raw, path, env={"HIP": _SCENE_DIR})
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["$HIPNAME/tree.bgeo.sc", "$TEMPLATES/tree.bgeo.sc"],
+)
+def test_a_variable_that_only_starts_with_a_session_variables_name_is_judged(raw: str) -> None:
+    """``$HIPNAME`` is not ``$HIP``, so a missing read built on it is refused, not skipped.
+
+    This fails if a variable's name is matched as the start of a longer name.
+    """
+    path: str = _absolute("assets", "tree.bgeo.sc")
+    assert _unreachable_subjects(raw, path) == {"/obj/topnet1/a/file1 parm 'file'"}
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        _absolute("assets", "$MISSING", "tree.bgeo.sc"),
+        _absolute("assets", "__PDG_ITEMNAME__", "tree.bgeo.sc"),
+        os.path.join("assets", "tree.bgeo.sc"),
+    ],
+)
+def test_a_read_whose_location_is_unknown_here_is_not_judged(raw: str) -> None:
+    """A read that still holds a variable or a PDG token, or is relative, is left alone.
+
+    None has a definite location on this machine, so a missing file here is not
+    evidence that a worker cannot find it. The token case starts with a literal
+    directory, so it fails if only the start of the authored value is checked.
+    """
+    assert not _unreachable_subjects(raw, raw)
+
+
+def test_a_write_is_not_judged_as_an_unreachable_read() -> None:
+    """A write outside the cook that is not on disk yet is never refused as a missing read.
+
+    The matcher drops writes, so the report is built by hand to hold one as an
+    external match. This fails if the check judges a parm that the node writes.
+    """
+    # One step whose write lies outside the working directory and is not on disk,
+    # so only the write's own flag keeps it from being refused.
+    nodes: List[NodeInfo] = [_node("a")]
+    write: SceneRead = _read("a", _absolute("elsewhere", "out.bgeo.sc"), is_output=True)
+    report: ReadReport = ReadReport(
+        matches=(ReadMatch(read=write, producer="", verdict=ReadVerdict.EXTERNAL),)
+    )
+    verdict: Verdict = validate(
+        _ctx(
+            nodes,
+            snapshot=synthesize(nodes),
+            reads=report,
+            working_dir=WORKING_DIR,
+            exists=lambda path: False,
+        )
+    )
+    assert not _subjects(verdict, RefusalScenario.LOCAL_FILE_UNREACHABLE)
+
+
+def test_a_literal_read_inside_the_working_directory_is_not_refused() -> None:
+    """A read inside the working directory is carried with the job, so it is not unreachable."""
+    root: str = _absolute("root", "wd")
+    path: str = os.path.join(root, "assets", "tree.bgeo.sc")
+    assert not _unreachable_subjects(path, path, working_dir=root)
+
+
+def test_a_read_another_step_produces_is_not_unreachable() -> None:
+    """A read another step writes is delivered along a job edge, so it is not unreachable."""
+    produced: str = _absolute("elsewhere", "cache", "a.bgeo.sc")
+    nodes: List[NodeInfo] = [
+        _node(
+            "cache", items=(_item("cache_0", 0, declared_outputs=(DeclaredFile(produced, ""),)),)
+        ),
+        _node("render"),
+    ]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = _read("render", produced, parm="file", is_output=False)
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    verdict: Verdict = validate(
+        _ctx(
+            nodes,
+            snapshot=snapshot,
+            reads=report,
+            working_dir=WORKING_DIR,
+            exists=lambda path: False,
+        )
+    )
+    assert not _subjects(verdict, RefusalScenario.LOCAL_FILE_UNREACHABLE)
+
+
+# -- an existing output outside the cook is two faults -------------------------
+
+
+def test_an_existing_output_outside_the_cook_is_two_faults_with_two_remedies() -> None:
+    """An existing output outside the cook is both undeliverable and cached, with distinct remedies."""
+    outside: str = os.path.normpath("/elsewhere/a.bgeo.sc")
+    nodes: List[NodeInfo] = [
+        _node("a", items=(_item("a_0", 0, declared_outputs=(DeclaredFile(outside, ""),)),)),
+        _node("b", ["a"]),
+    ]
+    verdict: Verdict = validate(
+        _ctx(nodes, working_dir=WORKING_DIR, env={}, exists=lambda path: True)
+    )
+    by_scenario: Dict[RefusalScenario, Refusal] = {
+        r.scenario: r for r in verdict.refusals if r.subject == "a"
+    }
+    assert set(by_scenario) == {
+        RefusalScenario.OUTPUT_OUTSIDE_COOK,
+        RefusalScenario.CACHED_OUTPUTS,
+    }
+    assert by_scenario[RefusalScenario.OUTPUT_OUTSIDE_COOK].remedy != (
+        by_scenario[RefusalScenario.CACHED_OUTPUTS].remedy
+    )
