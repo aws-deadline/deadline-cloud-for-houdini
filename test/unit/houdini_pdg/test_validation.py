@@ -1,6 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
-"""Tests for the validation module's public surface and its graph-shape checks.
+"""Tests for the validation module's public surface and its graph and node-kind checks.
 
 The module is pure, so every test builds its input value types directly, and the
 property tests check against independent models rather than a copy of the code.
@@ -10,14 +10,22 @@ from __future__ import annotations
 
 import os
 from dataclasses import replace
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from functools import reduce
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 from unittest.mock import patch
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from deadline.houdini_pdg import validation
-from deadline.houdini_pdg.graph import GraphSnapshot, NodeInfo, RawItem, synthesize
+from deadline.houdini_pdg.graph import (
+    DeclaredFile,
+    GraphSnapshot,
+    NodeInfo,
+    RawItem,
+    synthesize,
+)
 from deadline.houdini_pdg.validation import (
     Advisory,
     Quotas,
@@ -650,3 +658,573 @@ def test_waived_keeps_every_refusal_as_an_advisory_with_its_remedy() -> None:
     assert result.advisories[1].detail == (
         "Not refused, because graph validation is off. cooks here. Change it."
     )
+
+
+# -- service and command-server nodes ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "node_type",
+    [
+        "houdiniserver",
+        "mayaserver",
+        "nukeserver",
+        "shotgunserver",
+        "commandserverbegin",
+        "commandserverend",
+    ],
+)
+@pytest.mark.parametrize("cook_type", ["OutOfProcess", "Service", None])
+def test_a_command_server_is_refused_whatever_its_cook_type_says(
+    node_type: str, cook_type: Optional[str]
+) -> None:
+    """Each command-server type is refused by its node type, whatever its cook type says."""
+    nodes: List[NodeInfo] = [_node("server", node_type_name=node_type, cook_type=cook_type)]
+    assert _subjects(validate(_ctx(nodes)), RefusalScenario.SERVICE_NODE) == {"server"}
+
+
+def test_a_command_server_remedy_does_not_advise_out_of_process() -> None:
+    """A command server's remedy names the hang, not the Out-of-Process cook type that causes it."""
+    # A command server left on Out-of-Process is refused, and the remedy must name
+    # the hang rather than offer the cook type that causes it.
+    nodes: List[NodeInfo] = [_node("srv", node_type_name="houdiniserver", cook_type="OutOfProcess")]
+    (refusal,) = [
+        r for r in validate(_ctx(nodes)).refusals if r.scenario is RefusalScenario.SERVICE_NODE
+    ]
+    assert "command server" in refusal.detail
+    assert "does not help" in refusal.remedy
+
+
+def test_a_plain_service_node_is_refused_with_the_cook_type_remedy() -> None:
+    """A plain Service node is refused and told to switch cook type, and an Out-of-Process one is not."""
+    # One Service node and one Out-of-Process node: only the Service one is refused,
+    # and its remedy offers the cook-type fix a command server must not get.
+    nodes: List[NodeInfo] = [
+        _node("py_service", cook_type="Service"),
+        _node("ok", cook_type="OutOfProcess"),
+    ]
+    verdict: Verdict = validate(_ctx(nodes))
+    assert _subjects(verdict, RefusalScenario.SERVICE_NODE) == {"py_service"}
+    (refusal,) = [r for r in verdict.refusals if r.scenario is RefusalScenario.SERVICE_NODE]
+    assert "Out Of Process" in refusal.remedy
+
+
+def test_a_node_that_overrides_the_scheduler_is_refused() -> None:
+    """A node whose topscheduler is set sends part of the cook to another job, so it is refused."""
+    # Any override left here points at another scheduler, because the host clears a
+    # self-naming override before validation.
+    nodes: List[NodeInfo] = [_node("a", scheduler_override="/obj/topnet1/localscheduler")]
+    verdict: Verdict = validate(_ctx(nodes))
+    (refusal,) = [r for r in verdict.refusals if r.scenario is RefusalScenario.MULTIPLE_SCHEDULERS]
+    assert refusal.subject == "a"
+    assert "topscheduler" in refusal.detail and "topscheduler" in refusal.remedy
+
+
+def test_an_unused_extra_scheduler_node_causes_no_refusal() -> None:
+    """A scheduler node in the scene that no node overrides to is not itself a refusal."""
+    # The scheduler is just another node with no override set, so the scheduler
+    # check must leave the cook accepted.
+    nodes: List[NodeInfo] = [
+        _node("rop"),
+        _node("localscheduler", schedulable=False, items=(), node_type_name="localscheduler"),
+    ]
+    verdict: Verdict = validate(_ctx(nodes))
+    assert not _subjects(verdict, RefusalScenario.MULTIPLE_SCHEDULERS)
+
+
+# -- in-process nodes -----------------------------------------------------------
+
+
+def _in_process_script() -> List[NodeInfo]:
+    """A file pattern, a step, a wait-for-all, an in-process Python Script, and a step."""
+    return [
+        _node("filepattern1", schedulable=False, items=()),
+        _node("subdivide", ["filepattern1"], count=3),
+        _node("waitforall1", ["subdivide"], schedulable=False, items=(), top_type="Partitioner"),
+        _node("python1", ["waitforall1"], schedulable=False, items=(), cook_type="InProcess"),
+        _node("distort", ["python1"], count=1),
+    ]
+
+
+def _routed_network() -> List[NodeInfo]:
+    """Stock routing processors between two steps: a merge, a switch, an attribute create."""
+    return [
+        _node("subdivide", count=3),
+        _node("merge", ["subdivide"], schedulable=False, items=(), cook_type="Generate"),
+        _node("switch", ["merge"], schedulable=False, items=(), cook_type="Generate"),
+        # An attribute set from the frame number touches no file.
+        _node(
+            "attribcreate",
+            ["switch"],
+            schedulable=False,
+            items=(),
+            cook_type=None,
+            expressions=(("intvalue11", "@Frame+120"),),
+        ),
+        _node("distort", ["attribcreate"], count=1),
+    ]
+
+
+def _wedged_network() -> List[NodeInfo]:
+    """Wedges at the roots and partitioners between the steps."""
+    return [
+        _node("wedge1", schedulable=False, items=()),
+        _node("wedge2", schedulable=False, items=()),
+        _node("sparks", ["wedge1", "wedge2"], count=2),
+        _node("partition1", ["sparks"], schedulable=False, items=(), top_type="Partitioner"),
+        _node("karma", ["partition1"], count=2),
+        _node("mapper1", ["karma"], schedulable=False, items=(), top_type="Mapper"),
+        _node("mosaic", ["mapper1"], count=1),
+    ]
+
+
+def _between_steps(**middle: Any) -> List[NodeInfo]:
+    """A step that declares one output, a node ``middle`` that is not a step, and a step below it."""
+    # The middle node has no items and the Generate cook type unless a test says otherwise.
+    declared: Tuple[DeclaredFile, ...] = (DeclaredFile("__PDG_DIR__/geo/sub.1.bgeo.sc", ""),)
+    middle.setdefault("items", ())
+    middle.setdefault("cook_type", "Generate")
+    return [
+        _node("subdivide", items=(_item("subdivide_0", 0, declared_outputs=declared),)),
+        _node("middle", ["subdivide"], schedulable=False, **middle),
+        _node("distort", ["middle"]),
+    ]
+
+
+def _judged(nodes: List[NodeInfo]) -> Verdict:
+    """The verdict on ``nodes`` with no read report and nothing on disk."""
+    # Nothing is on disk, so the cached-output check stays out of these tests.
+    return validate(_ctx(nodes, working_dir=WORKING_DIR, env={}, exists=lambda path: False))
+
+
+def _in_process(verdict: Verdict) -> Refusal:
+    """The one in-process refusal in ``verdict``."""
+    (refusal,) = [r for r in verdict.refusals if r.scenario is RefusalScenario.IN_PROCESS_NODE]
+    return refusal
+
+
+def test_an_in_process_processor_between_two_steps_is_refused() -> None:
+    """An In-Process node with a step above and below is the only refusal, naming each side."""
+    # python1 is In-Process, below subdivide and above distort.
+    verdict: Verdict = validate(_ctx(_in_process_script()))
+    refusal: Refusal = _in_process(verdict)
+    assert refusal.subject == "python1"
+    assert "below subdivide" in refusal.detail and "above distort" in refusal.detail
+    assert verdict.refusals == (refusal,)
+
+
+def test_the_cooking_example_geometry_import_is_refused_from_its_own_parms() -> None:
+    """The Geometry Import below a step is refused with no read report, by its authored file parm.
+
+    Measured in Houdini 21: its ``filepath`` is authored as `` `@pdg_input` `` and
+    evaluates to nothing outside a work item, so the scene walk drops it, and its
+    cook type is Generate, which the reader reports as unknown.
+    """
+    # The scene's shape: a step, a wait-for-all, the Geometry Import, and a step.
+    nodes: List[NodeInfo] = [
+        _node("filepattern1", schedulable=False, items=()),
+        _node("subdivide_ropfetch1", ["filepattern1"], count=3),
+        _node(
+            "waitforall1",
+            ["subdivide_ropfetch1"],
+            schedulable=False,
+            items=(),
+            top_type="Partitioner",
+        ),
+        _node(
+            "merge",
+            ["waitforall1"],
+            schedulable=False,
+            items=(),
+            cook_type=None,
+            node_type_name="geometryimport",
+            expressions=(("filepath", "`@pdg_input`"),),
+            file_parms=(("filepath", "`@pdg_input`"),),
+        ),
+        _node("distort_ropfetch1", ["merge"], count=1),
+    ]
+    verdict: Verdict = _judged(nodes)
+    refusal: Refusal = _in_process(verdict)
+    assert refusal.subject == "merge"
+    assert "'filepath' parm reads an upstream work item's file" in refusal.detail
+    assert verdict.refusals == (refusal,)
+
+
+@pytest.mark.parametrize(
+    "text", ["`@pdg_input`", '`pdginput(0, "", 0)`', "@pdg_output", '`pdgoutput(0, "", 0)`']
+)
+def test_a_file_parm_that_names_an_upstream_items_file_is_refused(text: str) -> None:
+    """A file parm whose authored text names an upstream item's file reads a step's output."""
+    # The parm is the node's only file use, so the token alone must refuse it.
+    nodes: List[NodeInfo] = _between_steps(file_parms=(("filepath", text),))
+    refusal: Refusal = _in_process(_judged(nodes))
+    assert refusal.subject == "middle"
+    assert "'filepath' parm reads an upstream work item's file" in refusal.detail
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        'npoints(pdginput(0, "", 0))',
+        'detail(opinputpath(".", 0), "n", 0)',
+        'point(pdginput(0, "", 0), 0, "P", 0)',
+        'prim(opinputpath(".", 0), 0, "name", 0)',
+    ],
+)
+def test_an_expression_that_reads_an_upstream_file_is_refused(expression: str) -> None:
+    """An expression that opens an upstream file through any of the four functions is refused."""
+    nodes: List[NodeInfo] = _between_steps(expressions=(("intvalue11", expression),))
+    refusal: Refusal = _in_process(_judged(nodes))
+    assert "'intvalue11' expression reads an upstream work item's file" in refusal.detail
+
+
+def test_a_node_whose_own_parms_touch_no_step_file_is_allowed() -> None:
+    """An outside file, a constant expression, or an item's path copied into a plain parm is allowed.
+
+    Each is the near miss of a refused case. Copying `` `@pdg_input` `` into a
+    parm that is not a file parm stores the path and opens no file.
+    """
+    # One node carries all three near misses, so any one of them refusing fails.
+    nodes: List[NodeInfo] = _between_steps(
+        file_parms=(("file", "/library/tex/wood.jpg"),),
+        expressions=(("intvalue11", "@Frame+120"), ("stringvalue1", "`@pdg_input`")),
+    )
+    verdict: Verdict = _judged(nodes)
+    assert not _subjects(verdict, RefusalScenario.IN_PROCESS_NODE)
+    assert not _advised(verdict, RefusalScenario.IN_PROCESS_NODE)
+
+
+@pytest.mark.parametrize(
+    ("code", "advised"),
+    [
+        ("for up in upstream_items:\n    path = up.outputFiles[0].path\n", True),
+        ("import os\nok = os.path.exists(path)\n", True),
+        ("for up in upstream_items:\n    item_holder.addWorkItem(parent=up)\n", False),
+    ],
+)
+def test_python_code_that_names_item_files_is_only_advised(code: str, advised: bool) -> None:
+    """Python code that names item files or opens a file gets an advisory, never a refusal."""
+    # The code is the node's only file use, so it is at most an advisory.
+    nodes: List[NodeInfo] = _between_steps(python_code=(("generate", code),))
+    verdict: Verdict = _judged(nodes)
+    assert not _subjects(verdict, RefusalScenario.IN_PROCESS_NODE)
+    assert _advised(verdict, RefusalScenario.IN_PROCESS_NODE) == ({"middle"} if advised else set())
+
+
+def test_a_locked_assets_inner_node_is_not_judged() -> None:
+    """A node inside a locked asset is neither refused nor advised, because the artist cannot change it."""
+    # The node would be refused three ways and advised once if it were not locked.
+    nodes: List[NodeInfo] = _between_steps(
+        in_locked_asset=True,
+        cook_type="InProcess",
+        file_parms=(("filepath", "`@pdg_input`"),),
+        expressions=(("intvalue11", 'npoints(pdginput(0, "", 0))'),),
+        python_code=(("generate", "open(path)"),),
+    )
+    verdict: Verdict = _judged(nodes)
+    assert not _subjects(verdict, RefusalScenario.IN_PROCESS_NODE)
+    assert not _advised(verdict, RefusalScenario.IN_PROCESS_NODE)
+
+
+def test_routing_processors_between_two_steps_are_allowed() -> None:
+    """A Merge, Switch and Attribute Create with a constant touch no file, so none is refused."""
+    verdict: Verdict = validate(_ctx(_routed_network()))
+    assert verdict.accepted()
+
+
+def test_service_nodes_between_two_steps_are_not_refused_as_in_process() -> None:
+    """A Service node and a command server are reported once, under the service scenario."""
+    # The command server is also In-Process, so the in-process check could fire on it too.
+    nodes: List[NodeInfo] = [
+        _node("subdivide", count=2),
+        _node("serve", ["subdivide"], schedulable=False, items=(), cook_type="Service"),
+        _node(
+            "server",
+            ["serve"],
+            schedulable=False,
+            items=(),
+            cook_type="InProcess",
+            node_type_name="commandserverbegin",
+        ),
+        _node("distort", ["server"], count=1),
+    ]
+    verdict: Verdict = validate(_ctx(nodes))
+    assert not _subjects(verdict, RefusalScenario.IN_PROCESS_NODE)
+    assert _subjects(verdict, RefusalScenario.SERVICE_NODE) == {"serve", "server"}
+
+
+def test_root_wedges_and_partitioners_between_steps_are_allowed() -> None:
+    """Root wedges run before the job and partitioners move no files, so none is refused."""
+    verdict: Verdict = validate(_ctx(_wedged_network()))
+    assert verdict.accepted()
+
+
+def test_a_processor_above_every_step_is_allowed() -> None:
+    """An in-process node with no step above it runs before the job, so it is allowed."""
+    nodes: List[NodeInfo] = [
+        _node("filepattern1", schedulable=False, items=(), cook_type="InProcess"),
+        _node("rop", ["filepattern1"]),
+    ]
+    assert not _subjects(validate(_ctx(nodes)), RefusalScenario.IN_PROCESS_NODE)
+
+
+def test_an_upstream_name_with_no_node_does_not_stop_the_walk() -> None:
+    """A dangling upstream name must not stop the ancestor walk from finding the step above."""
+    nodes: List[NodeInfo] = [
+        _node("subdivide", count=2),
+        _node(
+            "python1", ["ghost", "subdivide"], schedulable=False, items=(), cook_type="InProcess"
+        ),
+        _node("distort", ["python1"]),
+    ]
+    assert _subjects(validate(_ctx(nodes)), RefusalScenario.IN_PROCESS_NODE) == {"python1"}
+
+
+@given(nodes=node_dags())
+def test_an_in_process_node_is_refused_exactly_when_a_step_is_above_it(
+    nodes: List[NodeInfo],
+) -> None:
+    """With no file reads, the subjects are exactly the In-Process non-steps with a step ancestor."""
+    by_name: Dict[str, NodeInfo] = {n.name: n for n in nodes}
+
+    def ancestors(name: str) -> Set[str]:
+        """Every name reachable upstream of ``name``, grown one wire per round.
+
+        A path in the graph has fewer wires than there are nodes, so that many
+        rounds reach every ancestor.
+        """
+        found: Set[str] = set(by_name[name].upstream)
+        for _ in nodes:
+            found |= {u for a in list(found) if a in by_name for u in by_name[a].upstream}
+        return found
+
+    # The model: an In-Process node that is not a step and has any step upstream.
+    expected: Set[str] = {
+        n.name
+        for n in nodes
+        if not n.is_schedulable
+        and n.cook_type == "InProcess"
+        and any(a in by_name and by_name[a].is_schedulable for a in ancestors(n.name))
+    }
+    assert _subjects(validate(_ctx(nodes)), RefusalScenario.IN_PROCESS_NODE) == expected
+
+
+# -- the path helpers ----------------------------------------------------------
+
+# Path prefixes that exercise every branch of the deliverability model: a PDG
+# token, a path inside the working directory, one outside it, and three variable
+# forms whose value depends on the environment.
+_PREFIXES: List[str] = [
+    "__PDG_DIR__",
+    WORKING_DIR,
+    os.path.normpath("/elsewhere"),
+    "$VAR",
+    "${VAR}",
+    "$GONE",
+]
+_ENVS: List[Dict[str, str]] = [
+    {"VAR": WORKING_DIR},
+    {"VAR": os.path.normpath("/elsewhere")},
+    {"VAR": "$OTHER"},
+]
+
+
+def _reason_model(path: str, working_dir: str, env: Mapping[str, str]) -> str:
+    """An independent model of _undeliverable_reason's four branches, re-derived from path and env."""
+    # Expand each variable once, the same single pass Houdini and the helper do.
+    expanded: str = reduce(
+        lambda text, pair: text.replace("${" + pair[0] + "}", pair[1]).replace(
+            "$" + pair[0], pair[1]
+        ),
+        env.items(),
+        path,
+    )
+    resolved: str = os.path.normpath(expanded)
+    if "__PDG_" in path:
+        return ""
+    if "$" in resolved:
+        return "unexpanded variable"
+    if not working_dir:
+        return ""
+    root: str = os.path.normpath(working_dir)
+    if resolved == root or resolved.startswith(root + os.sep):
+        return ""
+    return "outside the working directory"
+
+
+@given(
+    prefix=st.sampled_from(_PREFIXES),
+    tail=st.sampled_from(["/geo/a.bgeo.sc", "/images/img.0001.exr"]),
+    working_dir=st.sampled_from([WORKING_DIR, ""]),
+    env=st.sampled_from(_ENVS),
+)
+def test_the_undeliverable_reason_follows_its_four_branches(
+    prefix: str, tail: str, working_dir: str, env: Dict[str, str]
+) -> None:
+    """_undeliverable_reason matches the model on every branch, and a leading PDG token always wins."""
+    path: str = prefix + tail
+    assert validation._undeliverable_reason(path, working_dir, env) == _reason_model(
+        path, working_dir, env
+    )
+    # A PDG token in front makes the path session-relative, so the reason is always
+    # empty whatever the rest of the path said.
+    assert validation._undeliverable_reason("__PDG_DIR__" + path, working_dir, env) == ""
+
+
+def test_the_working_directory_itself_is_inside_the_working_directory() -> None:
+    """A path equal to the working directory is deliverable, so the equal case is pinned."""
+    assert validation._undeliverable_reason(WORKING_DIR, WORKING_DIR, {}) == ""
+
+
+def test_is_below_is_false_for_an_empty_path_or_ancestor() -> None:
+    """An empty path or ancestor is never below anything, so the guard refuses both."""
+    assert validation._is_below("", WORKING_DIR) is False
+    assert validation._is_below(WORKING_DIR, "") is False
+    assert validation._is_below("", "") is False
+
+
+def test_is_below_requires_a_separator_boundary() -> None:
+    """A sibling whose name merely starts with the ancestor's is not below it; a true child is."""
+    # A sibling sharing a prefix is not below, but the ancestor itself and a true
+    # child are, so the test needs a separator boundary, not a bare prefix.
+    parent: str = os.path.normpath("/a/b")
+    assert validation._is_below(os.path.normpath("/a/bc"), parent) is False
+    assert validation._is_below(parent, parent) is True
+    assert validation._is_below(os.path.normpath("/a/b/c"), parent) is True
+
+
+# -- outputs already on disk ----------------------------------------------------
+
+
+def _with_outputs(nodes: Sequence[NodeInfo], prefix: str) -> List[NodeInfo]:
+    """Every item declares one output, named after the item, under ``prefix``."""
+    return [
+        replace(
+            node,
+            items=tuple(
+                replace(
+                    item,
+                    declared_outputs=(
+                        DeclaredFile(f"{prefix}/{node.name}/{item.name}.bgeo.sc", ""),
+                    ),
+                )
+                for item in node.items
+            ),
+        )
+        for node in nodes
+    ]
+
+
+def _all_outputs(snapshot: GraphSnapshot) -> List[str]:
+    """Every declared output path, resolved against the working directory."""
+    return sorted(
+        os.path.normpath(f.path.replace("__PDG_DIR__", WORKING_DIR))
+        for step in snapshot.steps
+        for item in step.items
+        for f in item.declared_outputs
+    )
+
+
+@given(nodes=step_dags(max_nodes=4), data=st.data())
+def test_more_files_on_disk_can_only_add_cached_output_refusals(
+    nodes: List[NodeInfo], data: Any
+) -> None:
+    """Growing the on-disk set only adds refusals, and a full set refuses exactly the files' owners."""
+    # Give every item one declared output, then test subsets of those paths as the
+    # on-disk set.
+    with_outputs: List[NodeInfo] = _with_outputs(nodes, "__PDG_DIR__/geo")
+    snapshot: GraphSnapshot = synthesize(with_outputs)
+    paths: List[str] = _all_outputs(snapshot)
+    smaller: Set[str] = data.draw(st.sets(st.sampled_from(paths))) if paths else set()
+    larger: Set[str] = smaller | (data.draw(st.sets(st.sampled_from(paths))) if paths else set())
+
+    def refused(on_disk: Set[str]) -> Set[str]:
+        """The cached-output subjects when exactly ``on_disk`` is present."""
+        verdict: Verdict = validate(
+            _ctx(
+                with_outputs,
+                snapshot=snapshot,
+                working_dir=WORKING_DIR,
+                env={},
+                exists=lambda path: path in on_disk,
+            )
+        )
+        return _subjects(verdict, RefusalScenario.CACHED_OUTPUTS)
+
+    assert refused(set()) == set()
+    assert refused(smaller) <= refused(larger)
+    owners: Set[str] = {
+        step.name
+        for step in snapshot.steps
+        for item in step.items
+        for f in item.declared_outputs
+        if os.path.normpath(f.path.replace("__PDG_DIR__", WORKING_DIR)) in larger
+    }
+    assert refused(larger) == owners
+
+
+def test_one_cached_item_of_three_refuses_its_step() -> None:
+    """A single cached item refuses the step, and the detail carries the count and example path."""
+    # One of three items has its output on disk, so the step is refused and the
+    # detail carries the "1 of 3" count and that example path.
+    nodes: List[NodeInfo] = _with_outputs([_node("cache", count=3)], "__PDG_DIR__/geo")
+    present: str = os.path.join(WORKING_DIR, "geo", "cache", "cache_1.bgeo.sc")
+    verdict: Verdict = validate(
+        _ctx(nodes, working_dir=WORKING_DIR, env={}, exists=lambda path: path == present)
+    )
+    (refusal,) = [r for r in verdict.refusals if r.scenario is RefusalScenario.CACHED_OUTPUTS]
+    assert refusal.subject == "cache"
+    assert "1 of this step's 3 work item(s)" in refusal.detail and present in refusal.detail
+    assert "Write Files" in refusal.remedy and "Delete" in refusal.remedy
+
+
+@pytest.mark.parametrize("path", ["__PDG_TEMP__/a.bgeo.sc", "$UNSET/a.bgeo.sc"])
+def test_an_output_that_cannot_be_resolved_here_is_not_tested(path: str) -> None:
+    """A path that still holds a token or a variable is neither tested on disk nor refused."""
+    seen: List[str] = []
+
+    def record(candidate: str) -> bool:
+        """An exists that records every path it is asked about, to prove none was tested."""
+        seen.append(candidate)
+        return True
+
+    nodes: List[NodeInfo] = [
+        _node("a", items=(_item("a_0", 0, declared_outputs=(DeclaredFile(path, ""),)),))
+    ]
+    verdict: Verdict = validate(_ctx(nodes, working_dir=WORKING_DIR, env={}, exists=record))
+    assert not _subjects(verdict, RefusalScenario.CACHED_OUTPUTS)
+    assert not seen
+
+
+def test_a_cached_output_check_that_cannot_test_a_path_refuses_nothing() -> None:
+    """An ``exists`` that raises is not evidence a result is cached, so nothing refuses."""
+
+    def explode(path: str) -> bool:
+        """An exists that always raises, to prove the check swallows the error."""
+        raise OSError("name too long")
+
+    nodes: List[NodeInfo] = _with_outputs([_node("a")], "__PDG_DIR__/geo")
+    verdict: Verdict = validate(_ctx(nodes, working_dir=WORKING_DIR, env={}, exists=explode))
+    assert not _subjects(verdict, RefusalScenario.CACHED_OUTPUTS)
+
+
+def test_a_node_set_to_write_files_is_not_refused_for_existing_outputs() -> None:
+    """Write Files ignores existing results, so a node set to it is never cached."""
+    nodes: List[NodeInfo] = _with_outputs(
+        [_node("cache", count=3, cache_mode="Write Files")], "__PDG_DIR__/geo"
+    )
+    verdict: Verdict = validate(
+        _ctx(nodes, working_dir=WORKING_DIR, env={}, exists=lambda path: True)
+    )
+    assert not _subjects(verdict, RefusalScenario.CACHED_OUTPUTS)
+
+
+def test_cached_output_returns_an_empty_string_when_nothing_is_on_disk() -> None:
+    """The helper returns "", the value the caller treats as "not cached", when no output exists."""
+    # The caller keeps a found path only when it is truthy, so the empty value must
+    # be the empty string, not another falsy value.
+    item: Any = _item("a_0", 0, declared_outputs=(DeclaredFile("__PDG_DIR__/geo/a.bgeo.sc", ""),))
+    ctx: ValidationContext = _ctx(
+        [_node("a")], working_dir=WORKING_DIR, env={}, exists=lambda path: False
+    )
+    assert validation._cached_output(item, ctx) == ""

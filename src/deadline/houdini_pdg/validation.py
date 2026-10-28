@@ -11,12 +11,13 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
+import re
 from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
-from .graph import GraphSnapshot, NodeInfo
+from .graph import PDG_DIR_TOKEN, PDG_TOKEN_PREFIX, GraphSnapshot, NodeInfo, WorkItemSpec
 from .scene_reads import ReadReport
 
 _logger: logging.Logger = logging.getLogger(__name__)
@@ -95,9 +96,6 @@ class ValidationContext:
     env: Optional[Mapping[str, str]] = None
     quotas: Quotas = Quotas()
     exists: Callable[[str], bool] = os.path.exists
-    #: The schedulers the cook's nodes use, as node paths, the same form as
-    #: :attr:`NodeInfo.scheduler_override`.
-    scheduler_names: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -174,6 +172,67 @@ def _examples(values: Sequence[str], limit: int = 3) -> str:
     if len(values) > limit:
         shown += f", and {len(values) - limit} more"
     return shown
+
+
+# -- paths --------------------------------------------------------------------
+
+#: ``$NAME`` or ``${NAME}``.
+_VARIABLE: "re.Pattern[str]" = re.compile(r"\$\{(\w+)\}|\$(\w+)")
+
+_OUTSIDE_WORKING_DIR: str = "outside the working directory"
+_UNEXPANDED_VARIABLE: str = "unexpanded variable"
+
+
+def _expand(path: str, env: Optional[Mapping[str, str]]) -> str:
+    """One pass of ``$NAME`` and ``${NAME}`` substitution against ``env``, like Houdini."""
+    # One pass only: Houdini does not re-expand a value that is itself a variable,
+    # and an unknown name is left as it was, so the surviving ``$`` reaches the
+    # checks that report it.
+    source: Mapping[str, str] = os.environ if env is None else env
+
+    def replace(match: "re.Match[str]") -> str:
+        name: str = match.group(1) or match.group(2)
+        return source.get(name, match.group(0))
+
+    return _VARIABLE.sub(replace, path)
+
+
+def _resolve(path: str, working_dir: str, env: Optional[Mapping[str, str]]) -> str:
+    """A declared or authored path as it reads on this workstation."""
+    # Substitute the PDG directory token for the session's working directory, then
+    # Houdini variables, then normalise.
+    return os.path.normpath(_expand(path.replace(PDG_DIR_TOKEN, working_dir), env))
+
+
+def _is_below(path: str, ancestor: str) -> bool:
+    """Whether ``path`` is ``ancestor`` or under it. ``/a/bc`` is not under ``/a/b``."""
+    if not path or not ancestor:
+        return False
+    if path == ancestor:
+        return True
+    # Compare against the ancestor plus a separator, so a sibling whose name only
+    # starts with the ancestor's is not counted as under it.
+    return path.startswith(ancestor.rstrip(os.sep) + os.sep)
+
+
+def _undeliverable_reason(
+    path: str, working_dir: str, env: Optional[Mapping[str, str]] = None
+) -> str:
+    """Why this declared output cannot reach a dependent step, or ``""``."""
+    # A PDG token makes the path session-relative, and an absolute path inside the
+    # working directory is in the attachment tree, so both are deliverable. A
+    # surviving ``$`` or a path outside the working directory is not.
+    if PDG_TOKEN_PREFIX in path:
+        return ""
+    resolved: str = os.path.normpath(_expand(path, env))
+    if "$" in resolved:
+        return _UNEXPANDED_VARIABLE
+    if not working_dir:
+        # Nothing to compare against, so refusing on a guess is worse than skipping.
+        return ""
+    if _is_below(resolved, os.path.normpath(working_dir)):
+        return ""
+    return _OUTSIDE_WORKING_DIR
 
 
 # -- the graph's shape --------------------------------------------------------
@@ -454,6 +513,313 @@ def _check_steps_without_items(ctx: ValidationContext) -> Verdict:
     return Verdict(refusals=tuple(refusals), advisories=advisories)
 
 
+# -- the node's kind ----------------------------------------------------------
+
+
+def _nearest_steps(start: str, edges: Mapping[str, Set[str]], targets: Set[str]) -> List[str]:
+    """Traverse from ``start``, following ``edges``, and return the closest ``targets`` on each path."""
+    # Iterative with a visited set, so a cycle or a dangling name terminates. A
+    # target is a boundary: it is recorded and not walked past.
+    found: Set[str] = set()
+    seen: Set[str] = {start}
+    stack: List[str] = sorted(edges.get(start, set()))
+    while stack:
+        # Walk one node at a time, skipping seen names, recording a target without
+        # walking past it, and following every other node's edges.
+        current: str = stack.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        if current in targets:
+            found.add(current)
+            continue
+        stack.extend(sorted(edges.get(current, set())))
+    return sorted(found)
+
+
+#: The ``cook_type`` values this module acts on. A node reports ``None`` when PDG
+#: has not resolved its cook type.
+_IN_PROCESS: str = "InProcess"
+_SERVICE: str = "Service"
+
+#: Authored text that names an upstream work item's file.
+_ITEM_FILE_TOKENS: Tuple[str, ...] = ("@pdg_input", "pdginput(", "@pdg_output", "pdgoutput(")
+
+#: An expression that opens an upstream file: ``pdginput`` or ``opinputpath`` as
+#: the file argument of ``detail``, ``point``, ``prim`` or ``npoints``.
+_UPSTREAM_FILE_EXPRESSION: "re.Pattern[str]" = re.compile(
+    r"\b(?:detail|point|prim|npoints)\s*\(\s*(?:pdginput|opinputpath)\s*\("
+)
+
+#: Python code that names a work item's files or opens a file.
+_FILE_CODE: "re.Pattern[str]" = re.compile(
+    r"\b(?:inputFiles|outputFiles|expectedInputFiles|expectedOutputFiles|inputResultData"
+    r"|resultData|pdginput|pdgoutput|loadFromFile|glob)\b|\bopen\s*\(|\bos\.path\b"
+)
+
+
+def _node_file_uses(node: NodeInfo) -> List[str]:
+    """Each way ``node`` touches a step's files, in words.
+
+    These are judged from the node alone: its cook type, its file parms' authored
+    text, and its expressions.
+    """
+    uses: List[str] = []
+    if node.cook_type == _IN_PROCESS:
+        uses.append("its cook type is In-Process, so it can write files during the cook")
+    # A file parm whose authored text names an upstream item's file reads a step's
+    # output, even though it evaluates to nothing outside a work item.
+    uses.extend(
+        f"its '{parm}' parm reads an upstream work item's file"
+        for parm, text in node.file_parms
+        if any(token in text for token in _ITEM_FILE_TOKENS)
+    )
+    uses.extend(
+        f"its '{parm}' expression reads an upstream work item's file"
+        for parm, text in node.expressions
+        if _UPSTREAM_FILE_EXPRESSION.search(text)
+    )
+    return uses
+
+
+def _check_in_process_nodes(ctx: ValidationContext) -> Verdict:
+    """Refuse a node that is not a step, has a step above it, and touches a step's files.
+
+    Such a node runs on this machine, not on a worker, so a file it reads from a
+    step is missing or old, and a file it writes never reaches a step. A node that
+    only routes work items is allowed, and a locked asset's inner nodes are not judged.
+    """
+    steps: Set[str] = {node.name for node in ctx.nodes if node.is_schedulable}
+    # Build the upstream and downstream edge maps, so a node's step ancestors and
+    # step descendants can both be reached from its name.
+    upstream: Dict[str, Set[str]] = {node.name: set(node.upstream) for node in ctx.nodes}
+    downstream: Dict[str, Set[str]] = {node.name: set() for node in ctx.nodes}
+    for node in ctx.nodes:
+        for parent in node.upstream:
+            if parent in downstream:
+                downstream[parent].add(node.name)
+
+    refusals: List[Refusal] = []
+    advisories: List[Advisory] = []
+    for node in ctx.nodes:
+        # A step and a service node are judged by other checks, and the artist
+        # cannot change a locked asset's inner nodes.
+        if node.is_schedulable or node.in_locked_asset:
+            continue
+        if node.cook_type == _SERVICE or _is_command_server(node):
+            continue
+        above: List[str] = _nearest_steps(node.name, upstream, steps)
+        # With no step above it, the node runs before the job exists, so it is allowed.
+        if not above:
+            continue
+        below: List[str] = _nearest_steps(node.name, downstream, steps)
+        between: str = f"below {_examples(above)}"
+        if below:
+            between += f" and above {_examples(below)}"
+        uses: List[str] = _node_file_uses(node)
+        if uses:
+            refusals.append(
+                Refusal(
+                    scenario=RefusalScenario.IN_PROCESS_NODE,
+                    subject=node.name,
+                    detail=(
+                        f"This node is not a step and runs on this machine, {between}. "
+                        f"It touches a step's files: {'; '.join(uses)}. A file it reads "
+                        "from a step is missing or old here, and a file it writes never "
+                        "reaches a step on the farm."
+                    ),
+                    remedy=(
+                        "Move the file work into a node that runs on a worker, such as a "
+                        "ROP Fetch or a Python Script set to Out-of-Process, or cook this "
+                        "network with another scheduler."
+                    ),
+                )
+            )
+            continue
+        # Python code is too open-ended to judge, so code that names item files or
+        # opens a file is only an advisory.
+        coded: List[str] = [parm for parm, code in node.python_code if _FILE_CODE.search(code)]
+        if coded:
+            advisories.append(
+                Advisory(
+                    scenario=RefusalScenario.IN_PROCESS_NODE,
+                    subject=node.name,
+                    detail=(
+                        f"This node runs on this machine, {between}, and its Python code in "
+                        f"{_examples(coded)} names work item files or opens a file. If it "
+                        "reads a file a step writes, it reads a missing or old file."
+                    ),
+                )
+            )
+    return Verdict(refusals=tuple(refusals), advisories=tuple(advisories))
+
+
+#: TOP node types that start a long-running command server. Their cook type is
+#: whatever the scene author set, so the node type, not the cook type, recognises
+#: them: measured in Houdini 21.0.559, mayaserver and nukeserver ship as Service
+#: while houdiniserver and shotgunserver ship as Out-of-Process.
+_COMMAND_SERVERS: "frozenset[str]" = frozenset(
+    {
+        "houdiniserver",
+        "mayaserver",
+        "nukeserver",
+        "shotgunserver",
+        "commandserverbegin",
+        "commandserverend",
+    }
+)
+
+
+def _is_command_server(node: NodeInfo) -> bool:
+    """Whether the node is a command-server TOP type, by its node type name."""
+    return node.node_type_name in _COMMAND_SERVERS
+
+
+def _check_service_nodes(ctx: ValidationContext) -> Verdict:
+    """Refuse a Service node, and a command server whatever its cook type says.
+
+    A command server left on Out-of-Process still becomes a step whose task holds
+    a worker until it times out, so the node type is a second signal and its
+    remedy never offers that cook type.
+    """
+    refusals: List[Refusal] = []
+    for node in ctx.nodes:
+        server: bool = _is_command_server(node)
+        # A node is a service node by either signal: its cook type is Service, or
+        # its type is a command server whatever the cook type says.
+        if not server and node.cook_type != _SERVICE:
+            continue
+        # A command server and a plain service node take different remedies, and a
+        # command server must never be told to switch to Out-of-Process, because
+        # that still launches a server nothing connects to.
+        detail: str = (
+            (
+                "This node starts a long-running command server that later work items "
+                "connect to. Each task runs in its own session on its own worker, so "
+                "nothing can reach the server, and its own task would hold a worker "
+                "until it timed out."
+            )
+            if server
+            else (
+                "This node's work items cook in a long-running service process, which "
+                "this scheduler does not start."
+            )
+        )
+        remedy: str = (
+            (
+                "Cook this network with another scheduler. Setting 'pdg_cooktype' to Out "
+                "Of Process does not help: it only stops this refusal and leaves the task "
+                "running a server nothing connects to."
+            )
+            if server
+            else (
+                "Set the node's 'pdg_cooktype' parm to Out Of Process, or cook this "
+                "network with another scheduler."
+            )
+        )
+        refusals.append(
+            Refusal(
+                scenario=RefusalScenario.SERVICE_NODE,
+                subject=node.name,
+                detail=detail,
+                remedy=remedy,
+            )
+        )
+    return Verdict(refusals=tuple(refusals))
+
+
+def _check_schedulers(ctx: ValidationContext) -> Verdict:
+    """One cook becomes one job, so a node that overrides the scheduler is refused.
+
+    The host clears an override that names the cook's own scheduler before
+    validation, so any override left here points elsewhere.
+    """
+    refusals: List[Refusal] = []
+    for node in ctx.nodes:
+        if not node.scheduler_override:
+            continue
+        refusals.append(
+            Refusal(
+                scenario=RefusalScenario.MULTIPLE_SCHEDULERS,
+                subject=node.name,
+                detail=(
+                    f"This node's 'topscheduler' parm sends its work items to "
+                    f"'{node.scheduler_override}', and the rest of the cook is one job "
+                    "elsewhere."
+                ),
+                remedy="Clear the node's 'topscheduler' parm so it uses the network's scheduler.",
+            )
+        )
+    return Verdict(refusals=tuple(refusals))
+
+
+# -- outputs already on disk --------------------------------------------------
+
+#: The Cache Mode menu label that writes results whether or not they already
+#: exist, so a node set to it is never cached and is skipped by the check.
+_WRITE_FILES: str = "Write Files"
+
+
+def _cached_output(item: WorkItemSpec, ctx: ValidationContext) -> str:
+    """The item's first declared output already on disk, which PDG would treat as cooked from cache, or ``""``."""
+    # A path that still holds a PDG token or a variable has no definite location
+    # here, and a path the disk cannot answer for is not evidence of a cached
+    # result, so both are skipped.
+    for declared in item.declared_outputs:
+        resolved: str = _resolve(declared.path, ctx.working_dir, ctx.env)
+        if PDG_TOKEN_PREFIX in resolved or "$" in resolved:
+            continue
+        try:
+            present: bool = ctx.exists(resolved)
+        except Exception:
+            _logger.debug("Could not test whether '%s' exists.", resolved, exc_info=True)
+            continue
+        if present:
+            return resolved
+    return ""
+
+
+def _check_cached_outputs(ctx: ValidationContext) -> Verdict:
+    """Refuse a step with an item whose declared outputs already exist on this machine.
+
+    PDG's default cache mode marks such an item cooked from cache and never
+    schedules it, so its task never runs and the job waits forever. A node set to
+    Write Files, or a path that still holds a token or a variable, is skipped.
+    """
+    refusals: List[Refusal] = []
+    # Write Files ignores existing results, so a node set to it is never cached.
+    writes_always: Set[str] = {n.name for n in ctx.nodes if n.cache_mode == _WRITE_FILES}
+    for step in ctx.snapshot.steps:
+        if step.name in writes_always:
+            continue
+        # Each item with a result on disk is one PDG would skip, so the step is
+        # refused when any item does, and the first such file is the example.
+        present_files: List[str] = [
+            found for item in step.items if (found := _cached_output(item, ctx))
+        ]
+        if not present_files:
+            continue
+        cached: int = len(present_files)
+        example: str = present_files[0]
+        refusals.append(
+            Refusal(
+                scenario=RefusalScenario.CACHED_OUTPUTS,
+                subject=step.name,
+                detail=(
+                    f"{cached} of this step's {step.task_count} work item(s) declare outputs "
+                    f"that already exist, for example '{example}'. PDG would mark them cooked "
+                    "from cache and never schedule them, so their tasks would never run and "
+                    "the job would wait for them forever."
+                ),
+                remedy=(
+                    "Set the node's Cache Mode (pdg_cachemode) to Write Files, or delete its "
+                    "results before cooking (Delete Selected Node Results From Disk)."
+                ),
+            )
+        )
+    return Verdict(refusals=tuple(refusals))
+
+
 # Every check, with the scenario it reports. A new refusal is a new function and a
 # new row: no other check and no part of ``validate`` changes.
 _CHECKS: Tuple[Tuple[RefusalScenario, Callable[[ValidationContext], Verdict]], ...] = (
@@ -462,4 +828,8 @@ _CHECKS: Tuple[Tuple[RefusalScenario, Callable[[ValidationContext], Verdict]], .
     (RefusalScenario.ROP_BATCH, _check_rop_batch),
     (RefusalScenario.QUOTA_EXCEEDED, _check_quotas),
     (RefusalScenario.STEP_WITHOUT_ITEMS, _check_steps_without_items),
+    (RefusalScenario.IN_PROCESS_NODE, _check_in_process_nodes),
+    (RefusalScenario.SERVICE_NODE, _check_service_nodes),
+    (RefusalScenario.MULTIPLE_SCHEDULERS, _check_schedulers),
+    (RefusalScenario.CACHED_OUTPUTS, _check_cached_outputs),
 )
