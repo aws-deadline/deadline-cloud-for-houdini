@@ -95,6 +95,9 @@ def node_infos(
         upstream: Set[str] = (
             wiring.get(name, set()) if wiring is not None else item_upstream.get(name, set())
         )
+        # A step's own parms are judged by the scene walk, so only a node with no
+        # job script has its expressions, file parms and Python code read.
+        job_script: bool = _has_job_script(pdg_node)
         infos.append(
             NodeInfo(
                 name=name,
@@ -103,12 +106,16 @@ def node_infos(
                 upstream=tuple(sorted(upstream - {name})),
                 items=tuple(items.get(name, ())),
                 exported_attribute_names=tuple(sorted(attributes.get(name, ()))),
-                schedulable=_has_job_script(pdg_node),
+                schedulable=job_script,
                 in_cook_set=in_cook(name),
                 cook_type=_cook_type(pdg_node, hom),
                 scheduler_override=_scheduler_override(hom),
                 cache_mode=_cache_mode(hom),
                 node_type_name=_node_type_name(hom),
+                in_locked_asset=bool(_call(hom, "isInsideLockedHDA")),
+                expressions=() if job_script else _expressions(hom),
+                file_parms=() if job_script else _file_parm_texts(hom),
+                python_code=() if job_script else _python_code(hom),
             )
         )
 
@@ -441,6 +448,50 @@ def _node_type_name(hom: Any) -> str:
         return str(hom.type().name() or "")
     except Exception:
         return ""
+
+
+def _expressions(hom: Any) -> Tuple[Tuple[str, str], ...]:
+    """``(parm, text)`` for each parm driven by a channel expression or a backtick expression."""
+    found: List[Tuple[str, str]] = []
+    for parm in _iterate(_call(hom, "parms")):
+        # ``expression`` raises for a parm with no channel expression. A string
+        # parm holds its expression in backticks inside the authored text instead.
+        name: str = str(_call(parm, "name") or "")
+        expression: str = str(_call(parm, "expression") or "")
+        authored: str = "" if expression else _authored_text(parm)
+        text: str = expression or (authored if "`" in authored else "")
+        if name and text:
+            found.append((name, text))
+    return tuple(found)
+
+
+def _file_parm_texts(hom: Any) -> Tuple[Tuple[str, str], ...]:
+    """``(parm, text)`` for each file-reference parm with authored text, whatever it evaluates to."""
+    found: List[Tuple[str, str]] = []
+    for parm in _string_parms(hom, "FileReference"):
+        # A channel expression is the parm's text. Otherwise the authored string is,
+        # which keeps a token such as ``@pdg_input`` that evaluates to nothing here.
+        name: str = str(_call(parm, "name") or "")
+        text: str = str(_call(parm, "expression") or "") or _authored_text(parm)
+        if name and name not in IGNORE_PARMS and text:
+            found.append((name, text))
+    return tuple(found)
+
+
+def _python_code(hom: Any) -> Tuple[Tuple[str, str], ...]:
+    """``(parm, code)`` for each non-empty parm whose editor language is Python."""
+    found: List[Tuple[str, str]] = []
+    for parm in _iterate(_call(hom, "parms")):
+        # Houdini marks a code parm with the ``editorlang`` tag on its template.
+        tags: Any = _call(_call(parm, "parmTemplate"), "tags")
+        try:
+            language: str = str(dict(tags or {}).get("editorlang", "")).lower()
+        except Exception:
+            continue
+        code: str = _authored_text(parm) if language == "python" else ""
+        if code.strip():
+            found.append((str(_call(parm, "name") or ""), code))
+    return tuple(found)
 
 
 def _hom_wiring(pdg_nodes: Mapping[str, Any]) -> Optional[Dict[str, Set[str]]]:

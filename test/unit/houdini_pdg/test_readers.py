@@ -1632,3 +1632,118 @@ def test_describing_never_raises() -> None:
     capped: Dict[str, Any] = describe_work_item(item, attribute_limit=-1)
     assert (capped["attribute_names"], capped["attribute_count"]) == ([], 1)
     assert "environment" not in capped
+
+
+# -- what validation reads from a node that is not a step ------------------------
+
+
+class _CodeTemplate(_Template):
+    """A string parm template carrying HOM's tags, such as ``editorlang``."""
+
+    def __init__(self, tags: Dict[str, str], string_kind: str = "Regular") -> None:
+        super().__init__("String", string_kind)
+        self._tags = tags
+
+    def tags(self) -> Dict[str, str]:
+        return dict(self._tags)
+
+
+class _ExpressionParm(_Parm):
+    """A parm driven by a channel expression, or a code parm when ``tags`` is given.
+
+    ``kind`` is the string type, so a file-reference parm can be driven too.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        expression: str = "",
+        raw: str = "",
+        tags: Optional[Dict[str, str]] = None,
+        kind: str = "Regular",
+    ) -> None:
+        super().__init__(name, raw, raw, kind=kind)
+        self._expression = expression
+        self._template = _CodeTemplate(tags or {}, kind)
+
+    def expression(self) -> str:
+        # HOM raises when the parm has no channel expression.
+        if not self._expression:
+            raise RuntimeError("no expression")
+        return self._expression
+
+
+class _LockedHom(_Hom):
+    """A TOP node inside a locked digital asset."""
+
+    def isInsideLockedHDA(self) -> bool:
+        return True
+
+
+def _middle_parms() -> List[Any]:
+    """Expression, backtick, Python code and plain parms, and four kinds of file parm."""
+    return [
+        _ExpressionParm("intvalue11", expression='npoints(pdginput(0, "", 0))'),
+        _ExpressionParm("label", raw="`@pdg_name`"),
+        _ExpressionParm("generate", raw="open(path)\n", tags={"editorlang": "python"}),
+        _ExpressionParm("note", raw="plain text"),
+        # A file parm that evaluates to nothing outside a work item, one driven by
+        # an expression, one the scene walk ignores, and an empty one.
+        _file("filepath", "", raw="`@pdg_input`"),
+        _ExpressionParm("outfile", expression='pdgoutput(0, "", 0)', kind="FileReference"),
+        _file("pdg_workingdir", "/proj", raw="$HIP"),
+        _file("unused", ""),
+    ]
+
+
+def test_expressions_file_parms_and_python_code_are_read_only_for_a_node_with_no_job_script() -> (
+    None
+):
+    """A node with no job script carries its expressions, file parms and Python code, and a step none.
+
+    The in-process check judges only nodes that are not steps, so a step's parms
+    would be read for nothing. A file parm is kept by its authored text, so one
+    that evaluates to nothing outside a work item is still seen.
+    """
+    # The same four parms on a node with no job script and on a step.
+    middle: _PdgNode = _PdgNode("middle")
+    step: _PdgNode = _PdgNode("step", command="hython rop.py")
+    _topnet(
+        _wire(middle, "/obj/topnet1/middle", parms=_middle_parms()),
+        _wire(step, "/obj/topnet1/step", parms=_middle_parms()),
+    )
+    infos: Dict[str, NodeInfo] = _by_name(node_infos([middle, step], {}))
+    assert infos["middle"].expressions == (
+        ("intvalue11", 'npoints(pdginput(0, "", 0))'),
+        ("label", "`@pdg_name`"),
+        ("filepath", "`@pdg_input`"),
+        ("outfile", 'pdgoutput(0, "", 0)'),
+    )
+    assert infos["middle"].file_parms == (
+        ("filepath", "`@pdg_input`"),
+        ("outfile", 'pdgoutput(0, "", 0)'),
+    )
+    assert infos["middle"].python_code == (("generate", "open(path)\n"),)
+    assert (infos["step"].expressions, infos["step"].file_parms, infos["step"].python_code) == (
+        (),
+        (),
+        (),
+    )
+
+
+def test_a_node_inside_a_locked_asset_is_marked() -> None:
+    """A node inside a locked asset is marked, and an ordinary node or one with no TOP node is not."""
+    # A sort asset's inner switch, a plain merge, and a PDG node with no TOP node.
+    inner: _PdgNode = _PdgNode("sort1_switch")
+    plain: _PdgNode = _PdgNode("merge")
+    loose: _PdgNode = _PdgNode("loose")
+    hom: _LockedHom = _LockedHom("/obj/topnet1/sort1/switch", category="Top", pdg=inner)
+    inner.hom = hom
+    _topnet(hom, _wire(plain, "/obj/topnet1/merge"))
+    infos: Dict[str, NodeInfo] = _by_name(node_infos([inner, plain, loose], {}))
+    assert [infos[n].in_locked_asset for n in ("sort1_switch", "merge", "loose")] == [
+        True,
+        False,
+        False,
+    ]

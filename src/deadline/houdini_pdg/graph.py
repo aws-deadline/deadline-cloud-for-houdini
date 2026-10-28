@@ -89,6 +89,19 @@ class NodeInfo:
     #: cannot be read. ``top_type`` cannot tell a command server from a node that
     #: renders, and this can.
     node_type_name: str = ""
+    #: Whether the node is inside a locked digital asset, whose inner nodes the
+    #: artist cannot change.
+    in_locked_asset: bool = False
+    #: ``(parm, text)`` for each parm driven by an expression. Read only for nodes
+    #: that run no job script, because validation judges only those.
+    expressions: Tuple[Tuple[str, str], ...] = ()
+    #: ``(parm, text)`` for each file-reference parm, as authored, even when it
+    #: evaluates to nothing outside a work item. Read only for nodes that run no
+    #: job script.
+    file_parms: Tuple[Tuple[str, str], ...] = ()
+    #: ``(parm, code)`` for each Python code parm, such as a Python Processor's
+    #: generate code. Read only for nodes that run no job script.
+    python_code: Tuple[Tuple[str, str], ...] = ()
 
     @property
     def is_schedulable(self) -> bool:
