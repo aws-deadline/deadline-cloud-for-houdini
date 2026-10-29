@@ -8,25 +8,55 @@ sit behind them, so a unit test replaces each one with a small fake.
 
 from __future__ import annotations
 
+import os
+import string
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
 
+from .errors import PayloadTransferError
 from .graph import DeclaredFile, GraphSnapshot, NodeInfo, TaskKey
 from .scene_reads import SceneReads
 from .validation import RefusalScenario
 
+#: The session variables the worker agent sets for a task, in ``TaskAddress`` field order.
+_ENV_NAMES: Tuple[str, ...] = (
+    "DEADLINE_FARM_ID",
+    "DEADLINE_QUEUE_ID",
+    "DEADLINE_JOB_ID",
+    "DEADLINE_STEP_ID",
+    "DEADLINE_TASK_ID",
+)
+
 
 @dataclass(frozen=True)
 class TaskAddress:
-    """The IDs that name one task on the farm."""
+    """The IDs that name one task on the farm.
+
+    A blank ID raises ``ValueError``. The scheduler builds an address on the
+    workstation from IDs the service returned, so a blank one there is the
+    caller's mistake. ``from_env`` is expected to run on the worker, where a blank
+    ID means the session lacks a variable, so it checks the IDs first and raises
+    ``PayloadTransferError`` instead.
+    """
 
     farm_id: str
     queue_id: str
     job_id: str
     step_id: str
     task_id: str
+
+    def __post_init__(self) -> None:
+        # Refuse an address with an ID that is empty or only spaces and slashes.
+        # Such an ID adds no folder to the task's key, so two tasks could share a key.
+        blank: List[str] = [
+            name
+            for name in ("farm_id", "queue_id", "job_id", "step_id", "task_id")
+            if _is_blank(str(getattr(self, name)))
+        ]
+        if blank:
+            raise ValueError(f"A task address needs every ID. Empty: {', '.join(blank)}")
 
     @classmethod
     def from_env(cls, env: Optional[Mapping[str, str]] = None) -> "TaskAddress":
@@ -35,7 +65,22 @@ class TaskAddress:
         Raises :class:`~deadline.houdini_pdg.errors.PayloadTransferError` naming
         every variable that is missing or empty.
         """
-        raise NotImplementedError
+        source: Mapping[str, str] = os.environ if env is None else env
+        values: List[str] = [source.get(name) or "" for name in _ENV_NAMES]
+        missing: List[str] = [name for name, value in zip(_ENV_NAMES, values) if _is_blank(value)]
+        if missing:
+            # The worker agent sets all five together, so name every one at once.
+            raise PayloadTransferError(
+                "Cannot locate this task's work item payload: the Deadline Cloud session "
+                f"environment is missing {', '.join(missing)}."
+            )
+        return cls(*values)
+
+
+def _is_blank(value: str) -> bool:
+    # A key joins the IDs with slashes, so an ID of only slashes and spaces names
+    # no folder.
+    return not value.strip(string.whitespace + "/")
 
 
 @dataclass(frozen=True)
@@ -254,14 +299,18 @@ class TaskStorage(Protocol):
         ...
 
     def put_outputs(self, address: TaskAddress, outputs: Sequence[OutputFile]) -> None:
-        """Publish what a task produced, for a step that declares no outputs."""
+        """Publish what a task produced, for a step that declares no outputs.
+
+        Raises :class:`~deadline.houdini_pdg.errors.PayloadTransferError` naming the
+        key when the record cannot be stored.
+        """
         ...
 
     def get_outputs(self, address: TaskAddress) -> Optional[List[OutputFile]]:
         """What a task published, or None when it published nothing.
 
         Raises :class:`~deadline.houdini_pdg.errors.OutputManifestError` for a record
-        it cannot parse.
+        it cannot read or parse.
         """
         ...
 
