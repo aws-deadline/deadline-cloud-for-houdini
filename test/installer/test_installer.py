@@ -485,7 +485,7 @@ class TestSystemInstall:
 class TestVerifySigning:
     @pytest.mark.skipif(platform.system() != "Windows", reason="Only run on Windows")
     def test_windows_signing(self, installer_path):
-        """Assumes that the Windows SDK is installed so we can find signtool:
+        r"""Assumes that the Windows SDK is installed so we can find signtool:
             C:/Program Files*/Windows Kits/*/bin/*/x64/signtool.exe
         Example success:
 
