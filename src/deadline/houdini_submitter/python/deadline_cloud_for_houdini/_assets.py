@@ -35,17 +35,17 @@ def _houdini_time_vars_to_glob(path: str) -> str:
     ref: https://www.sidefx.com/docs/houdini/render/expressions.html
     """
     time_based_variable_patterns: tuple = (
-        "(`.*`)",  # an expression, like python!
-        "(\$FF)",  # current fractional frame number
-        "(\${FF})",
-        "(\$F\d*)",  # current frame number, only variable with digits that follow
-        "(\${F\d*})",
-        "(\$T)",  # current time
-        "(\${T})",
-        "(\$SF)",  # current simulation timestep number
-        "(\${SF})",
-        "(\$ST)",  # current simulation time
-        "(\${ST})",
+        r"(`.*`)",  # an expression, like python!
+        r"(\$FF)",  # current fractional frame number
+        r"(\${FF})",
+        r"(\$F\d*)",  # current frame number, only variable with digits that follow
+        r"(\${F\d*})",
+        r"(\$T)",  # current time
+        r"(\${T})",
+        r"(\$SF)",  # current simulation timestep number
+        r"(\${SF})",
+        r"(\$ST)",  # current simulation time
+        r"(\${ST})",
     )
     time_var_pattern = "|".join(time_based_variable_patterns)
 
