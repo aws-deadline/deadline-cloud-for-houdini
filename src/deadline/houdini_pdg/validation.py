@@ -49,6 +49,9 @@ class RefusalScenario(Enum):
     CACHED_OUTPUTS = "cached_outputs"
     #: Nothing in the cook runs on a worker, so the job would describe no steps.
     NO_FARM_WORK = "no_farm_work"
+    #: A read went unmatched because its producer's output root was discarded for
+    #: sitting at or above the working directory. Advisory only: incomplete, not wrong.
+    DISCARDED_PRODUCER_ROOT = "discarded_producer_root"
 
 
 @dataclass(frozen=True)
@@ -1177,6 +1180,35 @@ def _check_unreachable_local_files(ctx: ValidationContext) -> Verdict:
     return Verdict(refusals=refusals, advisories=advisories)
 
 
+def _check_discarded_producer_roots(ctx: ValidationContext) -> Verdict:
+    """Advise when a read went unmatched because its producer's output root was discarded.
+
+    Matching discards a root at or above the working directory, since it would match
+    every path. If that leaves a non-output read with no producer, the match is
+    incomplete, not wrong, so this names the step and root and never refuses.
+    """
+    # Without the scene walk there are no discards to report.
+    if ctx.reads is None:
+        return Verdict()
+
+    return Verdict(
+        advisories=tuple(
+            Advisory(
+                scenario=RefusalScenario.DISCARDED_PRODUCER_ROOT,
+                subject=discarded.step,
+                detail=(
+                    f"The read '{discarded.read.raw}' in step '{discarded.step}' was left "
+                    f"unmatched because the output root '{discarded.root}' sits at or above "
+                    "the working directory and was discarded to keep it from matching every "
+                    "path. The read may still be delivered, so this is only a note that the "
+                    "producer match for it is incomplete."
+                ),
+            )
+            for discarded in ctx.reads.discarded_roots
+        )
+    )
+
+
 # Every check, with the scenario it reports. A new refusal is a new function and a
 # new row: no other check and no part of ``validate`` changes.
 _CHECKS: Tuple[Tuple[RefusalScenario, Callable[[ValidationContext], Verdict]], ...] = (
@@ -1195,4 +1227,5 @@ _CHECKS: Tuple[Tuple[RefusalScenario, Callable[[ValidationContext], Verdict]], .
     (RefusalScenario.RUNTIME_FILE_UNPRODUCED, _check_runtime_files),
     (RefusalScenario.CACHED_OUTPUTS, _check_cached_outputs),
     (RefusalScenario.LOCAL_FILE_UNREACHABLE, _check_unreachable_local_files),
+    (RefusalScenario.DISCARDED_PRODUCER_ROOT, _check_discarded_producer_roots),
 )

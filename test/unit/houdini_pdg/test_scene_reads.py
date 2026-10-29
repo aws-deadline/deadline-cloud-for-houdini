@@ -11,7 +11,9 @@ against a copy of the code under test.
 from __future__ import annotations
 
 # Standard library, hypothesis for the "for any reads" properties, and the public
-# surface of ``graph`` and ``scene_reads`` only.
+# surface of ``graph`` and ``scene_reads`` only. ``dataclasses`` is imported for
+# ``FrozenInstanceError``, which a frozen value type raises on assignment.
+import dataclasses
 import os
 from typing import Dict, FrozenSet, List, Sequence, Set, Tuple
 
@@ -23,6 +25,7 @@ from deadline.houdini_pdg.graph import DeclaredFile, GraphSnapshot, StepSpec, Wo
 from deadline.houdini_pdg.scene_reads import (
     OUTPUT_PARMS,
     AttributeVariableUse,
+    DiscardedRoot,
     ReadMatch,
     ReadReport,
     ReadVerdict,
@@ -786,3 +789,260 @@ def test_prefix_matching_rules_hold_for_any_prefix(
     assert _verdicts(report.matches) == expected
     edged: Set[str] = {name for name, verdict, _ in expected if verdict is not ReadVerdict.SELF}
     assert report.data_edges == ({reader: frozenset(edged)} if edged else {})
+
+
+# -- discarded producer roots --------------------------------------------------
+
+
+def test_a_read_unmatched_by_a_discarded_root_is_recorded() -> None:
+    """A read sharing a subtree strictly below the working dir with a discarded producer is recorded."""
+    # "writer" writes into two top-level subdirectories, so its root is the working
+    # directory and is discarded. One output sits in WD/geo/cache. "reader" reads
+    # WD/geo/other, which shares WD/geo (strictly below the working directory) with
+    # that output, so the discard is plausibly why the read went unmatched.
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("writer", [f"{WORK}/geo/cache/a.bgeo.sc", f"{WORK}/render/b.exr"]),
+            _step("reader"),
+        )
+    )
+    read: SceneRead = _read("reader", f"{WORK}/geo/other/x.jpg")
+    report: ReadReport = match_reads(snapshot, [read], WORK)
+
+    # The read matched nothing, and the one discard that shares WD/geo was recorded.
+    (match,) = report.matches
+    assert match.verdict is ReadVerdict.EXTERNAL
+    assert [(d.step, d.root, d.read) for d in report.discarded_roots] == [
+        ("reader", os.path.normpath(WORK), read)
+    ]
+
+
+def test_a_read_in_an_unrelated_subtree_records_no_discard() -> None:
+    """A read whose only shared directory with the producer is the working dir records nothing."""
+    # "writer" writes WD/geo and WD/render (root WD discarded). "reader" reads
+    # WD/tex, which shares only the working directory with either output, so the
+    # discard is not why the read went unmatched and nothing is recorded.
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("writer", [f"{WORK}/geo/a.bgeo.sc", f"{WORK}/render/b.exr"]),
+            _step("reader"),
+        )
+    )
+    report: ReadReport = match_reads(snapshot, [_read("reader", f"{WORK}/tex/wood.jpg")], WORK)
+    assert report.discarded_roots == ()
+
+
+def test_a_relative_read_path_records_no_discard() -> None:
+    """A read authored with a relative path records no discard: the shared-directory test fails closed."""
+    # "writer" writes two top-level subdirectories, so its root is the working
+    # directory and is discarded. The reader's path is relative, so comparing it to
+    # the absolute output directories cannot find a common directory; the
+    # shared-directory test must fail closed and record nothing, rather than treat
+    # the mismatch as a shared subtree and log a bogus discard.
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("writer", [f"{WORK}/geo/cache/a.bgeo.sc", f"{WORK}/render/b.exr"]),
+            _step("reader"),
+        )
+    )
+    report: ReadReport = match_reads(snapshot, [_read("reader", "geo/other/x.jpg")], WORK)
+    assert report.discarded_roots == ()
+
+
+def test_two_producers_with_the_same_discarded_root_record_one_entry() -> None:
+    """Two producers whose discarded root and shared subtree are the same record no duplicate entry."""
+    # Both producers write across two top-level subdirectories, so both have the
+    # working directory as a discarded root, and both have an output under WD/geo.
+    # The reader reads WD/geo/other, sharing WD/geo with each. Deduping on
+    # (step, root, read) must leave exactly one entry, not one per producer.
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("one", [f"{WORK}/geo/cache_a/a.bgeo.sc", f"{WORK}/render/a.exr"]),
+            _step("two", [f"{WORK}/geo/cache_b/b.bgeo.sc", f"{WORK}/comp/b.exr"]),
+            _step("reader"),
+        )
+    )
+    read: SceneRead = _read("reader", f"{WORK}/geo/other/x.jpg")
+    report: ReadReport = match_reads(snapshot, [read], WORK)
+
+    # One entry, naming the reader and the single discarded root, with no duplicate.
+    assert [(d.step, d.root, d.read) for d in report.discarded_roots] == [
+        ("reader", os.path.normpath(WORK), read)
+    ]
+
+
+def test_a_discard_that_leaves_no_read_unmatched_is_not_recorded() -> None:
+    """A discarded root is recorded only for a read it would have covered that went unmatched."""
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("writer", [f"{WORK}/a/x.bgeo.sc", f"{WORK}/b/x.bgeo.sc"]),
+            _step("reader"),
+        )
+    )
+    # The reader reads a path outside the working directory, which the discarded
+    # root ``WORK`` does not cover, so no discard is recorded.
+    report: ReadReport = match_reads(snapshot, [_read("reader", "/elsewhere/c.bgeo.sc")], WORK)
+    assert report.discarded_roots == ()
+
+
+def test_an_exact_output_directory_match_records_no_discard() -> None:
+    """A read that matches an exact output directory records no discard, even past a discarded root."""
+    # "writer" writes under the working directory (root discarded) and also into
+    # one exact directory the reader reads from, so that read matches directly.
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("writer", [f"{WORK}/a.bgeo.sc", f"{WORK}/shared/x.bgeo.sc"]),
+            _step("reader"),
+        )
+    )
+    report: ReadReport = match_reads(snapshot, [_read("reader", f"{WORK}/shared/y.bgeo.sc")], WORK)
+    (match,) = report.matches
+    assert match.producer == "writer"
+    assert report.discarded_roots == ()
+
+
+def test_discarded_roots_defaults_to_empty() -> None:
+    """A report built with no discards has an empty ``discarded_roots``, so the field is additive."""
+    assert ReadReport().discarded_roots == ()
+    # A match with no discarded root leaves the field empty too.
+    snapshot: GraphSnapshot = GraphSnapshot(steps=(_step("a", [f"{WORK}/geo/x.bgeo.sc"]),))
+    assert match_reads(snapshot, [], WORK).discarded_roots == ()
+
+
+def _prefix_read(raw: str, path: str, static_prefix: str) -> SceneRead:
+    """A non-output read by "reader" whose path depends on a work item."""
+    return SceneRead(
+        step="reader",
+        node_path="/obj/reader/node",
+        parm="file",
+        raw=raw,
+        path=path,
+        is_output=False,
+        static_prefix=static_prefix,
+    )
+
+
+def test_a_prefix_read_discarded_by_the_working_dir_guard_is_recorded() -> None:
+    """A guarded prefix read in the same subtree below the working dir as a producer is recorded."""
+    # "writer" writes WD/0/geo and WD/render, so its files start with the prefix WD/,
+    # which the working-directory guard drops. The read's evaluated directory WD/0/geo
+    # shares WD/0/geo, strictly below the working directory, with an output directory,
+    # so the guard is why the read has no producer.
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("writer", [f"{WORK}/0/geo/a.bgeo.sc", f"{WORK}/render/b.exr"]),
+            _step("reader"),
+        )
+    )
+    read: SceneRead = _prefix_read(
+        f"{WORK}/`@wedgeindex`/geo/x.bgeo.sc", f"{WORK}/0/geo/x.bgeo.sc", f"{WORK}/"
+    )
+    report: ReadReport = match_reads(snapshot, [read], WORK)
+
+    # The guard left the read unmatched, and one entry names the guarded directory.
+    assert report.matches == ()
+    assert [(d.step, d.root, d.read) for d in report.discarded_roots] == [
+        ("reader", os.path.normpath(WORK), read)
+    ]
+
+
+def test_a_prefix_texture_read_sharing_only_the_working_dir_records_no_discard() -> None:
+    """A guarded prefix texture read outside every producer's subtree records nothing."""
+    # "writer" writes WD/geo and WD/render, and every file starts with the prefix WD/.
+    # The texture's evaluated directory WD/tex shares only the working directory with
+    # those outputs, so the guard is not why it has no producer. Recording it would
+    # blame every texture in the project on an unrelated step.
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("writer", [f"{WORK}/geo/a.bgeo.sc", f"{WORK}/render/b.exr"]),
+            _step("reader"),
+        )
+    )
+    read: SceneRead = _prefix_read("$HIP/`@dir`/wood.jpg", f"{WORK}/tex/wood.jpg", f"{WORK}/")
+    report: ReadReport = match_reads(snapshot, [read], WORK)
+
+    assert report.matches == ()
+    assert report.discarded_roots == ()
+
+
+def test_a_prefix_read_with_no_evaluated_path_records_no_discard() -> None:
+    """A guarded prefix read whose path did not evaluate records nothing: the subtree test fails closed."""
+    # The writer's files start with the prefix WD/, so only the read's own directory
+    # can place it in a subtree. With an empty evaluated path there is no directory,
+    # so nothing is recorded, rather than an entry for a read nobody can locate.
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("writer", [f"{WORK}/0/geo/a.bgeo.sc", f"{WORK}/render/b.exr"]),
+            _step("reader"),
+        )
+    )
+    read: SceneRead = _prefix_read(f"{WORK}/`@wedgeindex`/geo/x.bgeo.sc", "", f"{WORK}/")
+    report: ReadReport = match_reads(snapshot, [read], WORK)
+
+    assert report.matches == ()
+    assert report.discarded_roots == ()
+
+
+def test_a_prefix_read_no_producer_writes_under_is_not_recorded() -> None:
+    """A guarded prefix no producer writes under records no discard, even in a producer's subtree."""
+    # The read's evaluated path climbs out of its prefix to WD/geo/other, which shares
+    # WD/geo with the writer's output. No writer file starts with the prefix WD/frame,
+    # so the guard changed no match and nothing is recorded.
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("writer", [f"{WORK}/geo/cache/a.bgeo.sc", f"{WORK}/render/b.exr"]),
+            _step("reader"),
+        )
+    )
+    read: SceneRead = _prefix_read(
+        f"{WORK}/frame`@wedgeindex`/../geo/other/x.bgeo.sc",
+        f"{WORK}/frame0/../geo/other/x.bgeo.sc",
+        f"{WORK}/frame",
+    )
+    report: ReadReport = match_reads(snapshot, [read], WORK)
+
+    assert report.matches == ()
+    assert report.discarded_roots == ()
+
+
+def test_the_same_read_given_twice_records_one_entry() -> None:
+    """A read passed to ``match_reads`` twice records one entry, so the advisory is not repeated."""
+    # The read shares WD/geo with the writer's discarded-root output, so it is recorded.
+    # Listing it twice must still leave one (step, root, read) entry in the report.
+    snapshot: GraphSnapshot = GraphSnapshot(
+        steps=(
+            _step("writer", [f"{WORK}/geo/cache/a.bgeo.sc", f"{WORK}/render/b.exr"]),
+            _step("reader"),
+        )
+    )
+    read: SceneRead = _read("reader", f"{WORK}/geo/other/x.jpg")
+    report: ReadReport = match_reads(snapshot, [read, read], WORK)
+
+    assert [(d.step, d.root, d.read) for d in report.discarded_roots] == [
+        ("reader", os.path.normpath(WORK), read)
+    ]
+
+
+def test_discarded_root_is_hashable() -> None:
+    """A ``DiscardedRoot`` can be hashed and used in a set, so it stays frozen."""
+    # Build a read and two DiscardedRoot values that differ only by step, so the
+    # set must hold both and hashing must succeed.
+    read: SceneRead = _read("reader", f"{WORK}/renders/frame0.exr")
+    one: DiscardedRoot = DiscardedRoot(step="a", root=f"{WORK}/renders", read=read)
+    two: DiscardedRoot = DiscardedRoot(step="b", root=f"{WORK}/renders", read=read)
+
+    # Hashing must not raise, and distinct values must both survive in a set.
+    members: Set[DiscardedRoot] = {one, two, one}
+    assert hash(one) == hash(DiscardedRoot(step="a", root=f"{WORK}/renders", read=read))
+    assert members == {one, two}
+
+
+def test_discarded_root_rejects_field_assignment() -> None:
+    """Assigning a ``DiscardedRoot`` field raises ``FrozenInstanceError``, so it is immutable."""
+    # A minimal value whose single field we then try to rewrite.
+    read: SceneRead = _read("reader", f"{WORK}/renders/frame0.exr")
+    discarded: DiscardedRoot = DiscardedRoot(step="a", root=f"{WORK}/renders", read=read)
+
+    # Rewriting any field must raise, proving the instance is frozen.
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        discarded.step = "b"  # type: ignore[misc]

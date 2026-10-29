@@ -156,6 +156,19 @@ class AttributeVariableUse:
 
 
 @dataclass(frozen=True)
+class DiscardedRoot:
+    """A non-output read left unmatched because a producer's output root was discarded.
+
+    Records the step, the discarded root, and the read, so validation can advise
+    rather than refuse: the read may still be delivered.
+    """
+
+    step: str
+    root: str
+    read: SceneRead
+
+
+@dataclass(frozen=True)
 class ReadReport:
     """Everything the reads say about one snapshot."""
 
@@ -167,6 +180,10 @@ class ReadReport:
     #: workstation path.
     unportable: Tuple[SceneRead, ...] = ()
     attribute_variables: Tuple[AttributeVariableUse, ...] = ()
+    #: Non-output reads left unmatched because a producer's output root was discarded
+    #: for sitting at or above the working directory. Empty when no discard lost a match.
+    #: Each (step, root, read) appears once.
+    discarded_roots: Tuple[DiscardedRoot, ...] = ()
 
 
 def match_reads(
@@ -184,6 +201,9 @@ def match_reads(
 
     matches: List[ReadMatch] = []
     edges: Dict[str, Set[str]] = {}
+    # Non-output reads left unmatched only because a producer's output root was
+    # discarded. A discard that changes no match is not recorded.
+    discarded: List[DiscardedRoot] = []
     for read in reads:
         if read.is_output:
             # A write is not a read. Two File Copy nodes writing one sequence at
@@ -193,10 +213,23 @@ def match_reads(
             # Evaluated outside any work item, its path means nothing, so it is
             # matched by its static prefix. A prefix that matches no step adds no
             # match at all, so no check judges the meaningless path.
-            for match in _prefix_matches(read, producers, existing, working_dir):
+            prefix_matches: List[ReadMatch] = _prefix_matches(
+                read, producers, existing, working_dir
+            )
+            for match in prefix_matches:
                 matches.append(match)
                 if match.verdict in (ReadVerdict.COVERED, ReadVerdict.EDGE_ADDED):
                     edges.setdefault(read.step, set()).add(match.producer)
+            # A prefix read the working-directory guard left unmatched, where a
+            # producer writes under the prefix in the same subtree as the read, is
+            # noted: the guard, not the scene, is why it has no producer. The
+            # matching is left as it is.
+            if not prefix_matches:
+                discarded_prefix: str = _prefix_discarded_root(read, producers, working_dir)
+                if discarded_prefix:
+                    discarded.append(
+                        DiscardedRoot(step=read.step, root=discarded_prefix, read=read)
+                    )
             continue
         # A plain read has one producer, or none, and a verdict from how the
         # reading step relates to it.
@@ -205,6 +238,11 @@ def match_reads(
         # Covered matches count too, so an existing edge that carries data is kept.
         if verdict in (ReadVerdict.COVERED, ReadVerdict.EDGE_ADDED):
             edges.setdefault(read.step, set()).add(producer)
+        # A read with no producer that a discarded root would have covered is noted:
+        # the match is incomplete, not wrong, and left as it is.
+        if verdict is ReadVerdict.EXTERNAL:
+            for root in _discarded_roots_covering(read.path, producers, working_dir):
+                discarded.append(DiscardedRoot(step=read.step, root=root, read=read))
         matches.append(
             ReadMatch(
                 read=read,
@@ -214,12 +252,67 @@ def match_reads(
             )
         )
 
+    # Each (step, root, read) is kept once, in first-seen order, so two producers with
+    # one discarded root, or one read listed twice, give one entry and one advisory.
+    unique_discarded: Tuple[DiscardedRoot, ...] = tuple(dict.fromkeys(discarded))
     return ReadReport(
         matches=tuple(matches),
         data_edges={step: frozenset(found) for step, found in sorted(edges.items())},
         unportable=_unportable(reads, working_dir),
         attribute_variables=_attribute_variables(reads, snapshot),
+        discarded_roots=unique_discarded,
     )
+
+
+def _discarded_roots_covering(path: str, producers: Sequence[_Producer], working: str) -> List[str]:
+    """The discarded output roots whose discard is likely why ``path`` went unmatched.
+
+    A discarded root sits at or above the working directory, so it covers nearly
+    every read under the working directory. To report only the discards that plausibly
+    lost a match, this keeps a producer's discarded root only when the read's directory
+    and one of that producer's output directories share a common directory strictly below
+    the working directory, so the read and the producer's outputs sit in the same subtree.
+    An exact output directory is excluded, since it would have matched regardless.
+    Two producers with the same root each return it; the caller removes duplicates.
+    """
+    directory: str = os.path.dirname(os.path.normpath(path)) if path else ""
+    if not directory:
+        return []
+    working_norm: str = os.path.normpath(working) if working else ""
+    found: List[str] = []
+    for producer in producers:
+        if not producer.discarded_root:
+            continue
+        # An exact output directory is matched directly, so its being covered by a
+        # discarded root is not why the read went unmatched.
+        if directory in producer.directories:
+            continue
+        # Keep the root only when the read and some output directory share a common
+        # directory strictly below the working directory, the case where the discard
+        # is really why the read went unmatched.
+        if any(
+            _shares_dir_below(directory, output_dir, working_norm)
+            for output_dir in producer.directories
+        ):
+            found.append(producer.discarded_root)
+    return found
+
+
+def _shares_dir_below(first: str, second: str, working: str) -> bool:
+    """Whether two directories share a common directory strictly below ``working``.
+
+    ``working`` is already normalized. The common directory must be under ``working``
+    and not ``working`` itself, so two reads in unrelated top-level subdirectories of
+    the working directory do not count.
+    """
+    if not first or not second or not working:
+        return False
+    try:
+        common: str = os.path.commonpath([first, second])
+    except ValueError:  # absolute and relative mixed
+        return False
+    # Below the working directory and not the working directory itself.
+    return _is_below(common, working) and common != working
 
 
 def _depends_on_work_item(raw: str) -> bool:
@@ -253,6 +346,9 @@ class _Producer:
     #: The deepest directory holding all of them, or ``""`` when that would sit
     #: at or above the working directory.
     root: str
+    #: The root ``root`` would have been, kept only when it was discarded for sitting
+    #: at or above the working directory, so a read it leaves unmatched can be reported.
+    discarded_root: str = ""
 
 
 def _resolve(path: str, working_dir: str) -> str:
@@ -289,22 +385,29 @@ def _output_roots(snapshot: GraphSnapshot, working_dir: str) -> Tuple[_Producer,
         if not files:
             continue
         directories: Set[str] = {os.path.dirname(path) for path in files}
-        root: str = _root(directories, working)
-        producers.append(_Producer(step.name, frozenset(directories), frozenset(files), root))
+        root, discarded_root = _root(directories, working)
+        producers.append(
+            _Producer(step.name, frozenset(directories), frozenset(files), root, discarded_root)
+        )
     return tuple(producers)
 
 
-def _root(directories: Set[str], working: str) -> str:
-    """The deepest directory holding all of ``directories``, or ``""``.
+def _root(directories: Set[str], working: str) -> Tuple[str, str]:
+    """The deepest directory holding all of ``directories``, and any root discarded.
 
-    It is ``""`` when the directories mix absolute and relative paths, or when the
-    root would hold the working directory and so cover every read in the project.
+    The first value is the usable root, or ``""`` when paths mix absolute and relative
+    or when the root would hold the working directory. The second is the root discarded
+    for sitting at or above the working directory, or ``""`` when nothing was discarded.
     """
     try:
         root: str = os.path.commonpath(sorted(directories))
     except ValueError:  # absolute and relative mixed
-        return ""
-    return "" if working and _is_below(working, root) else root
+        return "", ""
+    # A root at or above the working directory would cover every path, so it is
+    # discarded, and kept separately so a read it leaves unmatched can be reported.
+    if working and _is_below(working, root):
+        return "", root
+    return root, ""
 
 
 def _producer_of(
@@ -395,6 +498,38 @@ def _prefix_matches(
         )
         for producer in found
     ]
+
+
+def _prefix_discarded_root(
+    read: SceneRead, producers: Sequence[_Producer], working_dir: str
+) -> str:
+    """The prefix directory the ``working_dir`` guard discarded, when that discard lost a match.
+
+    Returns the guarded directory only when some producer writes a file under the
+    prefix and one of that producer's output directories shares a common directory
+    strictly below the working directory with the directory of the read's evaluated
+    path, the same subtree test a plain read gets. The guarded directory is at or
+    above the working directory, so it cannot place the read in a subtree itself.
+    Otherwise it returns ``""`` and nothing is reported, so a texture elsewhere in the
+    project is not blamed on an unrelated step.
+    """
+    # Recompute the same prefix and guard _prefix_matches used, so the two agree on
+    # when the guard fires.
+    prefix, directory = _normalize_prefix(read.static_prefix)
+    working: str = os.path.normpath(working_dir) if working_dir else ""
+    if not directory or not (working and _is_below(working, directory)):
+        return ""
+    # The evaluated path is not used for matching, but its directory says which
+    # subtree of the working directory the read sits in.
+    read_dir: str = os.path.dirname(os.path.normpath(read.path)) if read.path else ""
+    # Only a producer that writes under the prefix, in the read's subtree, lost a
+    # match to the guard; otherwise the guard is not why the read has no producer.
+    for producer in producers:
+        if any(f.startswith(prefix) for f in producer.files) and any(
+            _shares_dir_below(read_dir, output_dir, working) for output_dir in producer.directories
+        ):
+            return directory
+    return ""
 
 
 def _unportable(reads: Sequence[SceneRead], working_dir: str) -> Tuple[SceneRead, ...]:

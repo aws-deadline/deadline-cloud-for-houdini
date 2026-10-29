@@ -1864,3 +1864,151 @@ def test_an_existing_output_outside_the_cook_is_two_faults_with_two_remedies() -
     assert by_scenario[RefusalScenario.OUTPUT_OUTSIDE_COOK].remedy != (
         by_scenario[RefusalScenario.CACHED_OUTPUTS].remedy
     )
+
+
+# -- the discarded producer root advisory ------------------------------------
+
+
+def test_a_read_unmatched_only_because_an_output_root_was_discarded_is_advised() -> None:
+    """A read left unmatched by the discarded-root guard is advised, naming the step and root."""
+    # Step "writer" writes into two top-level subdirectories, so its output root is
+    # the working directory and is discarded. One output sits in geo/cache. Step
+    # "reader" reads geo/other, which shares geo (strictly below the working
+    # directory) with that output, so the discard is why it went unmatched.
+    under_wd_a: str = os.path.join(WORKING_DIR, "geo", "cache", "a.bgeo.sc")
+    under_wd_b: str = os.path.join(WORKING_DIR, "render", "b.exr")
+    read_path: str = os.path.join(WORKING_DIR, "geo", "other", "x.jpg")
+    nodes: List[NodeInfo] = [
+        _node(
+            "writer",
+            items=(
+                _item(
+                    "writer_0",
+                    0,
+                    declared_outputs=(DeclaredFile(under_wd_a, ""), DeclaredFile(under_wd_b, "")),
+                ),
+            ),
+        ),
+        _node("reader"),
+    ]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = _read("reader", read_path, parm="file", is_output=False)
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    # The producer-side record exists: the read went unmatched, and the discard is why.
+    assert [(d.step, d.read.step) for d in report.discarded_roots] == [("reader", "reader")]
+
+    verdict: Verdict = validate(
+        _ctx(
+            nodes,
+            snapshot=snapshot,
+            reads=report,
+            working_dir=WORKING_DIR,
+            exists=lambda path: False,
+        )
+    )
+    assert verdict.accepted()
+    advised: List[Advisory] = [
+        a for a in verdict.advisories if a.scenario is RefusalScenario.DISCARDED_PRODUCER_ROOT
+    ]
+    (advisory,) = advised
+    assert advisory.subject == "reader"
+    assert os.path.normpath(WORKING_DIR) in advisory.detail
+    # It never refuses, whatever the discard.
+    assert not _subjects(verdict, RefusalScenario.DISCARDED_PRODUCER_ROOT)
+
+
+def test_a_prefix_read_the_working_dir_guard_discards_is_advised() -> None:
+    """A work-item read matched by its static prefix, dropped by the guard, is advised, not silent."""
+    # "writer" writes wd/0/geo and wd/render, so its files start with the prefix wd/,
+    # which the working-directory guard drops. "reader" reads a wedged path whose
+    # evaluated directory wd/0/geo is one of the writer's output directories, a
+    # subtree strictly below the working directory, so the guard is why it went unmatched.
+    geo: str = os.path.join(WORKING_DIR, "0", "geo", "a.bgeo.sc")
+    render: str = os.path.join(WORKING_DIR, "render", "b.exr")
+    nodes: List[NodeInfo] = [
+        _node(
+            "writer",
+            items=(
+                _item(
+                    "writer_0",
+                    0,
+                    declared_outputs=(DeclaredFile(geo, ""), DeclaredFile(render, "")),
+                ),
+            ),
+        ),
+        _node("reader"),
+    ]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    # A wedged read: its static prefix is the working directory, which the guard drops.
+    read: SceneRead = SceneRead(
+        step="reader",
+        node_path="/obj/topnet1/reader/file_node",
+        parm="file",
+        raw=os.path.join(WORKING_DIR, "`@wedgeindex`", "geo", "x.bgeo.sc"),
+        path=os.path.join(WORKING_DIR, "0", "geo", "x.bgeo.sc"),
+        is_output=False,
+        static_prefix=WORKING_DIR + os.sep,
+    )
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    # The guard left the prefix read unmatched, and the discard records why.
+    assert [(d.step, d.read.step) for d in report.discarded_roots] == [("reader", "reader")]
+
+    verdict: Verdict = validate(
+        _ctx(
+            nodes,
+            snapshot=snapshot,
+            reads=report,
+            working_dir=WORKING_DIR,
+            exists=lambda path: False,
+        )
+    )
+    assert verdict.accepted()
+    advised: List[Advisory] = [
+        a for a in verdict.advisories if a.scenario is RefusalScenario.DISCARDED_PRODUCER_ROOT
+    ]
+    (advisory,) = advised
+    assert advisory.subject == "reader"
+    assert os.path.normpath(WORKING_DIR) in advisory.detail
+    # The incomplete match never becomes a refusal.
+    assert not _subjects(verdict, RefusalScenario.DISCARDED_PRODUCER_ROOT)
+
+
+def test_a_discard_that_leaves_every_read_matched_is_not_reported() -> None:
+    """A discarded root reports nothing when the read it would have covered still matched."""
+    # The reader writes and reads the same exact directory, so the read matches its
+    # own output directly, whatever root was discarded for the writer.
+    under_wd_a: str = os.path.join(WORKING_DIR, "a.bgeo.sc")
+    shared: str = os.path.join(WORKING_DIR, "shared", "x.bgeo.sc")
+    nodes: List[NodeInfo] = [
+        _node(
+            "writer",
+            items=(_item("writer_0", 0, declared_outputs=(DeclaredFile(under_wd_a, ""),)),),
+        ),
+        _node(
+            "reader",
+            items=(_item("reader_0", 0, declared_outputs=(DeclaredFile(shared, ""),)),),
+        ),
+    ]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = _read("reader", shared, parm="file", is_output=False)
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    assert report.discarded_roots == ()
+    verdict: Verdict = validate(
+        _ctx(
+            nodes,
+            snapshot=snapshot,
+            reads=report,
+            working_dir=WORKING_DIR,
+            exists=lambda path: True,
+        )
+    )
+    assert not _advised(verdict, RefusalScenario.DISCARDED_PRODUCER_ROOT)
+
+
+# -- every scenario has a check ------------------------------------------------
+
+
+def test_every_scenario_has_a_check() -> None:
+    """Every refusal scenario but the pre-cook one is registered in the check table."""
+    checked: Set[RefusalScenario] = {scenario for scenario, _check in validation._CHECKS}
+    assert checked == set(RefusalScenario) - {RefusalScenario.UNSAVED_SCENE}
