@@ -109,6 +109,7 @@ ignore_missing_imports = true
 line-length = 100
 
 [tool.ruff.lint]
+extend-select = ["W605"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
