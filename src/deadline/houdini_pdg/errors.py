@@ -51,7 +51,7 @@ class TaskSuspensionError(PDGSchedulerError):
 
 
 class PayloadTransferError(PDGSchedulerError):
-    """A work item payload could not be stored, fetched, or decoded."""
+    """A work item payload could not be stored, fetched, or decoded, or an output record could not be stored."""
 
 
 class CookSetupError(PDGSchedulerError):
@@ -71,7 +71,7 @@ class QuotaExceededError(JobSubmissionError):
 
 
 class OutputManifestError(PDGSchedulerError):
-    """The output record a worker published cannot be parsed."""
+    """The output record a worker published cannot be read or parsed."""
 
 
 _SCHEDULER = "Deadline Cloud Scheduler (Experimental)"
