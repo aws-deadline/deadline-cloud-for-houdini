@@ -129,8 +129,10 @@ class SceneFiles:
     """The files every task needs: the saved ``.hip`` and the scene's assets."""
 
     hip_file: str
-    #: Absolute and fully expanded.
+    #: Files, absolute and fully expanded.
     assets: Tuple[str, ...] = ()
+    #: Directories, such as an asset library stored expanded. Attached whole.
+    directories: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
