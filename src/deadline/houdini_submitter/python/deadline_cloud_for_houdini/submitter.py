@@ -6,15 +6,12 @@ import copy
 import os
 import sys
 import yaml
-import json
 import traceback
 from typing import Any, Dict, Optional, cast
-from pathlib import Path
 
 from botocore.exceptions import ClientError
 
-from deadline.client.api import BaseSubmitter, BaseSubmitterSettings
-from deadline.client.job_bundle._yaml import deadline_yaml_dump
+from deadline.client.api import BaseSubmitter, BaseSubmitterSettings, SubmissionContext
 from deadline.client import api
 from deadline.client.job_bundle.submission import AssetReferences
 from deadline.client.job_bundle import create_job_history_bundle_dir
@@ -40,6 +37,15 @@ from ._assets import (
 from ._assets import (
     _IGNORE_REF_PARMS as IGNORE_REF_PARMS,  # noqa
     _IGNORE_REF_VALUES as IGNORE_REF_VALUES,  # noqa
+)
+from ._job_bundle import (
+    _apply_adaptor_wheels_override,
+    common_job_parameter_values,
+    get_houdini_environments,
+    merge_parameter_values,
+    read_common_job_settings,
+    read_queue_parameter_definitions,
+    write_job_bundle,
 )
 from ._version import version
 from .hip_settings import HoudiniSubmitterUISettings
@@ -152,22 +158,7 @@ class HoudiniSubmitter(BaseSubmitter):
         rop = self._get_rop_node()
         if rop is not None:
             settings.rop_node_path = rop.path()
-            if rop.parm("name"):
-                settings.job_name = rop.parm("name").evalAsString() or settings.job_name
-            if rop.parm("priority"):
-                settings.priority = rop.parm("priority").eval()
-            if rop.parm("initial_status"):
-                settings.initial_status = rop.parm("initial_status").evalAsString()
-            if rop.parm("failed_tasks_limit"):
-                settings.max_failed_tasks_count = rop.parm("failed_tasks_limit").eval()
-            if rop.parm("task_retry_limit"):
-                settings.max_retries_per_task = rop.parm("task_retry_limit").eval()
-            if rop.parm("description"):
-                settings.description = rop.parm("description").evalAsString()
-            if rop.parm("include_adaptor_wheels"):
-                settings.include_adaptor_wheels = bool(rop.parm("include_adaptor_wheels").eval())
-            if rop.parm("adaptor_wheels"):
-                settings.adaptor_wheels = rop.parm("adaptor_wheels").evalAsString()
+            read_common_job_settings(rop, settings)
 
             frame_range = rop.parmTuple("f")
             if frame_range:
@@ -245,13 +236,7 @@ class HoudiniSubmitter(BaseSubmitter):
         # ROP is still consulted for its per-node queue parameter values and hip
         # file, which have no settings equivalent.
         parameter_values: list[dict[str, Any]] = [
-            {"name": "deadline:priority", "value": houdini_settings.priority},
-            {"name": "deadline:targetTaskRunStatus", "value": houdini_settings.initial_status},
-            {
-                "name": "deadline:maxFailedTasksCount",
-                "value": houdini_settings.max_failed_tasks_count,
-            },
-            {"name": "deadline:maxRetriesPerTask", "value": houdini_settings.max_retries_per_task},
+            *common_job_parameter_values(houdini_settings),
             {"name": "HipFile", "value": _get_hip_file()},
             *get_queue_parameter_values_as_openjd(rop),
         ]
@@ -262,40 +247,9 @@ class HoudiniSubmitter(BaseSubmitter):
                 {"name": "AdaptorWheels", "value": houdini_settings.adaptor_wheels}
             )
 
-        # Merge caller-supplied queue_parameters with caller-wins precedence.
-        # The node already emits its own queue parameters (CondaPackages,
-        # CondaChannels, ...) via get_queue_parameter_values_as_openjd, and a
-        # headless consumer (e.g. AYON) passes the SAME queue parameters here as
-        # its resolved/edited values -- so the two sets overlap by design. The
-        # caller's value supersedes the node's on a name collision (mirroring how
-        # the GUI's set_queue_parameter_values_from_openjd writes dialog edits
-        # back onto the node before the bundle is read). A plain de-dup also
-        # avoids the duplicate parameterValues that CreateJob rejects.
-        #
-        # An empty/None caller value is treated as "not provided": consumers such
-        # as AYON build this list from get_queue_parameters(), which resolves
-        # every parameter to its queue default -- and a queue whose CondaPackages
-        # default is empty would otherwise clobber the node's computed value
-        # (e.g. "houdini=20.5.* houdini-openjd=0.x.*"). We only let a caller value
-        # win when it actually carries a value, so a bare queue default never
-        # blanks a populated node parameter. Falsy-but-real values (0, False) are
-        # preserved.
-        caller_values = {
-            param["name"]: param["value"]
-            for param in queue_parameters
-            if "value" in param and param["value"] not in (None, "")
-        }
-        merged: list[dict[str, Any]] = [
-            {"name": param["name"], "value": caller_values.get(param["name"], param["value"])}
-            for param in parameter_values
-        ]
-        existing_names = {param["name"] for param in merged}
-        merged.extend(
-            {"name": name, "value": value}
-            for name, value in caller_values.items()
-            if name not in existing_names
-        )
-        return merged
+        # A headless caller (e.g. AYON) passes the node's own queue parameters again,
+        # so merge them, letting a caller value win over the node's.
+        return merge_parameter_values(parameter_values, queue_parameters)
 
     def get_asset_references(self, settings: BaseSubmitterSettings) -> AssetReferences:
         rop = self._require_rop()
@@ -650,12 +604,7 @@ def _get_job_template(
     separate_steps = rop.parm("separate_steps").eval()
     rop_steps = _get_steps(rop, separate_steps)
     ignore_input_nodes = bool(separate_steps)
-    queue_parameter_definitions_json = rop.userData("queue_parameter_definitions")
-    parameter_definitions: list[dict[str, Any]] = (
-        json.loads(queue_parameter_definitions_json)
-        if queue_parameter_definitions_json is not None
-        else []
-    )
+    parameter_definitions: list[dict[str, Any]] = read_queue_parameter_definitions(rop)
     parameter_definitions.append(
         {
             "name": "HipFile",
@@ -704,51 +653,6 @@ def _get_job_template(
                 job_template["jobEnvironments"].append(override_environment["environment"])
 
     return job_template
-
-
-def _load_adaptor_override_environment() -> dict[str, Any]:
-    override_file = os.path.join(os.path.dirname(__file__), "adaptor_override_environment.yaml")
-    with open(override_file) as yaml_file:
-        return yaml.safe_load(yaml_file)
-
-
-# Names contributed by adaptor_override_environment.yaml, used to detect/strip
-# the override so the template can be reconciled with the settings-driven state.
-_ADAPTOR_OVERRIDE_PARAM_NAMES = {"AdaptorWheels", "OverrideAdaptorName"}
-_ADAPTOR_OVERRIDE_ENV_NAME = "OverrideAdaptor"
-
-
-def _apply_adaptor_wheels_override(job_template: dict[str, Any], enabled: bool) -> None:
-    """Add or remove the adaptor-wheels override on ``job_template`` in place.
-
-    Idempotent: makes the AdaptorWheels ``parameterDefinition``s and the
-    ``OverrideAdaptor`` ``jobEnvironment`` present when ``enabled`` and absent
-    otherwise, regardless of what the node-driven ``_get_job_template`` already
-    added. This keeps the template consistent with the settings-driven
-    AdaptorWheels parameter *value* emitted by ``get_parameter_values``.
-    """
-    already_present = any(
-        pd.get("name") in _ADAPTOR_OVERRIDE_PARAM_NAMES
-        for pd in job_template.get("parameterDefinitions", [])
-    )
-
-    if enabled and not already_present:
-        override = _load_adaptor_override_environment()
-        job_template.setdefault("parameterDefinitions", []).extend(override["parameterDefinitions"])
-        job_template.setdefault("jobEnvironments", []).append(override["environment"])
-    elif not enabled and already_present:
-        job_template["parameterDefinitions"] = [
-            pd
-            for pd in job_template.get("parameterDefinitions", [])
-            if pd.get("name") not in _ADAPTOR_OVERRIDE_PARAM_NAMES
-        ]
-        job_template["jobEnvironments"] = [
-            env
-            for env in job_template.get("jobEnvironments", [])
-            if env.get("name") != _ADAPTOR_OVERRIDE_ENV_NAME
-        ]
-        if not job_template["jobEnvironments"]:
-            del job_template["jobEnvironments"]
 
 
 def _get_step_template(node: Dict, ignore_input_nodes: bool):
@@ -858,13 +762,14 @@ def _create_job_bundle(
     job_template = submitter.get_job_template(settings, host_requirements)
     parameter_values = submitter.get_parameter_values(settings, [])
 
-    job_bundle_path = Path(job_bundle_dir)
-    with open(job_bundle_path / "template.yaml", "w", encoding="utf8") as f:
-        deadline_yaml_dump(job_template, f, indent=1)
-    with open(job_bundle_path / "parameter_values.yaml", "w", encoding="utf8") as f:
-        deadline_yaml_dump({"parameterValues": parameter_values}, f, indent=1)
-    with open(job_bundle_path / "asset_references.yaml", "w", encoding="utf8") as f:
-        deadline_yaml_dump(asset_references.to_dict(), f, indent=1)
+    # The shared writer takes the client library's submission context, so wrap the parts in one.
+    context: SubmissionContext = SubmissionContext(
+        settings=settings,
+        job_template=job_template,
+        parameter_values=parameter_values,
+        asset_references=asset_references,
+    )
+    write_job_bundle(context, job_bundle_dir)
 
 
 def _pre_gui_hook_confirm_callback(parent):
@@ -1330,53 +1235,3 @@ def _apply_farm_and_queue_settings(node):
     queue_response = deadline.get_queue(farmId=farm_id, queueId=queue_id)
     node.parm("queue").set(queue_response["displayName"])
     update_queue_parameters(farm_id, queue_id, node)
-
-
-# TODO: remove this and swap to default job template
-def get_houdini_environments(init_data_attachment: dict[str, Any]) -> list[dict[str, Any]]:
-    """Returns a list of environments that set things up to run frame renders
-    for the specified DCC.
-    """
-    return [
-        {
-            "name": "Houdini",
-            "description": "Runs Houdini in the background.",
-            "script": {
-                "embeddedFiles": [
-                    init_data_attachment,
-                ],
-                "actions": {
-                    "onEnter": {
-                        "command": "houdini-openjd",
-                        "args": [
-                            "daemon",
-                            "start",
-                            "--path-mapping-rules",
-                            "file://{{Session.PathMappingRulesFile}}",
-                            "--connection-file",
-                            "{{ Session.WorkingDirectory }}/connection.json",
-                            "--init-data",
-                            "file://{{ Env.File.initData }}",
-                        ],
-                        "cancelation": {
-                            "mode": "NOTIFY_THEN_TERMINATE",
-                        },
-                        "timeout": 400,
-                    },
-                    "onExit": {
-                        "command": "houdini-openjd",
-                        "args": [
-                            "daemon",
-                            "stop",
-                            "--connection-file",
-                            "{{ Session.WorkingDirectory }}/connection.json",
-                        ],
-                        "cancelation": {
-                            "mode": "NOTIFY_THEN_TERMINATE",
-                        },
-                        "timeout": 120,
-                    },
-                },
-            },
-        }
-    ]
