@@ -13,6 +13,7 @@ from configparser import ConfigParser
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
 
+import jsonschema
 import pytest
 import yaml
 from botocore.exceptions import ClientError
@@ -26,6 +27,7 @@ from openjd.model import (
     decode_job_template,
 )
 
+import deadline.houdini_adaptor
 from deadline.client.config import config_file
 from deadline.client.job_bundle.submission import AssetReferences
 from deadline.houdini_pdg import submitter as submitter_module
@@ -405,6 +407,33 @@ def test_one_session_environment_runs_the_daemon_with_the_scene_and_bucket() -> 
         },
     }
     assert all(line == line.rstrip() for line in init_file["data"].splitlines())
+
+
+def test_the_session_and_task_data_satisfy_the_worker_schemas() -> None:
+    """The adaptor validates its init and run data first, so data it refuses fails every PDG task.
+
+    PDG data has no ``render_node`` or ``frame_range``, so only ROP data may need them.
+    """
+    schemas: Path = Path(deadline.houdini_adaptor.__file__).parent / "HoudiniAdaptor" / "schemas"
+    template: Dict[str, Any] = template_for(GraphSnapshot(steps=(step("a", 2),)))
+    # The session's init data, with each parameter reference turned into a non-empty value,
+    # as it would be after the job starts.
+    (session,) = [e for e in template["jobEnvironments"] if e["name"] == "PdgSession"]
+    (init_file,) = session["script"]["embeddedFiles"]
+    init_text: str = init_file["data"].replace("{{Param.", "value_of_").replace("}}", "")
+    init_schema: Dict[str, Any] = json.loads(
+        (schemas / "init_data.schema.json").read_text(encoding="utf8")
+    )
+    jsonschema.validate(yaml.safe_load(init_text), init_schema)
+    # The daemon's front end adds the task's IDs, which it reads from the session environment.
+    task_data: Dict[str, Any] = run_data(template["steps"][0])
+    task_data["pdg"].update(
+        farm_id=FARM, queue_id=QUEUE, job_id="job-a", step_id="step-a", task_id="task-a-0"
+    )
+    run_schema: Dict[str, Any] = json.loads(
+        (schemas / "run_data.schema.json").read_text(encoding="utf8")
+    )
+    jsonschema.validate(task_data, run_schema)
 
 
 @pytest.mark.parametrize("include", [True, False])

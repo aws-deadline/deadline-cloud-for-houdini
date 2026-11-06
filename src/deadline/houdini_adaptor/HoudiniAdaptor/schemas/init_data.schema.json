@@ -7,7 +7,18 @@
         "version": { "type": "string" },
         "ignore_input_nodes": { "type": "boolean" },
         "wedgenum": { "type": "string" },
-        "wedge_node": { "type": "string" }
+        "wedge_node": { "type": "string" },
+        "pdg": {
+            "type": "object",
+            "properties": {
+                "pdg_dir": { "type": "string", "minLength": 1 },
+                "bucket": { "type": "string", "minLength": 1 },
+                "root_prefix": { "type": "string", "minLength": 1 }
+            },
+            "required": [ "pdg_dir", "bucket", "root_prefix" ]
+        }
     },
-    "required": [ "scene_file", "render_node", "version"]
+    "required": [ "scene_file", "version" ],
+    "if": { "not": { "required": [ "pdg" ] } },
+    "then": { "required": [ "render_node" ] }
 }

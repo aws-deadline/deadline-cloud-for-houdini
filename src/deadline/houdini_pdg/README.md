@@ -48,6 +48,6 @@ The scheduler does not download outputs to your workstation. Steps hand files to
 | `houdini/` | Reads PDG and Houdini objects |
 | `houdini_plugin/` | The scheduler registration, and the HDA that gives the node its icon, help, and Tab menu entry. Added to `hpath` by hand |
 
-The worker side lives in `src/deadline/houdini_adaptor/pdg_actions.py`.
+The worker side lives in `src/deadline/houdini_adaptor/pdg_actions.py`. The Houdini adaptor starts Houdini once per worker session. A stock PDG job script cooks in that Houdini, with the item's scene loaded fresh, and any other command runs through a shell.
 
 Only `host.py` and the registration module import `hou` or `pdg`. Everything else imports without Houdini, so the unit tests run anywhere.
