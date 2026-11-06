@@ -34,6 +34,25 @@ class HoudiniClient(ClientInterface):
         super().__init__(server_path=server_path)
         print(f"HoudiniClient: Houdini Version {hou.applicationVersionString()}")
         self.actions.update(HoudiniHandler().action_dict)
+        # The adaptor runs this only in a PDG session, so a ROP session gets no PDG actions.
+        self.actions["pdg_session"] = self._start_pdg_session
+
+    def _start_pdg_session(self, args: dict) -> None:
+        """
+        Adds the action that runs one PDG work item. It needs no storage here: the adaptor's own
+        process downloads each payload and publishes each item's outputs, so Houdini's Python never
+        imports the AWS libraries.
+        """
+        # See the imports at the top: in hython these packages are top-level names.
+        try:
+            from deadline.houdini_adaptor.pdg_actions import PdgWorkItemRunner
+            from deadline.houdini_pdg.cook import SystemClock
+        except ImportError:
+            from houdini_adaptor.pdg_actions import PdgWorkItemRunner  # type: ignore[import,no-redef]
+            from houdini_pdg.cook import SystemClock  # type: ignore[import,no-redef]
+
+        # The pdg_ prefix keeps the name apart from the ROP actions.
+        self.actions["pdg_run_work_item"] = PdgWorkItemRunner(clock=SystemClock()).run_work_item
 
     def close(self, args: Optional[dict] = None) -> None:
         hou.exit()

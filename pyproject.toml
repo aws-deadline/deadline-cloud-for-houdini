@@ -151,7 +151,7 @@ parallel = true
 omit = [
     "**/__main__.py",
     "**/_version.py",
-    # The experimental PDG worker actions have no tests yet.
+    # The experimental PDG worker actions stay out of coverage until the PDG scheduler can cook.
     "**/houdini_adaptor/pdg_actions.py",
 ]
 

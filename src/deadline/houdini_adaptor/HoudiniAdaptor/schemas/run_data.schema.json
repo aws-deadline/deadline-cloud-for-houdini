@@ -2,9 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
-    "frame_range": { "$ref": "#/$defs/frame_range" }
+    "frame_range": { "$ref": "#/$defs/frame_range" },
+    "pdg": { "$ref": "#/$defs/pdg" }
   },
-  "required": ["frame_range"],
+  "if": { "not": { "required": ["pdg"] } },
+  "then": { "required": ["frame_range"] },
   "$defs": {
     "frame_range": {
       "type": "object",
@@ -14,6 +16,23 @@
         "step": { "type": "number" }
       },
       "required": ["start", "end", "step"]
+    },
+    "pdg": {
+      "type": "object",
+      "properties": {
+        "step": { "type": "string" },
+        "task_index": { "type": "integer" },
+        "record_outputs": { "type": "boolean" },
+        "farm_id": { "type": "string", "minLength": 1 },
+        "queue_id": { "type": "string", "minLength": 1 },
+        "job_id": { "type": "string", "minLength": 1 },
+        "step_id": { "type": "string", "minLength": 1 },
+        "task_id": { "type": "string", "minLength": 1 }
+      },
+      "required": [
+        "step", "task_index", "record_outputs",
+        "farm_id", "queue_id", "job_id", "step_id", "task_id"
+      ]
     }
   }
 }
