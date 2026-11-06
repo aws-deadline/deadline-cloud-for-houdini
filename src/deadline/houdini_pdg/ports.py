@@ -13,7 +13,7 @@ import string
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
+from typing import AbstractSet, Any, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
 
 from .errors import PayloadTransferError
 from .graph import DeclaredFile, GraphSnapshot, NodeInfo, TaskKey
@@ -203,8 +203,6 @@ class CookSummary:
     #: Tasks the farm canceled, for example after another task failed. Not
     #: reported to PDG as failures, because they never ran.
     canceled: int = 0
-    #: Items PDG satisfied from its cache. They count as complete.
-    cached: int = 0
     refusals: Tuple[RefusalScenario, ...] = ()
     #: The artist canceled the cook. There is no canceled phase: ``final_phase``
     #: keeps the phase the cook had reached.
@@ -236,6 +234,22 @@ class PdgHost(Protocol):
 
     def set_working_dir(self, path: str) -> None:
         """Make ``path`` PDG's local and remote working directory."""
+        ...
+
+    def watch_generation(self, cook_set: Optional[AbstractSet[str]]) -> None:
+        """Start following PDG's generation of the steps in ``cook_set``, or of every step."""
+        ...
+
+    def pending_generation(self) -> Sequence[str]:
+        """The steps PDG asked for that have not finished generating, by name."""
+        ...
+
+    def stop_watching_generation(self) -> None:
+        """Stop following generation. Safe to call when not watching."""
+        ...
+
+    def failure_reason(self, item_id: int) -> Tuple[str, str]:
+        """A work item's PDG log, as ``(error, last_line)``: its ERROR lines and its last line, each ``""`` when absent. Never raises."""
         ...
 
 
@@ -282,6 +296,10 @@ class FarmJob(Protocol):
 
     def cancel(self) -> None:
         """Cancel the job. Never raises."""
+        ...
+
+    def fail(self) -> None:
+        """Mark the job failed, or cancel it when the service refuses, so no task stays suspended. Never raises."""
         ...
 
     def log_tail(self, key: TaskKey, lines: int) -> List[str]:

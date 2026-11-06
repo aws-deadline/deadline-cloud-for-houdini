@@ -8,7 +8,7 @@ tests cannot import it, so they check it as source.
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import AbstractSet, Optional, Sequence, Tuple
 
 import hou  # type: ignore[import-not-found]
 import pdg  # type: ignore[import-not-found]
@@ -47,6 +47,22 @@ class HoudiniPdgHost:
 
     def set_working_dir(self, path: str) -> None:
         """Use ``path`` as both the local and the remote working directory."""
+        raise NotImplementedError
+
+    def watch_generation(self, cook_set: Optional[AbstractSet[str]]) -> None:
+        """Follow PDG's generation of the steps the cook asked for, so the snapshot can wait for it."""
+        raise NotImplementedError
+
+    def pending_generation(self) -> Sequence[str]:
+        """The watched steps that have not finished generating."""
+        raise NotImplementedError
+
+    def stop_watching_generation(self) -> None:
+        """Stop following generation, if it is being followed."""
+        raise NotImplementedError
+
+    def failure_reason(self, item_id: int) -> Tuple[str, str]:
+        """The ERROR lines of the work item's PDG log, and its last line."""
         raise NotImplementedError
 
 
