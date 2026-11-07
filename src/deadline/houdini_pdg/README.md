@@ -33,6 +33,10 @@ To remove the scheduler, delete the package file and restart Houdini.
 
 The scheduler does not download outputs to your workstation. Steps hand files to each other on the farm. To fetch a cook's results, use Deadline Cloud Monitor or `deadline job download-output`.
 
+## Known issues
+
+* A login that expires during a long cook is untested. If the cook stops reporting progress, log in again and cook again.
+
 ## Layout
 
 | Module | What it does |
