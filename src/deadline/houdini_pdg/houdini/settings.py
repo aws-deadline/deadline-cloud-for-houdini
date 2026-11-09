@@ -18,3 +18,5 @@ class SchedulerSettings:
     working_dir: str
     #: 0 writes the always-on artifacts. Each level adds to the one below.
     debug_level: int = 0
+    #: False turns every graph refusal into a warning, so the cook goes ahead.
+    validate_graph: bool = True
