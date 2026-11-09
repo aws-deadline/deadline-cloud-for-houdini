@@ -284,6 +284,10 @@ class FarmJob(Protocol):
         """Cancel the job. Never raises."""
         ...
 
+    def fail(self) -> None:
+        """Mark the job failed, or cancel it when the service refuses, so no task stays suspended. Never raises."""
+        ...
+
     def log_tail(self, key: TaskKey, lines: int) -> List[str]:
         """The last lines of the task's latest session log, or ``[]``."""
         ...
