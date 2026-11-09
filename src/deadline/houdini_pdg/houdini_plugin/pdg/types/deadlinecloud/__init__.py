@@ -142,7 +142,7 @@ class DeadlineCloudPDGScheduler(PyScheduler):
     def _read_settings(self) -> SchedulerSettings:
         raise NotImplementedError
 
-    def _connect(self, settings: SchedulerSettings) -> CookServices:
+    def _connect(self, settings: SchedulerSettings, cook_id: str) -> CookServices:
         raise NotImplementedError
 
     def _handle(self, work_item: Any) -> WorkItemHandle:
