@@ -329,7 +329,7 @@ def test_a_scene_walk_that_fails_after_the_generate_still_gets_a_verdict(
     """
     # render's node gives a name that can't be turned into text, after a full generate.
     network: FakeNetwork = _network()
-    network.node("render").hom.name = lambda: _Unprintable()  # type: ignore[method-assign]
+    network.node("render").hom.name = _Unprintable  # type: ignore[method-assign]
     _generated(network, {"sim": 1, "render": 1, "montage": 1})
     assert submit(network.scheduler_node, get_setting=_workstation) is True
     assert "Steps: 3, tasks: 3" in scene.messages.calls[0][0]
@@ -833,7 +833,7 @@ def test_a_stopped_submit_stores_its_stop_and_queues_a_cook_of_the_output_node(
     assert submit(network.scheduler_node, get_setting=_workstation) is False
     # The popup has shown, the stop waits for onStartCook, and nothing is cooked yet.
     text: str = scene.messages.calls[-1][0]
-    assert "The cook can't start." in text and host.submit_stops[path][1:] == (text, "")
+    assert "The cook can't start." in text and host.submit_stops[path] == (text, "")
     assert len(queue.queued) == 1 and kwargs == []
     queue.run()
     assert kwargs == [
@@ -871,10 +871,10 @@ def test_a_stop_before_the_network_has_a_pdg_graph_starts_no_cook(
     "start, warning",
     [("refused", ""), ("ignored", "no error"), ("failed", "No cook to start")],
 )
-def test_a_cook_start_that_leaves_the_stop_waiting_is_logged(
+def test_a_cook_start_that_does_not_take_the_stop_drops_it_and_is_logged(
     scene: FakeHou, queue: _Queue, caplog: pytest.LogCaptureFixture, start: str, warning: str
 ) -> None:
-    """When the cook start never reaches onStartCook, the tab stays empty and only the log says why.
+    """A stop left stored after its cook start would refuse the artist's next real cook.
 
     A start that onStartCook refused took the stop, so it logs nothing.
     """
@@ -894,15 +894,53 @@ def test_a_cook_start_that_leaves_the_stop_waiting_is_logged(
     assert submit(network.scheduler_node, get_setting=_workstation) is False
     queue.run()
     path: str = network.scheduler_node.path()
-    waiting: List[str] = [
-        r.getMessage() for r in caplog.records if "still waiting" in r.getMessage()
-    ]
+    dropped: List[str] = [r.getMessage() for r in caplog.records if "dropped" in r.getMessage()]
     expected: List[str] = (
         [
-            f"The cook start of {display.path()} hasn't reached {path}'s onStartCook yet "
-            f"({warning}), so Submit's stop is still waiting."
+            f"The cook start of {display.path()} didn't reach {path}'s onStartCook "
+            f"({warning}), so Submit's stop was dropped."
         ]
         if warning
         else []
     )
-    assert waiting == expected and (path in host.submit_stops) is bool(warning)
+    assert dropped == expected and host.submit_stops == {}
+
+
+def test_a_fixed_submit_after_a_failed_cook_start_cooks_with_no_old_stop(scene: FakeHou) -> None:
+    """A cook start that fails before onStartCook used to leave its stop stored.
+
+    The artist's next Submit, fixed and confirmed, was then refused with the old text.
+    """
+    # The first Submit has no farm, and its cook start fails before reaching onStartCook.
+    network: FakeNetwork = _network()
+    _generated(network, {"sim": 1, "render": 1, "montage": 1})
+    display: Any = network.topnet.displayNode()
+    cook: Callable[..., None] = display.cookWorkItems
+
+    def fail_the_tab_cook(**kwargs: Any) -> None:
+        if "nodes" in kwargs:
+            raise OperationFailed("TOP node failed to cook")
+        cook(**kwargs)
+
+    display.cookWorkItems = fail_the_tab_cook
+    assert submit(network.scheduler_node, get_setting=lambda _name: "") is False
+    # The artist sets the farm and submits again at once, and confirms.
+    assert submit(network.scheduler_node, get_setting=_workstation) is True
+    assert _cooks(network) == [{"block": False}] and display.stop_cooks == []
+    assert host.submit_stops == {}
+
+
+def test_a_confirmed_submit_drops_a_stop_whose_cook_start_has_not_run(
+    scene: FakeHou, queue: _Queue
+) -> None:
+    """A stop still waiting for its queued cook start must not refuse a confirmed cook."""
+    # The first Submit stops with no farm, and its queued cook start hasn't run yet.
+    network: FakeNetwork = _network()
+    _generated(network, {"sim": 1, "render": 1, "montage": 1})
+    display: Any = network.topnet.displayNode()
+    assert submit(network.scheduler_node, get_setting=lambda _name: "") is False
+    assert len(queue.queued) == 1
+    # The fixed Submit is confirmed, and its cook starts with no stop stored.
+    assert submit(network.scheduler_node, get_setting=_workstation) is True
+    assert _cooks(network) == [{"block": False}] and display.stop_cooks == []
+    assert host.submit_stops == {}

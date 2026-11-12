@@ -250,6 +250,24 @@ def test_a_task_quota_crossed_while_generating_stops_generation_once(
     assert len(reports) == 1
 
 
+def test_a_quota_the_cook_does_not_stop_for_is_reported_once(scene: FakeHou) -> None:
+    """With validation off, each later step used to add the same quota warning again."""
+    # The cook declines to stop, as with validation off, and three steps pass the quota.
+    network: FakeNetwork = build_network(PYRO_BONFIRE)
+    host: HoudiniPdgHost = HoudiniPdgHost(network.scheduler())
+    reports: List[Verdict] = []
+
+    def decline(verdict: Verdict) -> bool:
+        reports.append(verdict)
+        return False
+
+    host.watch_generation(None, decline)
+    for name in ("sim", "render", "montage"):
+        network.node(name).workItems = [None] * 10_001
+        network.context.emit("NodeGenerated", name)
+    assert len(reports) == 1 and not network.context.canceled.is_set()
+
+
 def test_items_of_a_node_that_is_not_a_step_are_not_counted(scene: FakeHou) -> None:
     """A wedge's items cook here and are never tasks, so they can't pass a task quota."""
     # A wedge with twice the job's limit, which isn't a step.

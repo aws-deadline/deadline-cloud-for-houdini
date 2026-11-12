@@ -8,7 +8,6 @@ import importlib.util
 import logging
 import os
 import sys
-import time
 import types
 from datetime import datetime, timezone
 from pathlib import Path
@@ -732,7 +731,7 @@ def test_submits_stop_logs_under_the_package_logger(
     network: FakeNetwork = build_network(PYRO_BONFIRE)
     scheduler: Any = _scheduler(network)
     path: str = network.scheduler_node.path()
-    host_module.submit_stops[path] = (time.monotonic(), "The cook can't start.", "")
+    host_module.submit_stops[path] = ("The cook can't start.", "")
     assert scheduler.onStartCook(False, None) is False
     lines: List[str] = [
         r.getMessage() for r in caplog.records if r.name.startswith("deadline.houdini_pdg.")
@@ -755,7 +754,7 @@ def test_on_start_cook_takes_submits_stop_sends_it_to_both_tabs_and_refuses(
     cloud: FakeCloud = FakeCloud()
     scheduler: Any = _scheduler(network, cloud)
     path: str = network.scheduler_node.path()
-    host_module.submit_stops[path] = (time.monotonic(), "The cook can't start.", "render: slow")
+    host_module.submit_stops[path] = ("The cook can't start.", "render: slow")
     assert scheduler.onStartCook(False, [network.node("sim")]) is False
     assert scheduler.calls == [
         ("cookError", "The cook can't start."),
@@ -763,26 +762,3 @@ def test_on_start_cook_takes_submits_stop_sends_it_to_both_tabs_and_refuses(
     ]
     # The stop is used once, and nothing else was queued or called.
     assert host_module.submit_stops == {} and ui.queued == [] and cloud.s3.keys == []
-
-
-@pytest.mark.parametrize("age, refused", [(29.0, True), (31.0, False)], ids=["29s", "31s"])
-def test_on_start_cook_drops_a_stop_older_than_30_seconds_and_cooks(
-    scene: FakeHou, caplog: pytest.LogCaptureFixture, age: float, refused: bool
-) -> None:
-    """A stop no cook start took, say after a failed queue, must not refuse a later real cook.
-
-    A stop within 30 s is still Submit's own, so it is taken.
-    """
-    # Submit stored a stop ``age`` seconds ago, and the cook would start without it.
-    network: FakeNetwork = build_network(PYRO_BONFIRE)
-    scheduler: Any = _scheduler(network)
-    path: str = network.scheduler_node.path()
-    host_module.submit_stops[path] = (time.monotonic() - age, "The cook can't start.", "")
-    started: bool = scheduler.onStartCook(False, [network.node("sim")])
-    errors: List[Any] = [call for call in scheduler.calls if call[0] == "cookError"]
-    assert started is not refused and host_module.submit_stops == {}
-    assert errors == ([("cookError", "The cook can't start.")] if refused else [])
-    dropped: str = (
-        f"Dropped Submit's stop for {path}, stored {age:.0f} s ago, and started the cook."
-    )
-    assert (dropped in caplog.text) is not refused

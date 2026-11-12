@@ -57,8 +57,12 @@ check that fails starts nothing and creates no job.
   the TOP network has its PDG graph, Submit also puts the same text on this
   node's error tab, and any warnings on its Warning tab, so you can read
   them again while you fix the scene. The red error badge appears at your
-  next click in the network editor. Submit does this for every check after
-  it has the graph: a farm or queue that isn't set, a bad value on this
+  next click in the network editor. To put the text there, Submit starts a
+  cook that this node refuses at once, so Houdini also prints "Failed to
+  start scheduler". Only that cook start can take the text, so your next
+  cook or Submit is never refused with it, even when that start fails. Submit
+  does this for every check after it has the graph: a farm or queue that
+  isn't set, a bad value on this
   node's tabs, a node whose Cook Type is Service, more steps or
   dependencies than Deadline Cloud allows, a generate that didn't finish,
   and every check on the generated work items. Only these show in the popup

@@ -14,7 +14,6 @@ import logging
 import os
 import re
 import threading
-import time
 from types import ModuleType
 from typing import (
     AbstractSet,
@@ -334,6 +333,7 @@ class HoudiniPdgHost:
         try:
             names |= _names_of(self.scheduler_node())
         except CookSetupError:
+            # With no node to read, the scheduler's own name is the only one an override can use.
             pass
         return _clear_own_overrides(infos, graph_nodes, frozenset(name for name in names if name))
 
@@ -406,8 +406,9 @@ def watch_task_counts(context: Any, stop: Callable[[Verdict], bool]) -> Any:
                 return
             counts[name] = len(_attr(node, "workItems") or ())
             verdict: Verdict = check_generated_counts(counts)
-            stopped[0] = bool(verdict.refusals) and stop(verdict)
-            canceling: bool = stopped[0]
+            # Report a quota once per cook, even when the cook doesn't stop for it.
+            stopped[0] = bool(verdict.refusals)
+            canceling: bool = stopped[0] and stop(verdict)
         # PDG is inside its own generation here, so another thread cancels it.
         if canceling:
             threading.Thread(target=lambda: _call(context, "cancelCook"), daemon=True).start()
@@ -1349,12 +1350,9 @@ def rebuild_layout_from_definition(node: Any) -> None:
 
 _CONFIRM_BUTTONS: Tuple[str, ...] = ("Submit", "Cancel")
 
-#: Submit's stop for each scheduler node by path, as (``time.monotonic()`` when stored, error,
-#: advisories), until ``onStartCook`` takes it. A module dict doesn't mark the scene unsaved.
-submit_stops: Dict[str, Tuple[float, str, str]] = {}
-
-#: Seconds a stored stop stays valid. ``onStartCook`` drops an older one and cooks as normal.
-SUBMIT_STOP_MAX_AGE: float = 30.0
+#: Submit's stop for each scheduler node by path, as (error, advisories), until its cook start
+#: returns. A module dict doesn't mark the scene unsaved.
+submit_stops: Dict[str, Tuple[str, str]] = {}
 
 
 def submit(node: Any, *, get_setting: Optional[Callable[[str], str]] = None) -> bool:
@@ -1494,7 +1492,9 @@ def submit(node: Any, *, get_setting: Optional[Callable[[str], str]] = None) -> 
         if details:
             _show_on_node_tabs(node, display, "", details)
         return False
-    # The display node is what the network's own Cook button cooks.
+    # The display node is what the network's own Cook button cooks. A stop still stored
+    # from an earlier Submit would refuse this cook, so it goes first.
+    submit_stops.pop(node.path(), None)
     display.cookWorkItems(block=False)
     return True
 
@@ -1589,7 +1589,7 @@ def _show_on_node_tabs(node: Any, display: Any, error: str, advisories: str) -> 
     network: Any = node.parent()
     output: Any = (network.outputNode() if hasattr(network, "outputNode") else None) or display
     path: str = node.path()
-    submit_stops[path] = (time.monotonic(), error, advisories)
+    submit_stops[path] = (error, advisories)
     _logger.info("Routing Submit's stop through a cook start of %s", output.path())
     if error:
         _show(error)
@@ -1607,11 +1607,12 @@ def _start_cook_for_node_tabs(path: str, output: Any) -> None:
         # PDG raises this when onStartCook refuses the cook, and for any other failed start.
         failure = str(error)
     finally:
-        # The stop stays, because the cook may still start later. onStartCook ignores it once stale.
-        if path in submit_stops:
+        # onStartCook runs inside this call, so a stop still stored was never taken. Drop it, or
+        # the artist's next real cook would be refused with it.
+        if submit_stops.pop(path, None) is not None:
             _logger.warning(
-                "The cook start of %s hasn't reached %s's onStartCook yet (%s), so Submit's stop "
-                "is still waiting.",
+                "The cook start of %s didn't reach %s's onStartCook (%s), so Submit's stop was "
+                "dropped.",
                 output.path(),
                 path,
                 failure or "no error",

@@ -348,7 +348,7 @@ class FakeNode:
         from deadline.houdini_pdg.houdini.host import submit_stops
 
         if submit_stops:
-            self.stop_cooks.append({path: stop[1:] for path, stop in submit_stops.items()})
+            self.stop_cooks.append(dict(submit_stops))
             submit_stops.clear()
             raise OperationFailed("Failed to start scheduler")
         self.cook_calls.append(kwargs)
