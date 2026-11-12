@@ -13,6 +13,7 @@ from __future__ import annotations
 # Standard library, hypothesis for the "for any reads" properties, and the public
 # surface of ``graph`` and ``scene_reads`` only.
 import os
+from dataclasses import replace
 from typing import Dict, FrozenSet, List, Sequence, Set, Tuple
 
 import pytest
@@ -28,6 +29,7 @@ from deadline.houdini_pdg.scene_reads import (
     ReadVerdict,
     SceneRead,
     match_reads,
+    reads_opening,
 )
 
 WORK: str = "/proj"
@@ -786,3 +788,37 @@ def test_prefix_matching_rules_hold_for_any_prefix(
     assert _verdicts(report.matches) == expected
     edged: Set[str] = {name for name, verdict, _ in expected if verdict is not ReadVerdict.SELF}
     assert report.data_edges == ({reader: frozenset(edged)} if edged else {})
+
+
+# -- nodes that map to no step ---------------------------------------------------
+
+
+def test_reads_opening_matches_a_file_by_path_or_by_static_prefix() -> None:
+    """A plain read matches only the exact file, and a prefix read matches the files under its prefix.
+
+    A sibling file in the same directory is not a match, so a node that writes a
+    log next to a step's input is not refused. The reads are spelled with "/", as
+    Houdini spells them on Windows too, and the file in this OS's spelling.
+    """
+    # This OS's drive root, so the paths are absolute on Windows too.
+    root: str = os.path.abspath(os.sep)
+    proj: str = root.replace("\\", "/").rstrip("/") + "/proj"
+    # Four step reads: a file, its sibling, a prefix over it, and a prefix at the working
+    # directory, which would match every file, so it matches none.
+    exact: SceneRead = _read("karma", f"{proj}/mid/x.txt")
+    sibling: SceneRead = _read("karma", f"{proj}/mid/y.txt")
+    prefixed: SceneRead = replace(
+        _read("karma", "", raw="$HIP/mid/`@name`.txt"), static_prefix=f"{proj}/mid/"
+    )
+    too_wide: SceneRead = replace(_read("karma", "", raw="$HIP/`@name`"), static_prefix=f"{proj}/")
+    files: FrozenSet[str] = frozenset({os.path.join(root, "proj", "mid", "x.txt")})
+    found: Tuple[SceneRead, ...] = reads_opening(
+        files, (exact, sibling, prefixed, too_wide), os.path.join(root, "proj")
+    )
+    assert found == (exact, prefixed)
+
+
+# -- the node's extra output folders -------------------------------------------
+
+#: An output folder outside the working directory, as the node's Job Attachments tab lists it.
+EXTRA: str = "/renders/shot"

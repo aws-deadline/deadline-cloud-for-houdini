@@ -4,16 +4,239 @@
 
 = Deadline Cloud Scheduler (Experimental) =
 
-"""The PDG scheduler for AWS Deadline Cloud. Experimental: not functional in this build."""
+"""The PDG scheduler for AWS Deadline Cloud. Experimental."""
 
 WARNING:
-    This node is experimental and is not functional in this build. Starting a
-    cook with it fails. Do not use it in production scenes.
+    This node is experimental. Its behavior, parameters, and the graphs it
+    supports will change before release. Do not use it in production scenes.
 
 == Overview ==
 
 This scheduler cooks a TOP network as one AWS Deadline Cloud job. Each
 schedulable TOP node becomes a step, and each work item becomes a task.
 
-The integration is under active development. Its behavior, parameters, and the
-graphs it supports will change before release.
+The job's settings, the farm and queue, and the queue's parameters work the
+same way as on the Deadline Cloud ROP. The settings are stored on the node,
+so they are saved with the scene.
+
+When you create the node or load its scene, the node lays out its parameters
+as this version of the node does, and keeps the queue's parameters, such as its
+Conda packages, with their values. Any other spare parameter on the node is
+removed too, because it can't be told apart from an older version's tabs.
+
+== Cooking ==
+
+You can start a cook in two ways. Both run the same checks first, and a
+check that fails starts nothing and creates no job.
+
+* Cook the TOP network as usual, for example with the Cook Output Node button.
+  The scheduler refuses the cook if the scene has never been saved or has
+  unsaved changes, or if a check finds a node it can't run, such as a node
+  whose Cook Type is Service or In-Process. A refused cook stops before PDG
+  starts anything, including a Service node's processes, and PDG then says
+  "Failed to start scheduler", with the reason on this node's error tab. Any
+  warning the checks find goes on this node's Warning tab, also when they
+  refuse the cook. The cook uses
+  the work items PDG already has, so after you change a parm on a SOP outside
+  the TOP network, dirty the network or click __Generate__ before you cook, or
+  use __Submit__, which does that itself.
+
+* Click __Submit__ on this node's Shared Job Settings tab. If the scene has
+  unsaved changes, it first saves them, or asks you to. Then it checks that
+  the TOP network cooks on this scheduler, and runs the checks that need only
+  the network's topology. If
+  they pass, it generates the work items and runs every check on them. It
+  stops generating as soon as a step or the job has more tasks than Deadline
+  Cloud allows. Then it shows the job's farm, queue, name, priority, working
+  directory, step and task counts, host requirements, and extra attachments,
+  and any warnings. Click __Submit__ there, and the TOP network's display
+  node cooks in the background, and the cook puts the warnings on this node's
+  Warning tab. Click __Cancel__, and Submit puts them there itself. The job uses the settings on this
+  node, and Submit doesn't change them, except that Always Save turns on
+  automatic saving. When a check fails, Submit shows why in a popup. Once
+  the TOP network has its PDG graph, Submit also puts the same text on this
+  node's error tab, and any warnings on its Warning tab, so you can read
+  them again while you fix the scene. The red error badge appears at your
+  next click in the network editor. To put the text there, Submit starts a
+  cook that this node refuses at once, so Houdini also prints "Failed to
+  start scheduler". Only that cook start can take the text, so your next
+  cook or Submit is never refused with it, even when that start fails. Submit
+  does this for every check after it has the graph: a farm or queue that
+  isn't set, a bad value on this
+  node's tabs, a node whose Cook Type is Service, more steps or
+  dependencies than Deadline Cloud allows, a generate that didn't finish,
+  and every check on the generated work items. Only these show in the popup
+  alone: the TOP network's Default TOP Scheduler isn't this node, the
+  network has no display node, it has no PDG graph yet, or a step or the
+  job passes a Deadline Cloud task quota while Submit generates. A Service
+  node that the display node cooks is refused before the generate, because
+  the generate would start its service processes. A Service node the display
+  node doesn't cook is skipped, because nothing starts it. A generate that was canceled or that failed on a node
+  leaves steps with no work items and errors on the nodes. Submit stops, and
+  puts its text on the error tab too. The node errors can show a moment
+  after the popup. Fix them, then submit again. When no node has an error
+  yet, the text names the steps with no work items, because those steps may
+  also make no items with their current settings.
+
+Some checks need the generated work items, so the cook runs every check again
+before it submits the job. Results stay on the farm: download them with
+Deadline Cloud Monitor or `deadline job download-output`.
+
+@parameters
+
+== Shared Job Settings ==
+
+Name:
+    #id: name
+    The job's name. Shown in the Deadline Monitor.
+
+Description:
+    #id: description
+    The job's description. Included in the job template.
+
+Priority:
+    #id: priority
+    The job's scheduling priority. The numerically largest priority is
+    scheduled first.
+
+Failed Tasks Limit:
+    #id: failed_tasks_limit
+    The number of task failures before the job stops running and is marked as
+    FAILED.
+
+Task Retry Limit:
+    #id: task_retry_limit
+    The maximum number of retries for each task.
+
+Max Worker Count:
+    #id: max_worker_count
+    The maximum number of workers that run the job's tasks at the same time.
+    0 sets no limit.
+
+Farm:
+    #id: farm
+    The default farm of the AWS Deadline Cloud workstation configuration.
+
+Queue:
+    #id: queue
+    The default queue of the AWS Deadline Cloud workstation configuration.
+
+Login:
+    #id: login
+    Log in to AWS Deadline Cloud.
+
+Logout:
+    #id: logout
+    Log out of AWS Deadline Cloud.
+
+Settings:
+    #id: settings
+    Change the AWS Deadline Cloud workstation configuration shared by all
+    tools, including the default farm and queue.
+
+Update Queue Parameters:
+    #id: update_queue_parameters
+    Show the default farm and queue again, and refresh the queue's parameters,
+    such as its Conda packages.
+
+Submit:
+    #id: submit
+    Check the scene, confirm the job, and cook the TOP network's display node
+    as one AWS Deadline Cloud job.
+
+== PDG ==
+
+Working Directory:
+    #id: working_dir
+    The cook's working directory on this workstation. PDG writes its job
+    scripts and outputs below it, and each step receives it through job
+    attachments.
+
+Debug Level:
+    #id: debug_level
+    How much the cook writes to its log directory. __Standard__ writes the
+    files every cook writes. __Graph dump and item details__ adds a dump of the
+    graph and the details of each work item.
+
+Validate Graph:
+    #id: validate_graph
+    Refuse a graph this scheduler cannot cook correctly, before anything is
+    submitted, and name what to change. When off, each refusal is shown as a
+    warning and the cook goes ahead. Turn it off only when you know the check
+    does not apply, for example when every machine shares one file system. The
+    check for an unsaved scene stays on.
+
+Automatically save scene (.hip) file:
+    #id: auto_save_hip
+    Save the scene without asking when you click __Submit__ with unsaved
+    changes. When it's off, Submit asks, and __Always Save__ turns it on.
+
+Include Adaptor Wheels:
+    #id: include_adaptor_wheels
+    Install custom builds of the adaptor on the workers.
+
+Adaptor Wheels:
+    #id: adaptor_wheels
+    The directory that holds the adaptor wheels.
+
+== Job Attachments ==
+
+The cook attaches the saved scene and the files its parms name on every cook.
+Use these lists only for what that scan can't find.
+
+Input Filenames:
+    #id: input_filenames
+    Files the job needs that the scene doesn't name in a parm, such as a file a
+    Python node opens. They are attached next to the scene's own files. A
+    listed file that doesn't exist stops the cook.
+
+Input Directories:
+    #id: input_directories
+    Folders whose files are all attached as inputs. A folder that is a drive or
+    a home directory, or holds one, stops the cook.
+
+Output Directories:
+    #id: output_directories
+    Folders outside the working directory that tasks write to. Each task
+    uploads what it writes there, so the steps below and Deadline Cloud
+    Monitor can fetch it. A folder that holds the working directory, or is
+    inside it, stops the cook. On Linux and macOS, so does a folder that
+    shares only / with the working directory or another output folder, such
+    as /tmp/out with a working directory under /opt, when the queue's storage
+    profile gives the two the same LOCAL location or none. Put it under the
+    working directory's top-level folder, or ask your farm admin to give the
+    two different LOCAL locations in the storage profile. On Windows, a
+    folder on another drive, or one that shares only the drive with the
+    working directory, isn't refused.
+
+== Host Requirements ==
+
+The requirements apply to every step of the job, as on the Deadline Cloud ROP.
+Each number is -1 when it's not set.
+
+Run On:
+    #id: hr_mode
+    __All available worker hosts__, or only __Worker hosts that meet the
+    following requirements__.
+
+Operating System:
+    #id: hr_os
+    The operating systems a worker may run. Leave empty for any.
+
+CPU Architecture:
+    #id: hr_cpu_arch
+    The CPU architectures a worker may have. Leave empty for any.
+
+vCPUs Min:
+    #id: hr_vcpu_min
+    The fewest vCPUs a worker must have. The other minimum and maximum fields
+    work the same way. Memory and GPU memory are in GiB.
+
+Custom Amounts:
+    #id: hr_amounts
+    Amounts your fleet defines, each with a name and a minimum or maximum.
+
+Custom Attributes:
+    #id: hr_attributes
+    Attributes your fleet defines, each with a name, any of or all of, and
+    comma-separated values.

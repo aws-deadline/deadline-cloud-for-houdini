@@ -1404,8 +1404,8 @@ def test_which_run_a_result_comes_from_does_not_depend_on_the_workstation_clock(
 
 @settings(max_examples=40, deadline=None)
 @given(
-    early=st.sampled_from([("SUCCEEDED", None), ("FAILED", 1), ("NOT_COMPATIBLE", None)]),
-    second=st.sampled_from(["SUCCEEDED", "FAILED", "NOT_COMPATIBLE"]),
+    early=st.sampled_from([("SUCCEEDED", None), ("FAILED", 1)]),
+    second=st.sampled_from(["SUCCEEDED", "FAILED"]),
     gap=st.integers(0, 300),
     lag=st.integers(0, 300),
     run_length=st.integers(1, 300),
@@ -2119,7 +2119,7 @@ def test_each_final_status_is_reported_once_as_the_service_defines_it(
 ) -> None:
     """For any mix of final statuses and retry counts, each task's outcome follows the service's meaning, once.
 
-    ``SUCCEEDED`` succeeds. ``NOT_COMPATIBLE`` fails. ``FAILED`` fails once its
+    ``SUCCEEDED`` succeeds. ``NOT_COMPATIBLE`` waits for a fleet. ``FAILED`` fails once its
     retries are used up, or when its retry count is unreadable, and is not
     reported while the farm will retry it. ``CANCELED`` is returned as canceled,
     never as a failure.
@@ -2138,7 +2138,7 @@ def test_each_final_status_is_reported_once_as_the_service_defines_it(
         if status == "SUCCEEDED":
             expected.append(("a", i, TaskStatus.SUCCEEDED))
         elif status == "NOT_COMPATIBLE":
-            expected.append(("a", i, TaskStatus.FAILED))
+            continue
         elif status == "CANCELED":
             expected.append(("a", i, TaskStatus.CANCELED))
         elif used is None or used >= budget:
@@ -2652,3 +2652,30 @@ def test_the_farm_job_offers_every_method_of_its_port_with_the_same_signature() 
     assert "fail" in port and "poll" in port
     for name, signature in port.items():
         assert str(inspect.signature(getattr(DeadlineFarmJob, name))) == str(signature), name
+
+
+def test_a_task_no_fleet_can_run_waits_and_is_logged_once(caplog: pytest.LogCaptureFixture) -> None:
+    """A NOT_COMPATIBLE task is not a result: the job waits for a fleet that can run it.
+
+    Reporting it as failed made PDG end the cook, and the cook then failed a job
+    that was only waiting for a compatible fleet. The wait is logged once.
+    """
+    job, fake, clock, _ = started([("a", 1, ())])
+    job.release(TaskKey("a", 0))
+    job.poll()
+    fake.finish("a", 0, "NOT_COMPATIBLE")
+    # Polls across the reconcile see the same status, and none returns a result.
+    seen: List[TaskOutcome] = []
+    for _ in range(3):
+        clock.advance(61)
+        with caplog.at_level(logging.WARNING, logger="deadline.houdini_pdg.farm_job"):
+            seen.extend(job.poll())
+    assert seen == []
+    warnings: List[str] = [
+        r.getMessage() for r in caplog.records if "host requirements" in r.getMessage()
+    ]
+    assert len(warnings) == 1
+    # The same task then succeeding on a fleet added later is reported.
+    fake.finish("a", 0, "SUCCEEDED")
+    clock.advance(1)
+    assert statuses_of(job.poll()) == [("a", 0, TaskStatus.SUCCEEDED)]

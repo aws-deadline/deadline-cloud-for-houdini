@@ -88,6 +88,7 @@ class _Parm:
         node_path: str = "/obj/n",
         unexpanded_raises: bool = False,
         owner: Any = None,
+        expression: Optional[str] = None,
     ) -> None:
         # Keep what each HOM method returns.
         self._name = name
@@ -99,6 +100,7 @@ class _Parm:
         self._path = f"{node_path}/{name}"
         self._unexpanded_raises = unexpanded_raises
         self._owner = owner
+        self._expression = expression
 
     def name(self) -> str:
         return self._name
@@ -124,6 +126,12 @@ class _Parm:
 
     def rawValue(self) -> str:
         return self._raw
+
+    def expression(self) -> str:
+        # HOM raises when the parm holds no expression.
+        if self._expression is None:
+            raise RuntimeError("no expression")
+        return self._expression
 
     def getReferencedParm(self) -> "_Parm":
         # HOM returns the parm itself when it references nothing.
@@ -544,6 +552,54 @@ def test_cache_mode_is_read_as_its_menu_label(parms: List[Any], expected: Option
     assert info.cache_mode == expected
 
 
+class _GenerateWhenParm:
+    """The ``pdg_workitemgeneration`` menu parm, with its tokens out of label order as measured."""
+
+    def __init__(self, token: str) -> None:
+        self._token = token
+
+    def name(self) -> str:
+        return "pdg_workitemgeneration"
+
+    def evalAsString(self) -> str:
+        return self._token
+
+    def menuItems(self) -> Tuple[str, ...]:
+        return ("1", "3", "0", "2")
+
+    def menuLabels(self) -> Tuple[str, ...]:
+        return (
+            "All Upstream Items are Generated",
+            "All Upstream Items are Cooked",
+            "Each Upstream Item is Cooked",
+            "Automatic",
+        )
+
+
+@pytest.mark.parametrize(
+    "parms, expected",
+    [
+        ([_GenerateWhenParm("0")], True),
+        ([_GenerateWhenParm("3")], True),
+        ([_GenerateWhenParm("1")], False),
+        ([_GenerateWhenParm("2")], None),
+        ([], None),
+    ],
+)
+def test_generate_when_is_read_by_its_label_not_its_position(
+    parms: List[Any], expected: Optional[bool]
+) -> None:
+    """Only the node whose own parm is dynamic is refused, so the parm must be read right.
+
+    The menu's tokens are not in label order, so reading by position names the wrong setting.
+    """
+    # One step whose TOP node carries the Generate When parm under test.
+    node: _PdgNode = _PdgNode("n", command="x")
+    _topnet(_wire(node, "/obj/topnet1/n", parms=parms))
+    (info,) = node_infos([node], {})
+    assert info.dynamic_by_parm is expected
+
+
 def test_a_node_without_a_top_node_reads_no_parms() -> None:
     """A PDG node with no TOP node still reads, with nothing taken from parms."""
     node: _PdgNode = _PdgNode("n", command="x")
@@ -587,6 +643,7 @@ def test_generated_items_are_merged_with_declarations_and_attributes() -> None:
             ],
             inputs=[_File("/src/in.bgeo.sc", tag="")],
             environment={"zeta": "z", "wedgeindex": i},
+            attribNames=lambda: ["wedgeindex", "zeta", "hip"],
         )
         for i in range(2)
     ]
@@ -610,6 +667,8 @@ def test_generated_items_are_merged_with_declarations_and_attributes() -> None:
     assert cache_info.items[1].depends_on == ()
     # Sorted, so the same scene always gives the same NodeInfo.
     assert cache_info.exported_attribute_names == ("wedgeindex", "zeta")
+    # Every attribute counts here, exported or not, including PDG's own ``hip``.
+    assert cache_info.attribute_names == ("hip", "wedgeindex", "zeta")
     # The cook set names the cache only.
     assert cache_info.in_cook_set is True
     assert infos["render"].in_cook_set is False
@@ -1441,6 +1500,66 @@ def test_a_read_driven_by_an_attribute_records_its_evaluated_static_prefix() -> 
     assert set(_prefixes(_pyro_karma({"file": "$HIP/w`@i`"}), expand=None).values()) == {""}
 
 
+def test_a_read_records_the_variables_houdini_leaves_undefined() -> None:
+    """Each ``$NAME`` the session's expander refuses is recorded once, and ``$HIP`` is not.
+
+    The attribute check needs this to tell ``$WEDGEINDEX``, which expands to nothing,
+    from ``$HIP``, which every item also carries as an attribute.
+    """
+    top: _Hom = _Hom(
+        "/obj/topnet1/t",
+        category="Top",
+        parms=[_file("picture", "/v", "$HIP/w${WEDGEINDEX}/a.$WEDGEINDEX.exr")],
+    )
+    (read,) = collect_scene_reads({"t": top}, expand=_hip).reads
+    assert read.undefined_variables == ("WEDGEINDEX",)
+    # Without an expander nothing is judged undefined.
+    (unknown,) = collect_scene_reads({"t": top}).reads
+    assert unknown.undefined_variables == ()
+
+
+# The stock ``sopoutput`` expression of a File Cache, as Houdini 21 holds it.
+_STOCK_SOPOUTPUT: str = (
+    "{\n    if(ch('filemethod'))\n    {\n        return chs('file');\n    }\n    else\n"
+    "    {\n        return chs('cachedir') + '/' + chs('cachename');\n    }\n}"
+)
+
+
+@pytest.mark.parametrize(
+    "type_name, method, parm, sopoutput, expected",
+    [
+        ("filecache::2.0", 1, "file", _STOCK_SOPOUTPUT, True),
+        ("filecache::2.0", 0, "file", _STOCK_SOPOUTPUT, False),
+        ("filecache::2.0", 1, "basedir", _STOCK_SOPOUTPUT, False),
+        ("file", 1, "file", _STOCK_SOPOUTPUT, False),
+        # A literal typed over the expression is the write, so ``file`` is not.
+        ("filecache::2.0", 1, "file", None, False),
+        ("filecache::2.0", 1, "file", "chs('cachedir') + '/x.bgeo.sc'", False),
+    ],
+)
+def test_a_file_cache_file_is_a_write_only_when_its_write_uses_it(
+    type_name: str, method: int, parm: str, sopoutput: Optional[str], expected: bool
+) -> None:
+    """A File Cache writes ``file`` only when ``filemethod`` is on and ``sopoutput`` copies ``file``.
+
+    A File SOP's ``file`` is only a read.
+    """
+    cache: _Hom = _Hom(
+        "/obj/topnet1/t",
+        category="Top",
+        type_name=type_name,
+        parms=[
+            _file(parm, "/proj/geo/a.bgeo.sc"),
+            _Parm("filemethod", method, kind="", template="Toggle"),
+            _Parm("sopoutput", "/proj/x.bgeo.sc", kind="", expression=sopoutput),
+        ],
+    )
+    (read,) = collect_scene_reads({"t": cache}).reads
+    assert read.is_file_cache_write is expected
+    # It stays a read for matching, so a step that loads the cache keeps its edge.
+    assert read.is_output is False
+
+
 def test_os_in_a_copied_parm_names_the_node_that_holds_the_text() -> None:
     """``$OS`` in text copied with ``chs`` names the node the text was authored on.
 
@@ -1663,15 +1782,8 @@ class _ExpressionParm(_Parm):
         tags: Optional[Dict[str, str]] = None,
         kind: str = "Regular",
     ) -> None:
-        super().__init__(name, raw, raw, kind=kind)
-        self._expression = expression
+        super().__init__(name, raw, raw, kind=kind, expression=expression or None)
         self._template = _CodeTemplate(tags or {}, kind)
-
-    def expression(self) -> str:
-        # HOM raises when the parm has no channel expression.
-        if not self._expression:
-            raise RuntimeError("no expression")
-        return self._expression
 
 
 class _LockedHom(_Hom):

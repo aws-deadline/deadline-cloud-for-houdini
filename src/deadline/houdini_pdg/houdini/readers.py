@@ -13,7 +13,14 @@ import re
 from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple
 
 from ..graph import DeclaredFile, NodeInfo, RawItem
-from ..scene_reads import IGNORE_PARMS, IGNORE_VALUE_PREFIXES, OUTPUT_PARMS, SceneRead, SceneReads
+from ..scene_reads import (
+    IGNORE_PARMS,
+    IGNORE_VALUE_PREFIXES,
+    VARIABLE_PATTERN,
+    SceneRead,
+    SceneReads,
+    is_output_parm,
+)
 
 _logger: logging.Logger = logging.getLogger(__name__)
 
@@ -31,6 +38,9 @@ _SCHEDULER_OVERRIDE_PARM: str = "topscheduler"
 _OUTSIDE_COOK_STATES: FrozenSet[str] = frozenset(
     {"Uncooked", "Dirty", "CookedSuccess", "CookedFail", "CookedCancel", "CookedCache"}
 )
+
+# The ``pdg.workItemState`` name of an item PDG took from an earlier cook's files.
+_CACHED_STATE: str = "CookedCache"
 
 # The authored text of a parm that only copies another parm's value.
 _CHANNEL_REFERENCES: Tuple[str, ...] = ("chs(", "chsraw(", "ch(")
@@ -53,7 +63,8 @@ def node_infos(
     With ``only_items_in_cook``, read during a cook, an item PDG will not schedule
     is left out, and a node whose every generated item is left out is outside the
     cook: cooking one work item cooks it and its upstream items, not their nodes.
-    Outside a cook the item states are an earlier cook's, so every item is kept.
+    Items PDG took from cache are kept aside only on a node in the cook: one the
+    cook set names, or one with items left. Outside a cook every item is kept.
     """
     # The PDG nodes by name. The first of two nodes with one name wins, and a
     # nameless or unreadable node is skipped.
@@ -65,18 +76,23 @@ def node_infos(
 
     # During a cook, drop the items PDG will not schedule. A node left with none
     # is outside the cook.
-    items, item_upstream, attributes = _generated(dependency_graph)
+    items, item_upstream, attributes, carried = _generated(dependency_graph)
     outside: Set[str] = set()
+    cached: Dict[str, Tuple[RawItem, ...]] = {}
+    requested: Optional[Set[str]] = (
+        None if cook_set is None else {str(name) for name in _iterate(cook_set)}
+    )
     if only_items_in_cook:
         for name in list(items):
             kept: List[RawItem] = [item for item in items[name] if item.in_cook is not False]
+            # Items PDG cooked from cache are kept aside, so validation can refuse the
+            # step. A node outside the cook set with none left holds an earlier cook's.
+            if kept or requested is None or name in requested:
+                cached[name] = tuple(item for item in items[name] if item.cached)
             if not kept:
                 outside.add(name)
             items[name] = kept
     wiring: Optional[Dict[str, Set[str]]] = _hom_wiring(pdg_nodes)
-    requested: Optional[Set[str]] = (
-        None if cook_set is None else {str(name) for name in _iterate(cook_set)}
-    )
 
     def in_cook(name: str) -> Optional[bool]:
         """Whether the node is in the cook, or None when the cook set is unknown."""
@@ -89,6 +105,7 @@ def node_infos(
     # One NodeInfo per topology node. Its wiring comes from the TOP network, and
     # from the items' dependencies only when no network could be read.
     infos: List[NodeInfo] = []
+    dynamic: Set[str] = find_dynamic_nodes(pdg_nodes)
     for name in sorted(pdg_nodes):
         pdg_node: Any = pdg_nodes[name]
         hom: Any = _call(pdg_node, "topNode")
@@ -101,21 +118,24 @@ def node_infos(
         infos.append(
             NodeInfo(
                 name=name,
-                is_dynamic=bool(_attr(pdg_node, "isDynamic", False)),
+                is_dynamic=name in dynamic,
                 top_type=_enum_name(_attr(pdg_node, "nodeType", "")),
                 upstream=tuple(sorted(upstream - {name})),
                 items=tuple(items.get(name, ())),
                 exported_attribute_names=tuple(sorted(attributes.get(name, ()))),
+                attribute_names=tuple(sorted(carried.get(name, ()))),
                 schedulable=job_script,
                 in_cook_set=in_cook(name),
-                cook_type=_cook_type(pdg_node, hom),
+                cook_type=read_cook_type(pdg_node, hom),
                 scheduler_override=_scheduler_override(hom),
                 cache_mode=_cache_mode(hom),
+                dynamic_by_parm=_dynamic_by_parm(hom),
                 node_type_name=_node_type_name(hom),
                 in_locked_asset=bool(_call(hom, "isInsideLockedHDA")),
                 expressions=() if job_script else _expressions(hom),
                 file_parms=() if job_script else _file_parm_texts(hom),
                 python_code=() if job_script else _python_code(hom),
+                cached_items=cached.get(name, ()),
             )
         )
 
@@ -131,6 +151,7 @@ def node_infos(
                 upstream=tuple(sorted(item_upstream.get(name, set()) - {name})),
                 items=tuple(items[name]),
                 exported_attribute_names=tuple(sorted(attributes.get(name, ()))),
+                attribute_names=tuple(sorted(carried.get(name, ()))),
                 schedulable=None,
                 in_cook_set=in_cook(name),
             )
@@ -171,6 +192,18 @@ def collect_scene_reads(
             for node in reached:
                 node_path: str = _path_of(node)
                 node_name: str = _name_of(node)
+                node_type: str = _node_type_name(node)
+                # A File Cache writes its ``file`` when ``filemethod`` is on and
+                # ``sopoutput`` still holds an expression that copies ``file``.
+                file_cache_writes: bool = (
+                    node_type == _FILE_CACHE
+                    and bool(_call(_call(node, "parm", "filemethod"), "eval"))
+                    and bool(
+                        _COPIES_FILE.search(
+                            str(_call(_call(node, "parm", "sopoutput"), "expression") or "")
+                        )
+                    )
+                )
                 for parm, raw, value, owner in _file_parms(node, node_name):
                     reads.append(
                         SceneRead(
@@ -179,8 +212,10 @@ def collect_scene_reads(
                             parm=parm,
                             raw=raw,
                             path=value,
-                            is_output=parm in OUTPUT_PARMS,
+                            is_output=is_output_parm(node_type, parm),
                             static_prefix=_static_prefix(raw, owner, expand),
+                            undefined_variables=_undefined_variables(raw, owner, expand),
+                            is_file_cache_write=file_cache_writes and parm == "file",
                         )
                     )
             walked[step] = len(reached)
@@ -282,8 +317,8 @@ def _file_entries(files: Any) -> List[Dict[str, str]]:
 
 def _generated(
     dependency_graph: Any,
-) -> Tuple[Dict[str, List[RawItem]], Dict[str, Set[str]], Dict[str, Set[str]]]:
-    """Items, item-derived upstream nodes, and exported attribute names, by node name.
+) -> Tuple[Dict[str, List[RawItem]], Dict[str, Set[str]], Dict[str, Set[str]], Dict[str, Set[str]]]:
+    """Items, item-derived upstream nodes, exported attribute names, and all attribute names, by node name.
 
     ``dependencyGraph`` returns ``(dependencies, dependents, ready)``. Only the
     first is read: it maps each schedulable item to the items it waits on.
@@ -291,6 +326,7 @@ def _generated(
     items: Dict[str, List[RawItem]] = {}
     upstream: Dict[str, Set[str]] = {}
     attributes: Dict[str, Set[str]] = {}
+    carried: Dict[str, Set[str]] = {}
     # Each readable item joins its node's list, and its dependencies on other
     # nodes' items give that node's item-derived upstream.
     for work_item, depends_on in _dependency_map(dependency_graph):
@@ -301,12 +337,15 @@ def _generated(
         # An item on its own node's dependency adds no edge.
         items.setdefault(node_name, []).append(item)
         attributes.setdefault(node_name, set()).update(_exported_attributes(work_item))
+        carried.setdefault(node_name, set()).update(
+            str(name) for name in _iterate(_call(work_item, "attribNames"))
+        )
         edges: Set[str] = upstream.setdefault(node_name, set())
         for dep in _iterate(depends_on):
             dep_node: str = _str_attr(_attr(dep, "node", None), "name")
             if dep_node and dep_node != node_name:
                 edges.add(dep_node)
-    return items, upstream, attributes
+    return items, upstream, attributes, carried
 
 
 def _dependency_map(dependency_graph: Any) -> List[Tuple[Any, Any]]:
@@ -332,6 +371,11 @@ def _raw_item(work_item: Any, depends_on: Any) -> Optional[RawItem]:
     # Read batching from the child: the dependency graph's items are batch children,
     # so PDG's ``isBatch`` is False on every one of them.
     parent: Any = _attr(work_item, "batchParent", None)
+    cached: bool = _enum_name(_attr(work_item, "state", None)) == _CACHED_STATE
+    # An item PDG cooked from cache holds the files it found in ``outputFiles``, when it has any.
+    found: Tuple[DeclaredFile, ...] = (
+        declared_files(_attr(work_item, "outputFiles", ())) if cached else ()
+    )
     return RawItem(
         name=name,
         index=_as_int(_attr(work_item, "index", 0), 0),
@@ -340,10 +384,11 @@ def _raw_item(work_item: Any, depends_on: Any) -> Optional[RawItem]:
         is_out_of_process=bool(_attr(work_item, "isOutOfProcess", False)),
         is_batch=bool(_attr(work_item, "isBatch", False)),
         batch_parent=_str_attr(parent, "name") if parent is not None else "",
-        declared_outputs=_declared(_attr(work_item, "expectedOutputFiles", ())),
-        declared_inputs=_declared(_attr(work_item, "inputFiles", ())),
+        declared_outputs=found or declared_files(_attr(work_item, "expectedOutputFiles", ())),
+        declared_inputs=declared_files(_attr(work_item, "inputFiles", ())),
         depends_on=tuple(n for n in (_str_attr(d, "name") for d in _iterate(depends_on)) if n),
         in_cook=_in_cook(_attr(work_item, "state", None)),
+        cached=cached,
     )
 
 
@@ -358,7 +403,7 @@ def _in_cook(state: Any) -> Optional[bool]:
     return True if name else None
 
 
-def _declared(files: Any) -> Tuple[DeclaredFile, ...]:
+def declared_files(files: Any) -> Tuple[DeclaredFile, ...]:
     """Declared files with a path. PDG gives file objects; a ``(path, tag)`` pair is read too."""
     declared: List[DeclaredFile] = []
     for entry in _iterate(files):
@@ -394,7 +439,7 @@ def _has_job_script(node: Any) -> bool:
         return False
 
 
-def _cook_type(node: Any, hom: Any) -> Optional[str]:
+def read_cook_type(node: Any, hom: Any) -> Optional[str]:
     """Where the node's items cook: PDG's own answer first, then the node's parm."""
     value: Optional[str] = _cook_type_name(_attr(node, "cookType", None))
     if value:
@@ -429,6 +474,52 @@ def _cache_mode(hom: Any) -> Optional[str]:
         return str(parm.menuLabels()[list(parm.menuItems()).index(parm.evalAsString())])
     except Exception:
         return None
+
+
+# Generate When labels, by whether they make the node generate while the cook runs.
+_GENERATE_WHEN: Dict[str, bool] = {
+    "Each Upstream Item is Cooked": True,
+    "All Upstream Items are Cooked": True,
+    "All Upstream Items are Generated": False,
+}
+
+
+def _dynamic_by_parm(hom: Any) -> Optional[bool]:
+    """Whether the node's own Generate When makes it dynamic, read by label. None for Automatic or unknown."""
+    # The menu's tokens are out of label order, so the label names the setting.
+    parm: Any = _call(hom, "parm", "pdg_workitemgeneration")
+    if parm is None:
+        return None
+    try:
+        label: str = str(parm.menuLabels()[list(parm.menuItems()).index(parm.evalAsString())])
+    except Exception:
+        return None
+    return _GENERATE_WHEN.get(label)
+
+
+def find_dynamic_nodes(pdg_nodes: Mapping[str, Any]) -> Set[str]:
+    """The names of the nodes PDG generates while the cook runs.
+
+    Houdini 19.5's ``pdg.Node`` has no ``isDynamic``. There a node is dynamic when
+    its own Generate When says so or a dynamic node is wired above it.
+    """
+    # PDG's own flag decides where the node has one. None marks a node without it.
+    flags: Dict[str, Optional[bool]] = {
+        name: _attr(node, "isDynamic", None) for name, node in pdg_nodes.items()
+    }
+    dynamic: Set[str] = {name for name, flag in flags.items() if flag}
+    unknown: Set[str] = {name for name, flag in flags.items() if flag is None}
+    if not unknown:
+        return dynamic
+    # Without the flag, a node's Generate When decides, and PDG flags every node
+    # below a dynamic one, so the flag spreads down the wires until nothing changes.
+    dynamic |= {name for name in unknown if _dynamic_by_parm(_call(pdg_nodes[name], "topNode"))}
+    wiring: Dict[str, Set[str]] = _hom_wiring(pdg_nodes) or {}
+    while True:
+        below: Set[str] = {name for name in unknown - dynamic if wiring.get(name, set()) & dynamic}
+        if not below:
+            return dynamic
+        dynamic |= below
 
 
 def _scheduler_override(hom: Any) -> str:
@@ -644,8 +735,35 @@ def _string_parms(node: Any, kind: str) -> List[Any]:
     return found
 
 
+# The File Cache node type whose ``file`` parm is its write.
+_FILE_CACHE: str = "filecache::2.0"
+
+# ``chs('file')`` or ``chs("file")`` in an expression: the File Cache's stock ``sopoutput``.
+_COPIES_FILE: "re.Pattern[str]" = re.compile(r"""\bchs\(\s*["']file["']\s*\)""")
+
 # ``$OS`` and ``${OS}``: the name of the node that holds the parm.
 _OS_VARIABLE: "re.Pattern[str]" = re.compile(r"\$\{OS\}|\$OS(?!\w)")
+
+
+def _undefined_variables(
+    raw: str, owner: str, expand: Optional[Callable[[str], str]]
+) -> Tuple[str, ...]:
+    """The ``$NAME`` variables in ``raw`` that ``expand`` raises for, each once. ``()`` without ``expand``.
+
+    ``$OS`` names ``owner``, the node that holds the text, so it is defined when ``owner`` is known.
+    """
+    if expand is None:
+        return ()
+    # Each variable is expanded alone, so one unknown name can't hide another.
+    found: Dict[str, None] = {}
+    named: str = _OS_VARIABLE.sub(lambda _: owner, raw) if owner else raw
+    for braced, bare in VARIABLE_PATTERN.findall(named):
+        name: str = braced or bare
+        try:
+            expand("$" + name)
+        except Exception:
+            found[name] = None
+    return tuple(found)
 
 
 def _static_prefix(raw: str, owner: str, expand: Optional[Callable[[str], str]]) -> str:

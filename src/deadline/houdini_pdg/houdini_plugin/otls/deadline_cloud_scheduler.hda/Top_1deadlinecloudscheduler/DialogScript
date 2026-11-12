@@ -1,3 +1,5 @@
+# Dialog script for deadlinecloudscheduler automatically generated
+
 {
     name	deadlinecloudscheduler
     script	deadlinecloudscheduler
@@ -5,5 +7,470 @@
 
     help {
 	""
+    }
+
+    group {
+        name    "job_settings"
+        label   "Shared Job Settings"
+
+        groupsimple {
+            name    "folder0"
+            label   "Job Properties"
+
+            parm {
+                name    "name"
+                label   "Name"
+                type    string
+                default { "$HIPNAME" }
+                parmtag { "script_callback_language" "python" }
+                help    "The job's name. Shown in the Deadline Monitor."
+            }
+            parm {
+                name    "description"
+                label   "Description"
+                type    string
+                default { "" }
+                parmtag { "script_callback_language" "python" }
+                help    "The job's description. Included in the job template."
+            }
+            parm {
+                name    "priority"
+                label   "Priority"
+                type    integer
+                default { "50" }
+                range   { 1 100 }
+                parmtag { "script_callback_language" "python" }
+                parmtag { "sidefx::slider" "none" }
+                help    "The job's scheduling priority. The numerically largest priority is scheduled first. See the AWS Deadline Cloud job scheduling documentation for more details."
+            }
+            parm {
+                name    "failed_tasks_limit"
+                label   "Failed Tasks Limit"
+                type    integer
+                default { "20" }
+                range   { 0 200 }
+                parmtag { "script_callback_language" "python" }
+                parmtag { "sidefx::slider" "none" }
+                help    "The number of task failures before the job stops running and is marked as FAILED."
+            }
+            parm {
+                name    "task_retry_limit"
+                label   "Task Retry Limit"
+                type    integer
+                default { "5" }
+                range   { 0 10 }
+                parmtag { "script_callback_language" "python" }
+                parmtag { "sidefx::slider" "none" }
+                help    "The maximum number of retries for each task."
+            }
+            parm {
+                name    "max_worker_count"
+                label   "Max Worker Count"
+                type    integer
+                default { "0" }
+                range   { 0! 100 }
+                parmtag { "script_callback_language" "python" }
+                parmtag { "sidefx::slider" "none" }
+                help    "The maximum number of workers that run the job's tasks at the same time. 0 sets no limit."
+            }
+        }
+
+        groupsimple {
+            name    "folder1"
+            label   "Deadline Cloud Settings"
+
+            parm {
+                name    "farm"
+                label   "Farm"
+                type    label
+                default { "<unknown>" }
+            }
+            parm {
+                name    "queue"
+                label   "Queue"
+                type    label
+                default { "<unknown>" }
+            }
+            parm {
+                name    "login"
+                label   "Login"
+                type    button
+                joinnext
+                default { "0" }
+                parmtag { "script_callback" "hou.phm().callback(kwargs)" }
+                parmtag { "script_callback_language" "python" }
+                help    "Log in to AWS Deadline Cloud and authenticate for job submission."
+            }
+            parm {
+                name    "logout"
+                label   "Logout"
+                type    button
+                joinnext
+                default { "0" }
+                parmtag { "script_callback" "hou.phm().callback(kwargs)" }
+                parmtag { "script_callback_language" "python" }
+                help    "Log out of AWS Deadline Cloud."
+            }
+            parm {
+                name    "settings"
+                label   "Settings"
+                type    button
+                joinnext
+                default { "0" }
+                parmtag { "script_callback" "hou.phm().callback(kwargs)" }
+                parmtag { "script_callback_language" "python" }
+                help    "Update the AWS Deadline Cloud workstation configuration shared by all tools."
+            }
+            parm {
+                name    "update_queue_parameters"
+                label   "Update Queue Parameters"
+                type    button
+                default { "0" }
+                parmtag { "script_callback" "hou.phm().callback(kwargs)" }
+                parmtag { "script_callback_language" "python" }
+                help    "Show the default farm and queue, and refresh the queue's parameters below."
+            }
+        }
+        parm {
+            name    "submit"
+            label   "Submit"
+            type    button
+            default { "0" }
+            parmtag { "script_callback" "hou.phm().callback(kwargs)" }
+            parmtag { "script_callback_language" "python" }
+            help    "Check the scene, confirm the job, and cook the TOP network's display node as one AWS Deadline Cloud job."
+        }
+
+    }
+
+    group {
+        name    "job_settings_1"
+        label   "PDG"
+
+        parm {
+            name    "working_dir"
+            label   "Working Directory"
+            type    directory
+            default { "$HIP" }
+            parmtag { "script_callback_language" "python" }
+            help    "The cook's working directory on this workstation. PDG writes its job scripts and outputs below it, and each step receives it through job attachments."
+        }
+        parm {
+            name    "debug_level"
+            label   "Debug Level"
+            type    ordinal
+            default { "0" }
+            menu {
+                "0" "Standard"
+                "1" "Graph dump and item details"
+            }
+            parmtag { "script_callback_language" "python" }
+            help    "How much the cook writes to its log directory. The second level adds a dump of the graph and the details of each work item."
+        }
+        parm {
+            name    "validate_graph"
+            label   "Validate Graph"
+            type    toggle
+            default { "1" }
+            parmtag { "script_callback_language" "python" }
+            help    "Refuse a graph this scheduler cannot cook correctly before anything is submitted. When off, each refusal is a warning and the cook goes ahead."
+        }
+        parm {
+            name    "auto_save_hip"
+            label   "Automatically save scene (.hip) file"
+            type    toggle
+            default { "0" }
+            parmtag { "script_callback_language" "python" }
+            help    "Save the scene (.hip) file without asking when you click Submit with unsaved changes."
+        }
+        parm {
+            name    "include_adaptor_wheels"
+            label   "Include Adaptor Wheels"
+            type    toggle
+            default { "0" }
+            parmtag { "script_callback_language" "python" }
+            help    "Adaptor wheels are custom builds of the adaptor that change rendering behavior."
+        }
+        parm {
+            name    "adaptor_wheels"
+            label   "Adaptor Wheels"
+            type    directory
+            default { "" }
+            disablewhen "{ include_adaptor_wheels == 0 }"
+            parmtag { "script_callback_language" "python" }
+            help    "The directory for adaptor wheels."
+        }
+    }
+
+    group {
+        name    "job_settings_2"
+        label   "Job Attachments"
+
+        multiscroll {
+            name    "input_filenames"
+            label    "Input Filenames"
+
+            parm {
+                name    "input_filenames#"
+                label   "Input File"
+                type    file
+                default { "" }
+                parmtag { "script_callback_language" "python" }
+                help    "A file the job needs that the scene scan can't find, such as one a Python node opens. It is attached next to the scene's own files."
+            }
+        }
+
+        multiscroll {
+            name    "input_directories"
+            label    "Input Directories"
+
+            parm {
+                name    "input_dir#"
+                label   "Input Directory"
+                type    directory
+                default { "" }
+                parmtag { "script_callback_language" "python" }
+                help    "A folder whose files are all attached as inputs, next to the scene's own files."
+            }
+        }
+
+        multiscroll {
+            name    "output_directories"
+            label    "Output Directories"
+
+            parm {
+                name    "output_dir#"
+                label   "Output Directory"
+                type    directory
+                default { "" }
+                parmtag { "script_callback_language" "python" }
+                help    "A folder outside the working directory that tasks write to. Each task uploads what it writes there, so the steps below and Deadline Cloud Monitor can fetch it."
+            }
+        }
+    }
+
+    group {
+        name    "host_requirements"
+        label   "Host Requirements"
+
+        parm {
+            name    "hr_mode"
+            label   "Run On"
+            type    ordinal
+            default { "0" }
+            menu {
+                "all"       "All available worker hosts"
+                "custom"    "Worker hosts that meet the following requirements"
+            }
+            parmtag { "script_callback_language" "python" }
+            help    "Which workers may run the job. The requirements below apply to every step."
+        }
+        parm {
+            name    "hr_os"
+            label   "Operating System"
+            type    string
+            default { "" }
+            disablewhen "{ hr_mode == all }"
+            menutoggle {
+                "linux"     "linux"
+                "macos"     "macos"
+                "windows"   "windows"
+            }
+            parmtag { "script_callback_language" "python" }
+            help    "The operating systems a worker may run. Leave empty for any."
+        }
+        parm {
+            name    "hr_cpu_arch"
+            label   "CPU Architecture"
+            type    string
+            default { "" }
+            disablewhen "{ hr_mode == all }"
+            menutoggle {
+                "x86_64"    "x86_64"
+                "arm64"     "arm64"
+            }
+            parmtag { "script_callback_language" "python" }
+            help    "The CPU architectures a worker may have. Leave empty for any."
+        }
+        parm {
+            name    "hr_vcpu_min"
+            label   "vCPUs Min"
+            type    integer
+            default { "-1" }
+            disablewhen "{ hr_mode == all }"
+            range   { -1! 100000 }
+            parmtag { "sidefx::slider" "none" }
+            parmtag { "script_callback_language" "python" }
+            help    "The minimum vCPUs a worker must have. -1 means not set."
+        }
+        parm {
+            name    "hr_vcpu_max"
+            label   "vCPUs Max"
+            type    integer
+            default { "-1" }
+            disablewhen "{ hr_mode == all }"
+            range   { -1! 100000 }
+            parmtag { "sidefx::slider" "none" }
+            parmtag { "script_callback_language" "python" }
+            help    "The maximum vCPUs a worker may have. -1 means not set."
+        }
+        parm {
+            name    "hr_memory_min"
+            label   "Memory Min (GiB)"
+            type    integer
+            default { "-1" }
+            disablewhen "{ hr_mode == all }"
+            range   { -1! 100000 }
+            parmtag { "sidefx::slider" "none" }
+            parmtag { "script_callback_language" "python" }
+            help    "The minimum memory in GiB a worker must have. -1 means not set."
+        }
+        parm {
+            name    "hr_memory_max"
+            label   "Memory Max (GiB)"
+            type    integer
+            default { "-1" }
+            disablewhen "{ hr_mode == all }"
+            range   { -1! 100000 }
+            parmtag { "sidefx::slider" "none" }
+            parmtag { "script_callback_language" "python" }
+            help    "The maximum memory in GiB a worker may have. -1 means not set."
+        }
+        parm {
+            name    "hr_gpu_min"
+            label   "GPUs Min"
+            type    integer
+            default { "-1" }
+            disablewhen "{ hr_mode == all }"
+            range   { -1! 100000 }
+            parmtag { "sidefx::slider" "none" }
+            parmtag { "script_callback_language" "python" }
+            help    "The minimum GPUs a worker must have. -1 means not set."
+        }
+        parm {
+            name    "hr_gpu_max"
+            label   "GPUs Max"
+            type    integer
+            default { "-1" }
+            disablewhen "{ hr_mode == all }"
+            range   { -1! 100000 }
+            parmtag { "sidefx::slider" "none" }
+            parmtag { "script_callback_language" "python" }
+            help    "The maximum GPUs a worker may have. -1 means not set."
+        }
+        parm {
+            name    "hr_gpu_memory_min"
+            label   "GPU Memory Min (GiB)"
+            type    integer
+            default { "-1" }
+            disablewhen "{ hr_mode == all }"
+            range   { -1! 100000 }
+            parmtag { "sidefx::slider" "none" }
+            parmtag { "script_callback_language" "python" }
+            help    "The minimum GPU memory in GiB a worker must have. -1 means not set."
+        }
+        parm {
+            name    "hr_gpu_memory_max"
+            label   "GPU Memory Max (GiB)"
+            type    integer
+            default { "-1" }
+            disablewhen "{ hr_mode == all }"
+            range   { -1! 100000 }
+            parmtag { "sidefx::slider" "none" }
+            parmtag { "script_callback_language" "python" }
+            help    "The maximum GPU memory in GiB a worker may have. -1 means not set."
+        }
+        parm {
+            name    "hr_scratch_min"
+            label   "Scratch Space Min (GiB)"
+            type    integer
+            default { "-1" }
+            disablewhen "{ hr_mode == all }"
+            range   { -1! 100000 }
+            parmtag { "sidefx::slider" "none" }
+            parmtag { "script_callback_language" "python" }
+            help    "The minimum scratch space in GiB a worker must have. -1 means not set."
+        }
+        parm {
+            name    "hr_scratch_max"
+            label   "Scratch Space Max (GiB)"
+            type    integer
+            default { "-1" }
+            disablewhen "{ hr_mode == all }"
+            range   { -1! 100000 }
+            parmtag { "sidefx::slider" "none" }
+            parmtag { "script_callback_language" "python" }
+            help    "The maximum scratch space in GiB a worker may have. -1 means not set."
+        }
+
+        multiparm {
+            name    "hr_amounts"
+            label   "Custom Amounts"
+            default 0
+            disablewhen "{ hr_mode == all }"
+
+            parm {
+                name    "hr_amount_name#"
+                label   "Name"
+                type    string
+                default { "" }
+                parmtag { "script_callback_language" "python" }
+                help    "The amount's name, without the amount. prefix."
+            }
+            parm {
+                name    "hr_amount_min#"
+                label   "Min"
+                type    integer
+                default { "-1" }
+                parmtag { "sidefx::slider" "none" }
+                parmtag { "script_callback_language" "python" }
+                help    "The least a worker must have. -1 means not set."
+            }
+            parm {
+                name    "hr_amount_max#"
+                label   "Max"
+                type    integer
+                default { "-1" }
+                parmtag { "sidefx::slider" "none" }
+                parmtag { "script_callback_language" "python" }
+                help    "The most a worker may have. -1 means not set."
+            }
+        }
+
+        multiparm {
+            name    "hr_attributes"
+            label   "Custom Attributes"
+            default 0
+            disablewhen "{ hr_mode == all }"
+
+            parm {
+                name    "hr_attr_name#"
+                label   "Name"
+                type    string
+                default { "" }
+                parmtag { "script_callback_language" "python" }
+                help    "The attribute's name, without the attr. prefix."
+            }
+            parm {
+                name    "hr_attr_option#"
+                label   "Match"
+                type    ordinal
+                default { "0" }
+                menu {
+                    "anyOf" "Any of"
+                    "allOf" "All of"
+                }
+                parmtag { "script_callback_language" "python" }
+                help    "Whether a worker needs any one of the values or all of them."
+            }
+            parm {
+                name    "hr_attr_values#"
+                label   "Values"
+                type    string
+                default { "" }
+                parmtag { "script_callback_language" "python" }
+                help    "The values, separated by commas."
+            }
+        }
     }
 }

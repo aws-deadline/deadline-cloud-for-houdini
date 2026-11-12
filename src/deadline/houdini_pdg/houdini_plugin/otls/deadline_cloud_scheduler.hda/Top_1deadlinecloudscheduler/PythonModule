@@ -1,0 +1,31 @@
+"""Button callbacks of the Deadline Cloud scheduler node."""
+
+
+def callback(kwargs):
+    """Submit runs the scheduler's own flow. Every other button is the ROP's."""
+    if kwargs["parm"].name() == "submit":
+        from deadline.houdini_pdg.houdini.host import submit
+
+        submit(kwargs["node"])
+        return
+    from deadline.houdini_pdg.houdini.host import move_queue_folders_above_submit
+    from deadline_cloud_for_houdini.submitter import callback as rop_callback
+
+    # Login, Settings and Update Queue Parameters add the queue folders after Submit.
+    rop_callback(kwargs)
+    move_queue_folders_above_submit(kwargs["node"])
+
+
+def update_queue_parameters_callback(kwargs):
+    """Lay the node out as its definition does, then run the ROP's farm, queue and queue parameter update."""
+    from deadline.houdini_pdg.houdini.host import (
+        move_queue_folders_above_submit,
+        rebuild_layout_from_definition,
+    )
+    from deadline_cloud_for_houdini.submitter import update_queue_parameters_callback as rop
+
+    # The layout needs no login, so it runs first and a failed login still leaves the right tabs.
+    # The ROP's update then adds the queue folders after Submit, so they move back above it.
+    rebuild_layout_from_definition(kwargs["node"])
+    rop(kwargs)
+    move_queue_folders_above_submit(kwargs["node"])

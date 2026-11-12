@@ -3,3 +3,7 @@ DialogScript	DialogScript
 TypePropertiesOptions	TypePropertiesOptions
 Help	Help
 Tools.shelf	Tools.shelf
+PythonModule	PythonModule
+OnCreated	OnCreated
+OnLoaded	OnLoaded
+ExtraFileOptions	ExtraFileOptions

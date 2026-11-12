@@ -8,11 +8,13 @@ same place as the ROP's: the workstation defaults and the node's queue parameter
 
 from __future__ import annotations
 
+import copy
 import dataclasses
+import logging
 import os
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, cast
 
 import yaml
 
@@ -22,7 +24,7 @@ from deadline.client.api import (
     SubmissionContext,
     create_job_from_job_bundle,
 )
-from deadline.client.config import get_setting as _workstation_setting
+from deadline.client import config as _client_config
 from deadline.client.job_bundle.submission import AssetReferences
 from deadline.houdini_submitter.python.deadline_cloud_for_houdini._job_bundle import (
     _ADAPTOR_OVERRIDE_PARAM_NAMES,
@@ -42,7 +44,9 @@ from .errors import (
     QuotaExceededError,
 )
 from .graph import PDG_DIR_TOKEN, PDG_TOKEN_PREFIX, GraphSnapshot, StepSpec
-from .ports import SceneFiles
+from .ports import PdgHost, SceneFiles
+
+_logger: logging.Logger = logging.getLogger(__name__)
 
 _SESSION_ENVIRONMENT: str = "PdgSession"
 _OVERRIDE_ENVIRONMENT: str = "OverrideAdaptor"
@@ -54,6 +58,21 @@ _NO_FARM: str = "Please configure the farm ID in the AWS Deadline Cloud render n
 _NO_QUEUE: str = (
     "Please configure the queue ID in the AWS Deadline Cloud render node (ROP) settings"
 )
+
+
+def get_workstation_setting(name: str, config: Any = _client_config) -> str:
+    """A workstation setting from the client library's ``config``, such as ``defaults.farm_id``, or ``""`` when unset."""
+    return str(config.get_setting(name) or "")
+
+
+def farm_problem(get_setting: Callable[[str], str]) -> str:
+    """The ROP's message for a missing farm or queue, or ``""`` when both are set."""
+    if not get_setting("defaults.farm_id"):
+        return _NO_FARM
+    if not get_setting("defaults.queue_id"):
+        return _NO_QUEUE
+    return ""
+
 
 #: The parameters every PDG job declares. The values come from the cook.
 _PDG_PARAMETER_DEFINITIONS: List[Dict[str, Any]] = [
@@ -72,24 +91,6 @@ _PDG_PARAMETER_NAMES: Set[str] = {definition["name"] for definition in _PDG_PARA
 # Names only the cook may set. A node parameter with one of them is dropped, so no
 # value is sent twice or undeclared, and the wheels override always applies cleanly.
 _RESERVED_PARAMETER_NAMES: Set[str] = _PDG_PARAMETER_NAMES | _ADAPTOR_OVERRIDE_PARAM_NAMES
-
-
-def _houdini_version() -> str:
-    """The running Houdini's version, computed as the ROP computes it."""
-    from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
-        _get_houdini_version,
-    )
-
-    return _get_houdini_version()
-
-
-def _node_queue_parameter_values(node: Any) -> List[Dict[str, Any]]:
-    """The node's queue parameter values, read as the ROP reads them. Needs a Houdini session."""
-    from deadline.houdini_submitter.python.deadline_cloud_for_houdini.queue_parameters import (
-        get_queue_parameter_values_as_openjd,
-    )
-
-    return get_queue_parameter_values_as_openjd(node)
 
 
 @dataclass
@@ -119,47 +120,40 @@ class PdgSubmitter(BaseSubmitter):
         self,
         *,
         node: Any,
+        host: PdgHost,
         working_dir: str,
         snapshot: Optional[GraphSnapshot] = None,
         create_job: Callable[..., Optional[str]] = create_job_from_job_bundle,
         log: Callable[[str], None] = print,
-        scene_files: Optional[Callable[[], SceneFiles]] = None,
         file_exists: Callable[[str], bool] = os.path.isfile,
         job_attachments: Optional[Callable[[str, str], Tuple[str, str]]] = None,
         cook_id: str = "",
-        read_node: Callable[[Callable[[], Any]], Any] = lambda read: read(),
-        get_setting: Callable[[str], str] = _workstation_setting,
-        houdini_version: Callable[[], str] = _houdini_version,
-        queue_parameter_values: Callable[[Any], List[Dict[str, Any]]] = (
-            _node_queue_parameter_values
-        ),
+        get_setting: Callable[[str], str] = get_workstation_setting,
+        output_directories: Sequence[str] = (),
     ) -> None:
-        # Every read of ``node`` goes through ``read_node``, so a host whose scene
-        # must be read on one thread can route them there.
-        self._read_node: Callable[[Callable[[], Any]], Any] = read_node
+        # The host owns the scene: every read of ``node`` goes through its
+        # ``on_main_thread``, and it supplies the scene files and Houdini's version.
+        self._host: PdgHost = host
         self._node: Any = node
         self._working_dir: str = working_dir
+        # The node's extra output folders. Each task uploads what it writes there too.
+        self._output_directories: Tuple[str, ...] = tuple(output_directories)
         self._snapshot: Optional[GraphSnapshot] = snapshot
         self._create_job: Callable[..., Optional[str]] = create_job
         self._log: Callable[[str], None] = log
-        self._scene_files: Callable[[], SceneFiles] = scene_files or (
-            lambda: SceneFiles(hip_file="")
-        )
         self._file_exists: Callable[[str], bool] = file_exists
         self._job_attachments: Callable[[str, str], Tuple[str, str]] = (
             job_attachments or _queue_job_attachments
         )
         self._cook_id: str = cook_id or uuid.uuid4().hex
         self._get_setting: Callable[[str], str] = get_setting
-        self._houdini_version: Callable[[], str] = houdini_version
-        self._queue_parameter_values: Callable[[Any], List[Dict[str, Any]]] = queue_parameter_values
         self._location: Optional[Tuple[str, str]] = None
 
     def get_settings(self) -> PdgSubmitterSettings:
         """The job settings, read from the scheduler node with the ROP's shared reader."""
         # Read the shared parms, then refuse any numeric one a job can't carry.
         settings: PdgSubmitterSettings = PdgSubmitterSettings()
-        self._read_node(lambda: read_common_job_settings(self._node, settings))
+        self._host.on_main_thread(lambda: read_common_job_settings(self._node, settings))
         settings.priority = _whole_number(settings.priority, "priority", 0, 100)
         settings.max_failed_tasks_count = _whole_number(
             settings.max_failed_tasks_count, "failed_tasks_limit", 0, _INT32_MAX
@@ -171,14 +165,14 @@ class PdgSubmitter(BaseSubmitter):
         # its payload is stored would run without it.
         settings.initial_status = "SUSPENDED"
         # The scene's files and folders go with every task. An unnamed job takes the scene's name.
-        scene: SceneFiles = self._scene_files()
+        scene: SceneFiles = self._host.scene_files()
         settings.hip_file = scene.hip_file
         settings.scene_assets = list(scene.assets)
         settings.input_directories.extend(scene.directories)
         settings.job_name = (
             settings.job_name or os.path.basename(scene.hip_file) or f"PDG cook {self._cook_id[:8]}"
         )
-        settings.output_directories = [self._working_dir]
+        settings.output_directories = [self._working_dir, *self._output_directories]
         return settings
 
     def get_job_template(
@@ -186,14 +180,18 @@ class PdgSubmitter(BaseSubmitter):
         settings: BaseSubmitterSettings,
         host_requirements: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """One step per snapshot step, each with an INT ``TaskIndex`` parameter, plus the shared wheels override."""
-        # The scheduler offers no host requirements, so the argument is ignored.
+        """One step per snapshot step, each with an INT ``TaskIndex`` parameter, plus the shared wheels override.
+
+        ``host_requirements`` goes on every step, as the ROP does.
+        """
         template: Dict[str, Any] = _job_template(
             self._require_snapshot(),
-            houdini_version=self._read_node(self._houdini_version),
-            queue_parameter_definitions=self._read_node(
+            houdini_version=self._host.houdini_version(),
+            queue_parameter_definitions=self._host.on_main_thread(
                 lambda: read_queue_parameter_definitions(self._node)
             ),
+            host_requirements=host_requirements,
+            output_directories=self._output_directories,
         )
         if settings.description:
             template["description"] = settings.description
@@ -221,9 +219,7 @@ class PdgSubmitter(BaseSubmitter):
             values.append({"name": "deadline:maxWorkerCount", "value": settings.max_worker_count})
         # The values of the PDG parameters, then the node's queue parameters. The template
         # drops a node parameter with a reserved name, so its value is dropped too.
-        node_values: List[Dict[str, Any]] = self._read_node(
-            lambda: self._queue_parameter_values(self._node)
-        )
+        node_values: List[Dict[str, Any]] = self._host.queue_parameter_values()
         values += [
             {"name": "CookName", "value": settings.job_name},
             {"name": "PdgCookId", "value": self._cook_id},
@@ -252,7 +248,7 @@ class PdgSubmitter(BaseSubmitter):
         return AssetReferences(
             input_filenames=files,
             input_directories=set(settings.input_directories),
-            output_directories={self._working_dir},
+            output_directories={self._working_dir, *self._output_directories},
         )
 
     def submit(self, snapshot: GraphSnapshot, bundle_dir: str) -> str:
@@ -262,16 +258,17 @@ class PdgSubmitter(BaseSubmitter):
         :class:`~deadline.houdini_pdg.errors.JobSubmissionError`, chained to the cause.
         """
         # Refuse before any work when the workstation names no farm or queue.
-        if not self._get_setting("defaults.farm_id"):
-            raise CookSetupError(_NO_FARM)
-        if not self._get_setting("defaults.queue_id"):
-            raise CookSetupError(_NO_QUEUE)
+        problem: str = farm_problem(self._get_setting)
+        if problem:
+            raise CookSetupError(problem)
         self._snapshot = snapshot
         try:
             # The node's queue parameters are declared in the template, and the
             # queue's own are merged in on creation, so none are fetched here.
             settings: PdgSubmitterSettings = self.get_settings()
-            context: SubmissionContext = self.get_submission_context(settings, queue_parameters=[])
+            context: SubmissionContext = self.get_submission_context(
+                settings, queue_parameters=[], host_requirements=self._host.host_requirements()
+            )
             os.makedirs(bundle_dir, exist_ok=True)
             write_job_bundle(context, bundle_dir)
         except (PDGSchedulerError, ValueError):
@@ -354,7 +351,7 @@ class PdgSubmitter(BaseSubmitter):
     ) -> List[str]:
         # Every path here was chosen by the scheduler. An unknown one would make
         # the library ask for confirmation.
-        known: Set[str] = {self._working_dir}
+        known: Set[str] = {self._working_dir, *self._output_directories}
         known.update(os.path.dirname(path) for path in refs.input_filenames)
         known.update(refs.input_directories)
         if _wheels_enabled(settings):
@@ -380,6 +377,8 @@ def _job_template(
     *,
     houdini_version: str,
     queue_parameter_definitions: List[Dict[str, Any]],
+    host_requirements: Optional[Dict[str, Any]] = None,
+    output_directories: Sequence[str] = (),
 ) -> Dict[str, Any]:
     """The template for a snapshot. Pure, so it can be validated without a farm or a scene."""
     # A dependency outside the job would make CreateJob refuse it, so refuse it here.
@@ -393,26 +392,38 @@ def _job_template(
         d for d in queue_parameter_definitions if d.get("name") not in _RESERVED_PARAMETER_NAMES
     ]
     definitions += [dict(definition) for definition in _PDG_PARAMETER_DEFINITIONS]
+    # One set of requirements for the whole job, copied so each step owns its own.
+    steps: List[Dict[str, Any]] = [_step(step) for step in snapshot.steps]
+    if host_requirements:
+        for definition in steps:
+            definition["hostRequirements"] = copy.deepcopy(host_requirements)
     return {
         "specificationVersion": "jobtemplate-2023-09",
         "name": "{{Param.CookName}}",
         "parameterDefinitions": definitions,
-        "jobEnvironments": [_session_environment(houdini_version)],
-        "steps": [_step(step) for step in snapshot.steps],
+        "jobEnvironments": [_session_environment(houdini_version, output_directories)],
+        "steps": steps,
     }
 
 
-def _session_environment(houdini_version: str) -> Dict[str, Any]:
+def _session_environment(
+    houdini_version: str, output_directories: Sequence[str] = ()
+) -> Dict[str, Any]:
     """Starts the adaptor's daemon once per session, so one warm Houdini serves every task."""
     # The init data names the scene and where the work item payloads are stored.
+    pdg: Dict[str, Any] = {
+        "pdg_dir": "{{Param.PdgDir}}",
+        "bucket": "{{Param.JaBucket}}",
+        "root_prefix": "{{Param.JaRootPrefix}}",
+    }
+    # The workstation's spelling of each extra output folder. The worker maps it with
+    # the session's rules, and scans it for what a task wrote.
+    if output_directories:
+        pdg["output_directories"] = list(output_directories)
     init_data: Dict[str, Any] = {
         "scene_file": "{{Param.HipFile}}",
         "version": houdini_version,
-        "pdg": {
-            "pdg_dir": "{{Param.PdgDir}}",
-            "bucket": "{{Param.JaBucket}}",
-            "root_prefix": "{{Param.JaRootPrefix}}",
-        },
+        "pdg": pdg,
     }
     # Reuse the ROP's daemon environment, renamed for PDG.
     (environment,) = get_houdini_environments(
@@ -553,3 +564,36 @@ def _queue_job_attachments(farm_id: str, queue_id: str, *, client: Any = None) -
             "work item's data there, so choose a queue that has one."
         )
     return bucket, root_prefix
+
+
+def read_local_storage_locations(
+    get_setting: Callable[[str], str] = get_workstation_setting, *, client: Any = None
+) -> Tuple[str, ...]:
+    """The paths of the LOCAL locations in the workstation's storage profile, or ``()`` with none.
+
+    The farm, queue and profile are the ones the job is created with. ``client`` is a Deadline
+    Cloud client, made from the workstation's credentials when absent. A failed read is logged.
+    """
+    from deadline.client import api
+
+    # Job attachments read this setting too when they create the job, and with none use no profile.
+    profile_id: str = get_setting("settings.storage_profile_id")
+    if not profile_id:
+        return ()
+    try:
+        deadline: Any = client if client is not None else api.get_boto3_client("deadline")
+        profile: Dict[str, Any] = deadline.get_storage_profile_for_queue(
+            farmId=get_setting("defaults.farm_id"),
+            queueId=get_setting("defaults.queue_id"),
+            storageProfileId=profile_id,
+        )
+    except Exception as error:
+        _logger.warning("Could not read storage profile %s: %s", profile_id, error)
+        return ()
+    # Only a LOCAL location gives a path its own root. A SHARED one isn't uploaded at all.
+    locations: Tuple[str, ...] = tuple(
+        location["path"]
+        for location in profile.get("fileSystemLocations", ())
+        if location.get("type") == "LOCAL"
+    )
+    return locations

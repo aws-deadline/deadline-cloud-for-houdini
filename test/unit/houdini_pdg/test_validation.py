@@ -121,6 +121,7 @@ def node_dags(draw: Any, max_nodes: int = 6, dynamic: bool = False) -> List[Node
                 count=draw(st.integers(0, 3)),
                 top_type=draw(st.sampled_from(["Processor", "Partitioner", "Mapper"])),
                 is_dynamic=draw(st.booleans()) if dynamic else False,
+                dynamic_by_parm=draw(st.sampled_from([None, True, False])) if dynamic else None,
                 in_cook_set=draw(st.sampled_from([True, False, None])),
                 cook_type=draw(
                     st.sampled_from([None, "Generate", "InProcess", "OutOfProcess", "Service"])
@@ -330,22 +331,63 @@ def test_a_requested_empty_step_is_left_to_step_without_items_not_no_farm_work()
 # -- dynamic nodes -------------------------------------------------------------
 
 
+def _ancestors_of(nodes: Sequence[NodeInfo], name: str) -> Set[str]:
+    """Every node ``name`` reaches by following upstream wires, by brute force."""
+    # A plain walk with a visited set, the model the code is checked against.
+    by_name: Dict[str, NodeInfo] = {n.name: n for n in nodes}
+    found: Set[str] = set()
+    frontier: List[str] = list(by_name[name].upstream) if name in by_name else []
+    while frontier:
+        current: str = frontier.pop()
+        if current in found or current not in by_name:
+            continue
+        found.add(current)
+        frontier.extend(by_name[current].upstream)
+    return found
+
+
 @given(nodes=node_dags(dynamic=True))
-def test_every_dynamic_node_is_refused_once_and_not_as_a_step_without_items(
+def test_every_dynamic_cause_is_named_once_and_never_as_a_step_without_items(
     nodes: List[NodeInfo],
 ) -> None:
-    """Dynamic subjects equal the dynamic nodes, once each, and never doubled with step-without-items."""
+    """Each dynamic node is refused itself or through a refused ancestor, and only causes are refused.
+
+    PDG also flags every node below a dynamic one, so refusing each flagged node
+    gave the artist eight messages for one parm.
+    """
     verdict: Verdict = validate(_ctx(nodes))
     dynamic: Set[str] = {n.name for n in nodes if n.is_dynamic}
+    refused: Set[str] = _subjects(verdict, RefusalScenario.DYNAMIC_NODE)
+    by_name: Dict[str, NodeInfo] = {n.name: n for n in nodes}
 
-    # Exactly the dynamic nodes are refused, once each, and never doubled as a
-    # step-without-items finding for the same node.
-    assert _subjects(verdict, RefusalScenario.DYNAMIC_NODE) == dynamic
-    assert len([r for r in verdict.refusals if r.scenario is RefusalScenario.DYNAMIC_NODE]) == len(
-        dynamic
-    )
+    # Only dynamic nodes are refused, once each.
+    assert refused <= dynamic
+    count: int = len([r for r in verdict.refusals if r.scenario is RefusalScenario.DYNAMIC_NODE])
+    assert count == len(refused)
+    # Every dynamic node is covered: refused itself, or below a refused node.
+    for name in dynamic:
+        assert name in refused or _ancestors_of(nodes, name) & refused, name
+    # A node whose own parm makes it dynamic, or that has no dynamic node above it, is a cause.
+    for name in dynamic:
+        if by_name[name].dynamic_by_parm or not _ancestors_of(nodes, name) & dynamic:
+            assert name in refused, name
     assert not dynamic & _subjects(verdict, RefusalScenario.STEP_WITHOUT_ITEMS)
     assert not dynamic & _advised(verdict, RefusalScenario.STEP_WITHOUT_ITEMS)
+
+
+def test_one_dynamic_parm_gives_one_refusal_not_one_per_node_below_it() -> None:
+    """The measured case: one node set to Each Upstream Item is Cooked, and PDG flags the nodes below too."""
+    # sparks is set to dynamic, and PDG flags everything below it as dynamic too.
+    nodes: List[NodeInfo] = [
+        _node("pyro"),
+        _node("sparks", ["pyro"], count=0, is_dynamic=True, dynamic_by_parm=True),
+        _node("part", ["sparks"], count=0, schedulable=False, is_dynamic=True),
+        _node("karma", ["part"], count=0, is_dynamic=True, dynamic_by_parm=False),
+        _node("montage", ["karma"], count=0, is_dynamic=True),
+    ]
+    verdict: Verdict = validate(_ctx(nodes))
+    assert _subjects(verdict, RefusalScenario.DYNAMIC_NODE) == {"sparks"}
+    assert not _subjects(verdict, RefusalScenario.STEP_WITHOUT_ITEMS)
 
 
 # -- ROP batching --------------------------------------------------------------
@@ -545,6 +587,34 @@ def test_quotas_set_to_the_exact_counts_refuse_nothing(nodes: List[NodeInfo]) ->
     assert not _quota_refusals(verdict)
 
 
+@given(
+    counts=st.dictionaries(st.sampled_from(["a", "b", "c", "d"]), st.integers(0, 8)),
+    quota=quotas,
+)
+def test_the_counts_during_generation_are_refused_once_a_step_or_the_job_is_over(
+    counts: Dict[str, int], quota: Quotas
+) -> None:
+    """Generation stops at the first node that makes the job too big, before the rest generate."""
+    # The model: each step over its limit, and the job when the sum is over its limit.
+    expected: Set[Tuple[str, str]] = {
+        (name, validation._TASKS_PER_STEP)
+        for name, count in counts.items()
+        if count > quota.max_tasks_per_step
+    }
+    if sum(counts.values()) > quota.max_tasks_per_job:
+        expected.add((validation._WHOLE_COOK, validation._TASKS_PER_JOB))
+    verdict: Verdict = validation.check_generated_counts(counts, quota)
+    assert _quota_refusals(verdict) == expected
+    assert all("stopped" in refusal.detail for refusal in verdict.refusals)
+
+
+def test_a_count_during_generation_names_the_node_and_its_count() -> None:
+    """The artist needs the node and the number to know what to make smaller."""
+    step, job = validation.check_generated_counts({"ropfetch_karma": 10_001}).refusals
+    assert step.subject == "ropfetch_karma" and job.subject == "this cook"
+    assert step.detail.startswith("10,001 tasks per step, more than the limit of 10,000.")
+
+
 def test_a_dependency_quota_refusal_says_how_many_edges_carry_data() -> None:
     """A dependency refusal reports how many of its edges carry data, since a data edge cannot be pruned."""
     nodes: List[NodeInfo] = [_node("a"), _node("b"), _node("c", ["a", "b"])]
@@ -564,24 +634,37 @@ def test_a_dependency_quota_refusal_says_how_many_edges_carry_data() -> None:
 def test_a_step_without_items_is_refused_when_it_was_asked_for_or_is_needed(
     nodes: List[NodeInfo],
 ) -> None:
-    """A dropped step refuses iff the cook asked for it or a survivor needs it, leaving dynamic nodes out."""
+    """A dropped step refuses iff the cook asked for it or a survivor needs it, unless another refusal explains it.
+
+    A dynamic node, an In-Process step, a Service node and an overridden step
+    have their own refusal, and so does every dropped step below one of them.
+    """
+    # The causes, and the dropped steps below one, which another refusal explains.
     snapshot: GraphSnapshot = synthesize(nodes)
     verdict: Verdict = validate(_ctx(nodes, snapshot=snapshot))
     by_name: Dict[str, NodeInfo] = {n.name: n for n in nodes}
-    dynamic: Set[str] = {n.name for n in nodes if n.is_dynamic}
+    causes: Set[str] = {
+        n.name
+        for n in nodes
+        if n.is_dynamic
+        or (n.is_schedulable and n.cook_type == "InProcess")
+        or n.cook_type == "Service"
+        or n.scheduler_override
+    }
+    explained: Set[str] = causes | {
+        name for name in snapshot.steps_without_items if _ancestors_of(nodes, name) & causes
+    }
 
-    # A refusal is expected exactly when a dropped step that is not dynamic was
-    # requested, or a surviving step depends on a dropped one that is not dynamic.
-    # A dynamic node already has its own refusal, so it never adds this one, and a
-    # dynamic survivor is never also refused here.
+    # A refusal is expected exactly when an unexplained dropped step was requested,
+    # or an unexplained surviving step depends on an unexplained dropped one.
     requested: bool = any(
-        name not in dynamic and by_name[name].in_cook_set is not False
+        name not in explained and by_name[name].in_cook_set is not False
         for name in snapshot.steps_without_items
     )
     orphaned: bool = any(
-        name not in dynamic
+        name not in explained
         for step, missing in snapshot.dependencies_on_dropped.items()
-        if step not in dynamic
+        if step not in explained
         for name in missing
     )
     refused: bool = bool(_subjects(verdict, RefusalScenario.STEP_WITHOUT_ITEMS))
@@ -592,14 +675,24 @@ def test_a_step_without_items_is_refused_when_it_was_asked_for_or_is_needed(
 def test_an_unknown_cook_set_makes_every_dropped_step_a_refusal(
     nodes: List[NodeInfo],
 ) -> None:
-    """With cook_set unknown, every dropped step is refused, the strict reading."""
+    """With cook_set unknown, every dropped step is refused, the strict reading.
+
+    An In-Process or Service step, and a dropped step below one, are the
+    exception, because the step's own refusal names the cause.
+    """
     # Force every node's cook-set flag to unknown, so no drop can be excused.
     unknown: List[NodeInfo] = [replace(n, in_cook_set=None) for n in nodes]
     snapshot: GraphSnapshot = synthesize(unknown)
     verdict: Verdict = validate(_ctx(unknown, snapshot=snapshot))
-    assert _subjects(verdict, RefusalScenario.STEP_WITHOUT_ITEMS) >= set(
-        snapshot.steps_without_items
+    in_process: Set[str] = {
+        n.name for n in unknown if n.is_schedulable and n.cook_type == "InProcess"
+    }
+    causes: Set[str] = in_process | {n.name for n in unknown if n.cook_type == "Service"}
+    below: Set[str] = {n.name for n in unknown if _ancestors_of(unknown, n.name) & causes}
+    assert _subjects(verdict, RefusalScenario.STEP_WITHOUT_ITEMS) >= (
+        set(snapshot.steps_without_items) - causes - below
     )
+    assert in_process <= _subjects(verdict, RefusalScenario.IN_PROCESS_STEP)
 
 
 def test_a_step_left_out_of_the_cook_only_gets_an_advisory() -> None:
@@ -617,6 +710,32 @@ def test_a_surviving_step_that_needs_a_dropped_one_is_refused() -> None:
     nodes: List[NodeInfo] = [_node("a", count=0, in_cook_set=False), _node("b", ["a"])]
     verdict: Verdict = validate(_ctx(nodes))
     assert _subjects(verdict, RefusalScenario.STEP_WITHOUT_ITEMS) == {"b"}
+
+
+@pytest.mark.parametrize(
+    "cause, scenario",
+    [
+        ({"cook_type": "Service"}, RefusalScenario.SERVICE_NODE),
+        ({"scheduler_override": "../localscheduler1"}, RefusalScenario.MULTIPLE_SCHEDULERS),
+    ],
+)
+def test_a_service_or_overridden_step_with_no_items_gets_one_refusal(
+    cause: Dict[str, Any], scenario: RefusalScenario
+) -> None:
+    """A Service step with no items got two extra refusals, for itself and the step below it.
+
+    The step's own refusal already says why it has no items, so it is the only one.
+    """
+    # karma has no items for the cause, and overlay and late sit below it.
+    nodes: List[NodeInfo] = [
+        _node("geo"),
+        _node("karma", ["geo"], count=0, in_cook_set=True, **cause),
+        _node("overlay", ["karma"], in_cook_set=True),
+        _node("late", ["karma"], count=0, in_cook_set=True),
+    ]
+    verdict: Verdict = validate(_ctx(nodes))
+    assert _subjects(verdict, scenario) == {"karma"}
+    assert not _subjects(verdict, RefusalScenario.STEP_WITHOUT_ITEMS)
 
 
 def test_a_step_whose_only_dropped_producer_is_dynamic_is_not_refused_for_it() -> None:
@@ -738,6 +857,28 @@ def test_a_plain_service_node_is_refused_with_the_cook_type_remedy() -> None:
     assert "Out Of Process" in refusal.remedy
 
 
+@pytest.mark.parametrize(
+    "in_cook_set, refused",
+    [(False, False), (True, True), (None, True)],
+    ids=["outside the cook", "in the cook", "cook set unknown"],
+)
+@pytest.mark.parametrize(
+    "kind",
+    [{"cook_type": "Service"}, {"node_type_name": "houdiniserver"}],
+    ids=["service", "command server"],
+)
+def test_a_service_node_is_refused_only_when_it_may_be_in_the_cook(
+    in_cook_set: Optional[bool], refused: bool, kind: Dict[str, Any]
+) -> None:
+    """A Service node the cook never reaches starts nothing, so refusing it would stop a good job.
+
+    When the cook set isn't known, the node may be in it, so it is still refused.
+    """
+    nodes: List[NodeInfo] = [_node("server", in_cook_set=in_cook_set, **kind), _node("render")]
+    found: Set[str] = _subjects(validate(_ctx(nodes)), RefusalScenario.SERVICE_NODE)
+    assert found == ({"server"} if refused else set())
+
+
 def test_a_node_that_overrides_the_scheduler_is_refused() -> None:
     """A node whose topscheduler is set sends part of the cook to another job, so it is refused."""
     # Any override left here points at another scheduler, because the host clears a
@@ -761,7 +902,7 @@ def test_an_unused_extra_scheduler_node_causes_no_refusal() -> None:
     assert not _subjects(verdict, RefusalScenario.MULTIPLE_SCHEDULERS)
 
 
-# -- in-process nodes -----------------------------------------------------------
+# -- the in-process node: what the node's own parms show ------------------------
 
 
 def _in_process_script() -> List[NodeInfo]:
@@ -807,8 +948,14 @@ def _wedged_network() -> List[NodeInfo]:
     ]
 
 
+#: The file the ``subdivide`` step of :func:`_between_steps` writes.
+_STEP_FILE: str = os.path.join(WORKING_DIR, "geo", "sub.1.bgeo.sc")
+#: A file only the node between the steps writes.
+_MIDDLE_FILE: str = os.path.join(WORKING_DIR, "mid", "x.txt")
+
+
 def _between_steps(**middle: Any) -> List[NodeInfo]:
-    """A step that declares one output, a node ``middle`` that is not a step, and a step below it."""
+    """A step that declares :data:`_STEP_FILE`, a node ``middle`` that is not a step, and a step below it."""
     # The middle node has no items and the Generate cook type unless a test says otherwise.
     declared: Tuple[DeclaredFile, ...] = (DeclaredFile("__PDG_DIR__/geo/sub.1.bgeo.sc", ""),)
     middle.setdefault("items", ())
@@ -1038,6 +1185,46 @@ def test_an_in_process_node_is_refused_exactly_when_a_step_is_above_it(
     assert _subjects(validate(_ctx(nodes)), RefusalScenario.IN_PROCESS_NODE) == expected
 
 
+# -- the in-process node: what the scene walk shows -----------------------------
+
+
+def _scene_read(node: str, parm: str, path: str, **kwargs: Any) -> SceneRead:
+    """One file parm on ``node``, authored as its path unless ``raw`` is given."""
+    kwargs.setdefault("raw", path)
+    return SceneRead(step=node, node_path=f"/obj/topnet1/{node}", parm=parm, path=path, **kwargs)
+
+
+def _with_reads(nodes: List[NodeInfo], reads: Sequence[SceneRead]) -> ValidationContext:
+    """A context whose read report comes from matching ``reads`` against the snapshot."""
+    # Nothing is on disk, so the cached-output check stays out of these tests.
+    snapshot: GraphSnapshot = synthesize(nodes)
+    return _ctx(
+        nodes,
+        snapshot=snapshot,
+        reads=match_reads(snapshot, reads, WORKING_DIR),
+        working_dir=WORKING_DIR,
+        env={},
+        exists=lambda path: False,
+    )
+
+
+def test_a_file_parm_that_reads_a_steps_output_is_refused() -> None:
+    """A file parm whose path is a step's output is refused, naming the step that writes it."""
+    reads: List[SceneRead] = [_scene_read("middle", "file", _STEP_FILE)]
+    refusal: Refusal = _in_process(validate(_with_reads(_between_steps(), reads)))
+    assert f"'{_STEP_FILE}', which the step 'subdivide' writes" in refusal.detail
+
+
+def test_a_write_parm_that_a_step_reads_is_refused() -> None:
+    """A write parm whose file a step reads is refused, because the file never reaches the step."""
+    reads: List[SceneRead] = [
+        _scene_read("middle", "outputpath", _MIDDLE_FILE, is_output=True),
+        _scene_read("distort", "file", _MIDDLE_FILE),
+    ]
+    refusal: Refusal = _in_process(validate(_with_reads(_between_steps(), reads)))
+    assert "the step 'distort' reads through its 'file' parm" in refusal.detail
+
+
 # -- the path helpers ----------------------------------------------------------
 
 # Path prefixes that exercise every branch of the deliverability model: a PDG
@@ -1078,7 +1265,7 @@ def _reason_model(path: str, working_dir: str, env: Mapping[str, str]) -> str:
     root: str = os.path.normpath(working_dir)
     if resolved == root or resolved.startswith(root + os.sep):
         return ""
-    return "outside the working directory"
+    return "outside the working directory and every output folder"
 
 
 @given(
@@ -1129,6 +1316,31 @@ def test_is_below_ignores_case_only_where_the_platform_does() -> None:
     assert validation._is_below(r"C:\Work\shotb", r"c:\work\shot", ntpath) is False
     # POSIX paths are case sensitive, so the same difference still counts there.
     assert validation._is_below("/Work/shot/a.exr", "/work/shot", posixpath) is False
+
+
+@pytest.mark.parametrize(
+    ("path", "module", "rooted"),
+    [
+        ("/elsewhere/tree.bgeo.sc", ntpath, True),
+        ("\\elsewhere\\tree.bgeo.sc", ntpath, True),
+        ("C:/proj/tree.bgeo.sc", ntpath, True),
+        ("//server/share/tree.bgeo.sc", ntpath, True),
+        ("//server/share", ntpath, True),
+        ("C:proj/tree.bgeo.sc", ntpath, False),
+        ("proj/tree.bgeo.sc", ntpath, False),
+        ("", ntpath, False),
+        ("/a/b", posixpath, True),
+        ("a/b", posixpath, False),
+        ("\\a\\b", posixpath, False),
+    ],
+)
+def test_a_path_has_a_root_as_its_platform_reads_it(path: str, module: Any, rooted: bool) -> None:
+    """On Windows ``/a`` lands on the current drive, so it has a root, as Houdini 21's Python says.
+
+    Python 3.13's ``ntpath.isabs`` says no, so a check built on it skips such a path.
+    On POSIX a backslash is part of a name, so ``\\a`` is relative and must not be judged.
+    """
+    assert validation._has_root(path, module) is rooted
 
 
 # -- outputs already on disk ----------------------------------------------------
@@ -1257,6 +1469,28 @@ def test_a_node_set_to_write_files_is_not_refused_for_existing_outputs() -> None
     assert not _subjects(verdict, RefusalScenario.CACHED_OUTPUTS)
 
 
+@pytest.mark.parametrize("cache_mode", [None, "Automatic", "Read Files"])
+def test_files_on_disk_are_described_as_pdg_takes_them_from_cache(
+    cache_mode: Optional[str],
+) -> None:
+    """The message says what PDG does with an item whose outputs exist, as measured in Houdini.
+
+    With Automatic or Read Files, PDG marks the item cooked from cache and never offers it
+    to this scheduler. Nothing waits on the item forever.
+    """
+    # One item whose output exists, in each mode that reads results from disk.
+    nodes: List[NodeInfo] = _with_outputs(
+        [_node("cache", count=1, cache_mode=cache_mode)], "__PDG_DIR__/geo"
+    )
+    verdict: Verdict = validate(
+        _ctx(nodes, working_dir=WORKING_DIR, env={}, exists=lambda path: True)
+    )
+    (refusal,) = [r for r in verdict.refusals if r.scenario is RefusalScenario.CACHED_OUTPUTS]
+    assert "Automatic or Read Files" in refusal.detail
+    assert "never offers it to this scheduler" in refusal.detail
+    assert "forever" not in refusal.detail
+
+
 def test_cached_output_returns_an_empty_string_when_nothing_is_on_disk() -> None:
     """The helper returns "", the value the caller treats as "not cached", when no output exists."""
     # The caller keeps a found path only when it is truthy, so the empty value must
@@ -1266,6 +1500,86 @@ def test_cached_output_returns_an_empty_string_when_nothing_is_on_disk() -> None
         [_node("a")], working_dir=WORKING_DIR, env={}, exists=lambda path: False
     )
     assert validation._cached_output(item, ctx) == ""
+
+
+@pytest.mark.parametrize("on_disk", [True, False])
+def test_a_step_with_an_item_cooked_from_cache_is_refused_naming_its_file(on_disk: bool) -> None:
+    """The cached item never reaches the farm, so the job would run on a local result.
+
+    The step is refused before anything is uploaded, with the file that made PDG skip
+    the item, and the message says PDG never offered it. PDG already decided not to
+    cook the item, so the step is refused whatever the disk holds now.
+    """
+    # sim has two items in the cook and a third PDG cooked from cache, and render is below it.
+    cached: RawItem = _item(
+        "sim_2", 2, declared_outputs=(DeclaredFile("__PDG_DIR__/geo/sim.2.bgeo.sc", ""),)
+    )
+    nodes: List[NodeInfo] = [
+        _node("sim", count=2, cached_items=(cached,)),
+        _node("render", ["sim"]),
+    ]
+    # Only the cached item's file can exist, so the disk check alone would not refuse the step.
+    cached_file: str = os.path.join(WORKING_DIR, "geo", "sim.2.bgeo.sc")
+    verdict: Verdict = validate(
+        _ctx(
+            nodes,
+            working_dir=WORKING_DIR,
+            exists=lambda path: on_disk and path == cached_file,
+        )
+    )
+    (refusal,) = [r for r in verdict.refusals if r.scenario is RefusalScenario.CACHED_OUTPUTS]
+    assert refusal.subject == "sim"
+    assert "never offered them to this scheduler" in refusal.detail
+    if on_disk:
+        assert cached_file in refusal.detail
+
+
+def test_a_step_outside_the_cook_is_never_refused_for_its_files_on_disk() -> None:
+    """The on-disk check judges only the steps in this cook, like the check of cached items."""
+    # Both steps have outputs on disk, and only a is in the cook.
+    nodes: List[NodeInfo] = _with_outputs(
+        [_node("a", in_cook_set=True), _node("b", in_cook_set=False)], "__PDG_DIR__/geo"
+    )
+    verdict: Verdict = validate(
+        _ctx(nodes, working_dir=WORKING_DIR, env={}, exists=lambda path: True)
+    )
+    assert _subjects(verdict, RefusalScenario.CACHED_OUTPUTS) == {"a"}
+
+
+def test_cooked_from_cache_names_each_step_in_the_cook_and_one_file() -> None:
+    """At the end of a cook PDG offered nothing to, each cached step is named with a file.
+
+    The graph read puts such a step outside the cook, because it has no item left,
+    so it must be judged by its cached items. A step with nothing cached is not named.
+    """
+    # Only up's first file is still on disk, so it's the example for up.
+    first: str = os.path.join(WORKING_DIR, "geo", "up.1.bgeo.sc")
+
+    def cached(name: str, index: int) -> RawItem:
+        """An item of ``name`` that PDG cooked from cache, with one declared output."""
+        return _item(
+            f"{name}_{index}",
+            index,
+            declared_outputs=(DeclaredFile(f"__PDG_DIR__/geo/{name}.{index}.bgeo.sc", ""),),
+            cached=True,
+        )
+
+    # Two cached steps, and one with nothing cached.
+    nodes: List[NodeInfo] = [
+        _node("up", count=0, in_cook_set=False, cached_items=(cached("up", 1), cached("up", 2))),
+        _node("down", ["up"], count=0, in_cook_set=False, cached_items=(cached("down", 1),)),
+        _node("plain", count=0, in_cook_set=False),
+    ]
+    verdict: Verdict = validation.check_cooked_from_cache(
+        _ctx(nodes, working_dir=WORKING_DIR, env={}, exists=lambda path: path == first),
+        offered_nothing=True,
+    )
+    by_step: Dict[str, Refusal] = {r.subject: r for r in verdict.refusals}
+    assert set(by_step) == {"up", "down"}
+    assert {r.scenario for r in verdict.refusals} == {RefusalScenario.CACHED_OUTPUTS}
+    assert first in by_step["up"].detail and "no job was created" in by_step["up"].detail
+    assert os.path.join(WORKING_DIR, "geo", "down.1.bgeo.sc") in by_step["down"].detail
+    assert "Write Files" in by_step["up"].remedy
 
 
 # -- outputs that cannot be delivered ------------------------------------------
@@ -1360,7 +1674,10 @@ def test_a_step_with_both_undeliverable_reasons_gets_both_remedies() -> None:
     verdict: Verdict = validate(_ctx(nodes, working_dir=WORKING_DIR, env={"DATA": "$HIP"}))
     # One refusal for the step, naming both reasons in a sentence and both remedies.
     (refusal,) = [r for r in verdict.refusals if r.scenario is RefusalScenario.OUTPUT_OUTSIDE_COOK]
-    assert "are outside the working directory or left with an unexpanded variable" in refusal.detail
+    assert (
+        "are outside the working directory and every output folder or left with an unexpanded variable"
+        in refusal.detail
+    )
     assert "another variable" in refusal.remedy
     assert "Point the working directory" in refusal.remedy
 
@@ -1659,6 +1976,163 @@ def test_an_attribute_variable_is_reported_even_without_a_scene_walk_report() ->
     }
 
 
+# Attribute names a ROP Fetch work item carries in the Pyro Bonfire scene, as
+# ``attribNames`` reports them. None is exported, and ``hip`` is among them.
+PYRO_ATTRIBUTES: Tuple[str, ...] = (
+    "densityThreshold",
+    "executeparm",
+    "frame",
+    "hip",
+    "outputparm",
+    "partitionsize",
+    "range",
+    "voxelSize",
+    "wedgeattribs",
+    "wedgecount",
+    "wedgeindex",
+    "wedgenum",
+    "wedgetotal",
+)
+
+
+def _pyro_write(
+    step: str, node_path: str, parm: str, raw: str, undefined: Tuple[str, ...], **kwargs: Any
+) -> SceneRead:
+    """A Pyro Bonfire write parm as the scene walk records it, with the variables Houdini left undefined."""
+    return SceneRead(
+        step=step,
+        node_path=node_path,
+        parm=parm,
+        raw=raw,
+        path=raw.replace("$HIP", WORKING_DIR),
+        undefined_variables=undefined,
+        **kwargs,
+    )
+
+
+def _pyro_refusals(*reads: SceneRead) -> Set[str]:
+    """The attribute-as-variable subjects for ``reads`` over the pyro cache and karma steps."""
+    nodes: List[NodeInfo] = [
+        _node("ropfetch_pyro_cache", count=6, attribute_names=PYRO_ATTRIBUTES),
+        _node("ropfetch_karma", ["ropfetch_pyro_cache"], 6, attribute_names=PYRO_ATTRIBUTES),
+    ]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    report: ReadReport = match_reads(snapshot, list(reads), WORKING_DIR)
+    verdict: Verdict = validate(
+        _ctx(nodes, snapshot=snapshot, reads=report, working_dir=WORKING_DIR)
+    )
+    return _subjects(verdict, RefusalScenario.ATTRIBUTE_AS_VARIABLE)
+
+
+@pytest.mark.parametrize(
+    "write, refused",
+    [
+        # ``$WEDGEINDEX`` in a File Cache's ``file`` is spelled twice and refused once.
+        (
+            _pyro_write(
+                "ropfetch_pyro_cache",
+                "/obj/pyro/pyro_cache",
+                "file",
+                "$HIP/geo/$OS/wedge$WEDGEINDEX/$OS.w$WEDGEINDEX.$F4.bgeo.sc",
+                ("WEDGEINDEX",),
+                is_file_cache_write=True,
+            ),
+            "/obj/pyro/pyro_cache parm 'file'",
+        ),
+        # Karma's ``picture`` is refused, though its folder uses `` `@wedgeindex` `` correctly.
+        (
+            _pyro_write(
+                "ropfetch_karma",
+                "/obj/render_bonfire/karma_bonfire",
+                "picture",
+                "$HIP/render/$OS/wedge`@wedgeindex`/$OS.w$WEDGEINDEX.$F4.png",
+                ("WEDGEINDEX",),
+                is_output=True,
+            ),
+            "/obj/render_bonfire/karma_bonfire parm 'picture'",
+        ),
+    ],
+)
+def test_a_pyro_write_with_an_unexported_attribute_variable_is_refused(
+    write: SceneRead, refused: str
+) -> None:
+    """``$WEDGEINDEX`` expands to nothing, so all 6 wedges write one file.
+
+    The attribute isn't exported, so only its name and the empty expansion show it.
+    """
+    assert _pyro_refusals(write) == {refused}
+
+
+def test_an_exported_attribute_refusal_still_says_it_resolves_on_the_worker() -> None:
+    """An exported attribute is set on the worker, so its detail keeps that case's wording."""
+    nodes: List[NodeInfo] = [_node("a", exported_attribute_names=("wedgeindex",))]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    read: SceneRead = _read("a", "$HIP/render/v$WEDGEINDEX/a.exr")
+    report: ReadReport = match_reads(snapshot, [read], WORKING_DIR)
+    verdict: Verdict = validate(
+        _ctx(nodes, snapshot=snapshot, reads=report, working_dir=WORKING_DIR)
+    )
+    (refusal,) = [
+        r for r in verdict.refusals if r.scenario is RefusalScenario.ATTRIBUTE_AS_VARIABLE
+    ]
+    assert "exports to the environment" in refusal.detail
+    assert "isn't exported" not in refusal.detail
+
+
+@pytest.mark.parametrize(
+    "reads",
+    [
+        # ``$HIP`` is defined in the session, though every item has a ``hip`` attribute.
+        (
+            _pyro_write(
+                "ropfetch_karma",
+                "/obj/render_bonfire/karma_bonfire",
+                "picture",
+                "$HIP/render/out.$F4.png",
+                (),
+                is_output=True,
+            ),
+        ),
+        # The scene as shipped spells the wedge as `` `@wedgeindex` ``, which is right.
+        (
+            _pyro_write(
+                "ropfetch_pyro_cache",
+                "/obj/pyro/pyro_cache",
+                "file",
+                "$HIP/geo/$OS/wedge`@wedgeindex`/$OS.w`@wedgeindex`.$F4.bgeo.sc",
+                (),
+                is_file_cache_write=True,
+            ),
+            _pyro_write(
+                "ropfetch_karma",
+                "/obj/render_bonfire/karma_bonfire",
+                "picture",
+                "$HIP/render/$OS/wedge`@wedgeindex`/$OS.w`@wedgeindex`.$F4.png",
+                (),
+                is_output=True,
+            ),
+        ),
+        # A carried attribute counts only when Houdini leaves ``$NAME`` undefined, not by name alone.
+        (
+            _pyro_write(
+                "ropfetch_karma",
+                "/obj/render_bonfire/karma_bonfire",
+                "picture",
+                "$HIP/render/w$WEDGEINDEX.png",
+                (),
+                is_output=True,
+            ),
+        ),
+    ],
+    ids=["hip", "backticks", "defined variable"],
+)
+def test_a_pyro_write_whose_variables_are_all_defined_is_not_refused(
+    reads: Tuple[SceneRead, ...],
+) -> None:
+    """Only a variable Houdini leaves undefined that names an attribute is refused."""
+    assert _pyro_refusals(*reads) == set()
+
+
 # -- runtime files with no producer --------------------------------------------
 
 
@@ -1799,6 +2273,38 @@ def test_a_runtime_input_that_cannot_be_resolved_here_is_not_tested(path: str) -
 def _absolute(*parts: str) -> str:
     """An absolute path on every platform: on Windows, a path with no drive is not absolute."""
     return os.path.abspath(os.path.join(os.sep, *parts))
+
+
+def test_a_missing_file_two_steps_reach_through_one_node_is_refused_once() -> None:
+    """Two steps that walk the same node read its parm twice, and the artist sees one refusal.
+
+    The subject names the node and not the step, so a second copy only repeats it.
+    """
+    # Steps a and b both reach one node whose parm names a file that isn't on disk.
+    nodes: List[NodeInfo] = [_node("a"), _node("b")]
+    snapshot: GraphSnapshot = synthesize(nodes)
+    missing: str = _absolute("nonexistent", "Mandril.pic")
+    reads: List[SceneRead] = [
+        SceneRead(step=step, node_path="/obj/sparks/adjust", parm="cmap", raw=missing, path=missing)
+        for step in ("a", "b")
+    ]
+    report: ReadReport = match_reads(snapshot, reads, WORKING_DIR)
+    verdict: Verdict = validate(
+        _ctx(
+            nodes,
+            snapshot=snapshot,
+            reads=report,
+            working_dir=WORKING_DIR,
+            exists=lambda path: False,
+        )
+    )
+    # A list, not a set, so a repeated refusal shows up.
+    refused: List[Refusal] = [
+        refusal
+        for refusal in verdict.refusals
+        if refusal.scenario is RefusalScenario.LOCAL_FILE_UNREACHABLE
+    ]
+    assert [refusal.subject for refusal in refused] == ["/obj/sparks/adjust parm 'cmap'"]
 
 
 def test_a_read_outside_the_cook_that_is_not_on_disk_is_refused() -> None:
@@ -2000,3 +2506,19 @@ def test_an_existing_output_outside_the_cook_is_two_faults_with_two_remedies() -
     assert by_scenario[RefusalScenario.OUTPUT_OUTSIDE_COOK].remedy != (
         by_scenario[RefusalScenario.CACHED_OUTPUTS].remedy
     )
+
+
+# -- the node's extra output folders -------------------------------------------
+
+#: An output folder outside the working directory, as the node's Job Attachments tab lists it.
+EXTRA: str = os.path.normpath("/renders/shot")
+
+
+def test_a_set_hip_is_kept_over_the_saved_scenes_folder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A session's own $HIP decides where $HIP paths resolve, so the saved file must not replace it."""
+    # A set $HIP wins, an unset one comes from the saved file, and no file sets nothing.
+    monkeypatch.setenv("HIP", "/session/hip")
+    assert validation.environment_with_hip("/saved/scene.hip")["HIP"] == "/session/hip"
+    monkeypatch.delenv("HIP")
+    assert validation.environment_with_hip("/saved/scene.hip")["HIP"] == "/saved"
+    assert "HIP" not in validation.environment_with_hip("")
