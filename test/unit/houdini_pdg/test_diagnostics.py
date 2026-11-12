@@ -38,6 +38,7 @@ from deadline.houdini_pdg.graph import (
     StepSpec,
     TaskKey,
     WorkItemSpec,
+    synthesize,
 )
 from deadline.houdini_pdg.ports import CookPhase, CookSummary, WorkItemHandle
 from deadline.houdini_pdg.scene_reads import (
@@ -779,7 +780,7 @@ def test_closing_a_refused_cook_records_its_refusals(tmp_path: Path) -> None:
 
 def test_snapshot_json_matches_the_snapshot(tmp_path: Path) -> None:
     """``snapshot.json`` carries the totals, the leaf steps, the nodes that map to nothing, and
-    each step's tasks, range, dependencies, and first and last item."""
+    each step's tasks, range, dependencies, first and last item, and every item in task order."""
     _journal(tmp_path).snapshot_taken(_diamond_nodes(), _diamond(), None)
     data: Dict[str, Any] = _read_json(_expected_dir(tmp_path) / "snapshot.json")
     # Totals and step lists first, then one step's entry in full.
@@ -797,7 +798,28 @@ def test_snapshot_json_matches_the_snapshot(tmp_path: Path) -> None:
         "declares_outputs": True,
         "first_item": "d_0",
         "last_item": "d_1",
+        "items": ["d_0", "d_1"],
     }
+
+
+def test_snapshot_json_lists_items_by_task_index_not_by_pdg_order(tmp_path: Path) -> None:
+    """A step's ``items`` follow the task index, which differs from the order PDG lists its
+    items and from PDG's own indices when they have gaps.
+
+    A reader joins farm task i to ``items[i]``, so listing them in PDG's order would join
+    each task to the wrong work item.
+    """
+    # PDG lists the items out of order, with indices 7, 3 and 12.
+    raw: Tuple[RawItem, ...] = tuple(
+        RawItem(name=name, index=index, item_id=index, command="hython job.py")
+        for name, index in (("render_7", 7), ("render_3", 3), ("render_12", 12))
+    )
+    node: NodeInfo = NodeInfo(
+        name="render", is_dynamic=False, top_type="ropfetch", upstream=(), items=raw
+    )
+    _journal(tmp_path).snapshot_taken([node], synthesize([node]), None)
+    data: Dict[str, Any] = _read_json(_expected_dir(tmp_path) / "snapshot.json")
+    assert data["steps"][0]["items"] == ["render_3", "render_7", "render_12"]
 
 
 @st.composite
@@ -820,8 +842,12 @@ def snapshots(draw: Any) -> GraphSnapshot:
 @settings(max_examples=30, deadline=None)
 @given(snapshots())
 def test_snapshot_json_counts_and_edges_agree_with_any_snapshot(snap: GraphSnapshot) -> None:
-    """For any snapshot, the step count, task total, leaf steps, data-edge subset, and first and
-    last items in ``snapshot.json`` match the snapshot itself."""
+    """For any snapshot, the step count, task total, leaf steps, data-edge subset, first and last
+    items, and item list in ``snapshot.json`` match the snapshot itself.
+
+    The item list is how a reader outside the cook finds the work item a farm task ran, so
+    entry i must be the item with task index i, and the list must have one entry per task.
+    """
     with tempfile.TemporaryDirectory() as wd:
         _journal(wd).snapshot_taken([], snap, None)
         data: Dict[str, Any] = _read_json(_expected_dir(wd) / "snapshot.json")
@@ -837,6 +863,9 @@ def test_snapshot_json_counts_and_edges_agree_with_any_snapshot(snap: GraphSnaps
         assert entry["task_range"] == f"0-{len(s.items) - 1}"
         assert entry["first_item"] == s.items[0].name
         assert entry["last_item"] == s.items[-1].name
+        by_task_index: List[str] = [i.name for i in sorted(s.items, key=lambda i: i.task_index)]
+        assert entry["items"] == by_task_index
+        assert len(entry["items"]) == entry["task_count"]
 
 
 def _read_report() -> ReadReport:

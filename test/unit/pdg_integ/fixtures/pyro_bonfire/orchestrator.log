@@ -1,0 +1,93 @@
+[2026-11-10T17:09:52.742258+00:00] PDG asked to cook 12 node(s).
+[2026-11-10T17:09:52.742421+00:00] Cook 0123456789abcdef0123456789abcdef started in /projects/fx/shots/bonfire. The job is submitted when PDG offers its first work item.
+[2026-11-10T17:09:52.906052+00:00] Debug artifacts: /projects/fx/shots/bonfire/pdg_debug/2026-11-10-17-09-52-01234567
+[2026-11-10T17:09:52.907317+00:00] Snapshot: 6 step(s) and 26 task(s). Nodes that are not steps: partitionbyattribute1, partitionbyattribute2, partitionbyframe1, waitforall1, wedge1, wedge2.
+[2026-11-10T17:09:54.064687+00:00] Submitting 6 step(s) and 26 task(s), attaching 1 file(s).
+[2026-11-10T17:09:54.157068+00:00] No storage profile on this queue shares the working directory, so job attachments carry the cook's files.
+[2026-11-10T17:09:54.292462+00:00] Submitting to Queue: Test queue
+
+[2026-11-10T17:09:54.626135+00:00] Approval for Job Attachment S3 transfers needed.
+
+Files in the following paths will be uploaded to your queue's S3 bucket. Output files will be uploaded by workers after task completion. Files in 'SHARED' paths (defined by storage profiles) and duplicates (matching file hashes in S3) are skipped.
+
+***********************************************************
+
+    Known paths:
+    /projects/fx/shots/bonfire
+    /projects/fx/wheels
+    (output) /projects/fx/shots/bonfire
+
+***********************************************************
+
+Summary:
+Local uploads: 4 files (3.65 MB) before deduplication
+Worker uploads: Files created in 1 output directory
+
+[2026-11-10T17:09:54.646126+00:00] Hashing: Processed 2.72 MB / 3.65 MB of 4 files (Hashing speed: 0 B/s)
+[2026-11-10T17:09:54.667968+00:00] Hashing: Processed 2.81 MB / 3.65 MB of 4 files (Hashing speed: 4.94 MB/s)
+[2026-11-10T17:09:54.670317+00:00] Hashing: Processed 3.03 MB / 3.65 MB of 4 files (Hashing speed: 0 B/s)
+[2026-11-10T17:09:54.673876+00:00] Hashing: Processed 3.65 MB / 3.65 MB of 4 files (Hashing speed: 0 B/s)
+[2026-11-10T17:09:54.676720+00:00] Hashing Summary:
+[2026-11-10T17:09:54.676841+00:00]     Processed 3 files totaling 933.8 KB.
+    Skipped re-processing 1 files totaling 2.72 MB.
+    Total processing time of 0.05031 seconds at 18.56 MB/s.
+
+[2026-11-10T17:09:54.994939+00:00] Uploading: Uploaded 3.65 MB / 3.65 MB of 4 files (Transfer rate: 0 B/s)
+[2026-11-10T17:09:55.002401+00:00] Uploading: Uploaded 3.65 MB / 3.65 MB of 4 files (Transfer rate: 0 B/s)
+[2026-11-10T17:09:55.002650+00:00] Upload Summary:
+[2026-11-10T17:09:55.003430+00:00]     Processed 1 file totaling 215.91 KB.
+    Skipped re-processing 3 files totaling 3.43 MB.
+    Total processing time of 0.32567 seconds at 662.99 KB/s.
+
+[2026-11-10T17:09:55.805141+00:00] Waiting for Job to be created...
+[2026-11-10T17:09:57.440972+00:00] Submitted job bundle:
+[2026-11-10T17:09:57.441895+00:00]    /projects/fx/shots/bonfire/pdg_debug/2026-11-10-17-09-52-01234567/bundle
+[2026-11-10T17:09:57.441977+00:00] Job creation completed successfully
+job-exjob000000000000000000000000001
+[2026-11-10T17:09:57.442373+00:00] Submitted job job-exjob000000000000000000000000001.
+[2026-11-10T17:09:59.986102+00:00] Cooking job job-exjob000000000000000000000000001.
+[2026-11-10T17:10:01.364911+00:00] Activated 6 task(s) to run.
+[2026-11-10T17:10:01.924876+00:00] Cooking: 0 of 26 work item(s) reported (0 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:10:31.968882+00:00] Cooking: 0 of 26 work item(s) reported (0 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:11:02.144333+00:00] Cooking: 0 of 26 work item(s) reported (0 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:11:32.454391+00:00] Cooking: 0 of 26 work item(s) reported (0 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:12:02.556430+00:00] Cooking: 0 of 26 work item(s) reported (0 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:12:32.622306+00:00] Cooking: 0 of 26 work item(s) reported (0 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:13:02.907870+00:00] Cooking: 0 of 26 work item(s) reported (0 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:13:32.995588+00:00] Cooking: 0 of 26 work item(s) reported (0 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:14:03.325224+00:00] Cooking: 0 of 26 work item(s) reported (0 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:14:33.342327+00:00] Cooking: 0 of 26 work item(s) reported (0 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:15:03.817499+00:00] Cooking: 1 of 26 work item(s) reported (1 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:15:06.671255+00:00] Activated 1 task(s) to run.
+[2026-11-10T17:15:12.597441+00:00] Activated 5 task(s) to run.
+[2026-11-10T17:15:34.332930+00:00] Cooking: 6 of 26 work item(s) reported (6 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:16:04.419846+00:00] Cooking: 6 of 26 work item(s) reported (6 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:16:34.443115+00:00] Cooking: 6 of 26 work item(s) reported (6 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:17:05.578012+00:00] Cooking: 6 of 26 work item(s) reported (6 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:17:18.583413+00:00] Activated 4 task(s) to run.
+[2026-11-10T17:17:20.895093+00:00] Activated 2 task(s) to run.
+[2026-11-10T17:17:35.842813+00:00] Cooking: 12 of 26 work item(s) reported (12 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:18:06.318185+00:00] Cooking: 12 of 26 work item(s) reported (12 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:18:36.459795+00:00] Cooking: 12 of 26 work item(s) reported (12 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:19:06.754745+00:00] Cooking: 12 of 26 work item(s) reported (12 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:19:21.557884+00:00] Activated 2 task(s) to run.
+[2026-11-10T17:19:26.498186+00:00] Activated 2 task(s) to run.
+[2026-11-10T17:19:31.630684+00:00] Activated 2 task(s) to run.
+[2026-11-10T17:19:36.983444+00:00] Cooking: 18 of 26 work item(s) reported (18 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:20:07.300476+00:00] Cooking: 18 of 26 work item(s) reported (18 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:20:37.375150+00:00] Cooking: 18 of 26 work item(s) reported (18 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:21:07.561928+00:00] Cooking: 18 of 26 work item(s) reported (18 succeeded, 0 failed), 6 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:21:35.563178+00:00] Activated 1 task(s) to run.
+[2026-11-10T17:21:37.739048+00:00] Cooking: 24 of 26 work item(s) reported (24 succeeded, 0 failed), 1 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:22:07.943251+00:00] Cooking: 24 of 26 work item(s) reported (24 succeeded, 0 failed), 1 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:22:38.163569+00:00] Cooking: 24 of 26 work item(s) reported (24 succeeded, 0 failed), 1 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:23:08.627534+00:00] Cooking: 24 of 26 work item(s) reported (24 succeeded, 0 failed), 1 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:23:34.148297+00:00] Activated 1 task(s) to run.
+[2026-11-10T17:23:39.126585+00:00] Cooking: 25 of 26 work item(s) reported (25 succeeded, 0 failed), 1 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:24:10.019625+00:00] Cooking: 25 of 26 work item(s) reported (25 succeeded, 0 failed), 1 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:24:40.916319+00:00] Cooking: 25 of 26 work item(s) reported (25 succeeded, 0 failed), 1 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:25:11.074210+00:00] Cooking: 25 of 26 work item(s) reported (25 succeeded, 0 failed), 1 offered and waiting for a result, 0 canceled.
+[2026-11-10T17:25:32.445280+00:00] All 26 work item(s) reported: 26 succeeded, 0 failed.
+[2026-11-10T17:25:32.445498+00:00] The job succeeded.
+[2026-11-10T17:25:32.445986+00:00] The cook ended Done with job job-exjob000000000000000000000000001: 26 of 26 work item(s) reported, 26 succeeded, 0 failed, 0 task(s) canceled by the farm.
+[2026-11-10T17:25:32.446600+00:00] Debug artifacts for this cook: /projects/fx/shots/bonfire/pdg_debug/2026-11-10-17-09-52-01234567

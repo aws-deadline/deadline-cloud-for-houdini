@@ -38,6 +38,7 @@ pre-install-commands = [
 test = "pytest --no-cov {args:test/integ} -vvv --numprocesses=1"
 test_submitters = "pytest --no-cov {args:test/integ} -vvv --numprocesses=1 -m submitter"
 test_adaptors = "pytest --no-cov {args:test/integ} -vvv --numprocesses=1 -m adaptor"
+compare_pdg_cook_with_farm = "python -m test.integ.pdg.compare_cook_with_farm {args}"
 
 [envs.e2e.scripts]
 test = "pytest --no-cov {args:test/*/e2e}"

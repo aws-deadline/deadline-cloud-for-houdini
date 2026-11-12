@@ -1,0 +1,16 @@
+{
+  "cook_id": "0123456789abcdef0123456789abcdef",
+  "started_at": "2026-11-10T17:09:52.742094+00:00",
+  "debug_level": 0,
+  "updated_at": "2026-11-10T17:25:32.446319+00:00",
+  "job_id": "job-exjob000000000000000000000000001",
+  "final_phase": "Done",
+  "outcome": "succeeded",
+  "refusals": [],
+  "step_count": 6,
+  "task_count": 26,
+  "succeeded": 26,
+  "failed": 0,
+  "canceled": 0,
+  "stopped_by_user": false
+}
