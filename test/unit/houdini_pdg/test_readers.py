@@ -1782,15 +1782,8 @@ class _ExpressionParm(_Parm):
         tags: Optional[Dict[str, str]] = None,
         kind: str = "Regular",
     ) -> None:
-        super().__init__(name, raw, raw, kind=kind)
-        self._expression = expression
+        super().__init__(name, raw, raw, kind=kind, expression=expression or None)
         self._template = _CodeTemplate(tags or {}, kind)
-
-    def expression(self) -> str:
-        # HOM raises when the parm has no channel expression.
-        if not self._expression:
-            raise RuntimeError("no expression")
-        return self._expression
 
 
 class _LockedHom(_Hom):
