@@ -13,12 +13,27 @@ import string
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import AbstractSet, Any, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
+from typing import (
+    AbstractSet,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+    TypeVar,
+)
 
 from .errors import PayloadTransferError
 from .graph import DeclaredFile, GraphSnapshot, NodeInfo, TaskKey
 from .scene_reads import SceneReads
-from .validation import RefusalScenario
+from .validation import RefusalScenario, Verdict
+
+#: What a read run through :meth:`PdgHost.on_main_thread` returns.
+T = TypeVar("T")
 
 #: The session variables the worker agent sets for a task, in ``TaskAddress`` field order.
 _ENV_NAMES: Tuple[str, ...] = (
@@ -235,8 +250,15 @@ class PdgHost(Protocol):
         """Make ``path`` PDG's local and remote working directory."""
         ...
 
-    def watch_generation(self, cook_set: Optional[AbstractSet[str]]) -> None:
-        """Start following PDG's generation of the steps in ``cook_set``, or of every step."""
+    def watch_generation(
+        self,
+        cook_set: Optional[AbstractSet[str]],
+        on_quota_exceeded: Optional[Callable[[Verdict], bool]] = None,
+    ) -> None:
+        """Start following PDG's generation of the steps in ``cook_set``, or of every step.
+
+        A task count over a quota goes to ``on_quota_exceeded``, and True cancels the cook.
+        """
         ...
 
     def pending_generation(self) -> Sequence[str]:
@@ -249,6 +271,26 @@ class PdgHost(Protocol):
 
     def failure_reason(self, item_id: int) -> Tuple[str, str]:
         """A work item's PDG log, as ``(error, last_line)``: its ERROR lines and its last line, each ``""`` when absent. Never raises."""
+        ...
+
+    def houdini_version(self) -> str:
+        """The running Houdini's version, as the ROP reports it for the Conda packages."""
+        ...
+
+    def queue_parameter_values(self) -> List[Dict[str, Any]]:
+        """The scheduler node's queue parameter values, as OpenJD parameter values."""
+        ...
+
+    def host_requirements(self) -> Optional[Dict[str, Any]]:
+        """The job's host requirements block, or None when any worker may run it."""
+        ...
+
+    def show_warning(self, text: str) -> None:
+        """Add ``text`` to the scheduler node's Warning tab. Never raises."""
+        ...
+
+    def on_main_thread(self, read: Callable[[], T]) -> T:
+        """Run ``read`` where it may use ``hou``, and return its result or raise its error."""
         ...
 
 

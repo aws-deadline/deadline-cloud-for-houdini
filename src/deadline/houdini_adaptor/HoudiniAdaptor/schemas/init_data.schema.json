@@ -13,7 +13,11 @@
             "properties": {
                 "pdg_dir": { "type": "string", "minLength": 1 },
                 "bucket": { "type": "string", "minLength": 1 },
-                "root_prefix": { "type": "string", "minLength": 1 }
+                "root_prefix": { "type": "string", "minLength": 1 },
+                "output_directories": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1 }
+                }
             },
             "required": [ "pdg_dir", "bucket", "root_prefix" ]
         }

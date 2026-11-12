@@ -46,13 +46,11 @@ class HoudiniClient(ClientInterface):
         # See the imports at the top: in hython these packages are top-level names.
         try:
             from deadline.houdini_adaptor.pdg_actions import PdgWorkItemRunner
-            from deadline.houdini_pdg.cook import SystemClock
         except ImportError:
             from houdini_adaptor.pdg_actions import PdgWorkItemRunner  # type: ignore[import,no-redef]
-            from houdini_pdg.cook import SystemClock  # type: ignore[import,no-redef]
 
         # The pdg_ prefix keeps the name apart from the ROP actions.
-        self.actions["pdg_run_work_item"] = PdgWorkItemRunner(clock=SystemClock()).run_work_item
+        self.actions["pdg_run_work_item"] = PdgWorkItemRunner().run_work_item
 
     def close(self, args: Optional[dict] = None) -> None:
         hou.exit()

@@ -14,14 +14,13 @@ import gzip
 import importlib
 import json
 import logging
-import math
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import traceback
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import (
     Any,
@@ -43,12 +42,11 @@ try:
     from openjd.adaptor_runtime_client import PathMappingRule
 
     from deadline.houdini_pdg.graph import PDG_DIR_TOKEN
-    from deadline.houdini_pdg.ports import Clock, OutputFile, TaskAddress, TaskStorage
+    from deadline.houdini_pdg.ports import OutputFile, TaskAddress, TaskStorage
 except ImportError:
     from adaptor_runtime_client import PathMappingRule  # type: ignore[import-not-found,no-redef]
     from houdini_pdg.graph import PDG_DIR_TOKEN  # type: ignore[import-not-found,no-redef]
     from houdini_pdg.ports import (  # type: ignore[import-not-found,no-redef]
-        Clock,
         OutputFile,
         TaskAddress,
         TaskStorage,
@@ -279,8 +277,9 @@ def download_pdg_work_item(
 ) -> Tuple[Dict[str, Any], str]:
     """Fetch the payload, map its paths, and write it where PDG's loader looks. Runs in the adaptor's process.
 
-    ``run_data`` is the task's ``pdg`` run data plus the session's ``pdg_dir`` and ``scene_file``, and
-    ``rules`` are the session's path mapping rules. Returns the client's arguments and its outputs file.
+    ``run_data`` is the task's ``pdg`` run data plus the session's ``pdg_dir``, ``scene_file`` and any
+    ``output_directories``, and ``rules`` are the session's path mapping rules. Returns the client's
+    arguments and its outputs file.
     """
     # The item's name becomes its payload's file name, so it's checked before anything is written.
     payload: WorkItemPayload = WorkItemPayload(storage.get_payload(address)).map_paths(rules)
@@ -306,6 +305,12 @@ def download_pdg_work_item(
         "scene_file": str(run_data.get("scene_file") or ""),
         "record_outputs": bool(run_data.get("record_outputs")),
     }
+    # Each extra output folder as this worker sees it, mapped like the payload, next to
+    # the workstation's spelling, which the scheduler knows it by.
+    listed: List[str] = [str(folder) for folder in run_data.get("output_directories") or ()]
+    if listed:
+        mapped: List[str] = WorkItemPayload({"folders": listed}).map_paths(rules).data["folders"]
+        client_args["mapped_output_directories"] = [list(pair) for pair in zip(mapped, listed)]
     return client_args, outputs_file
 
 
@@ -338,6 +343,8 @@ class _DownloadedItem:
     pdg_temp: str
     scene_file: str
     record_outputs: bool
+    #: Each extra output folder, as (this worker's path, the workstation's path).
+    mapped_output_directories: Tuple[Tuple[str, str], ...] = ()
 
 
 class PdgWorkItemRunner:
@@ -346,8 +353,7 @@ class PdgWorkItemRunner:
     Each item runs with the session's environment plus its own values, and nothing is kept between items.
     """
 
-    def __init__(self, *, clock: Clock) -> None:
-        self._clock: Clock = clock
+    def __init__(self) -> None:
         self._baseline: Dict[str, str] = dict(os.environ)
 
     def run_work_item(self, args: Dict[str, Any]) -> None:
@@ -361,7 +367,18 @@ class PdgWorkItemRunner:
         try:
             item: _DownloadedItem = _read_work_item(args)
             self._set_environment(item)
-            started: datetime = self._clock.now()
+            # Each folder the scan reads, with its file system's time before the command runs.
+            started: Dict[str, Optional[int]] = (
+                {
+                    folder: _read_file_system_time(folder)
+                    for folder in (
+                        item.pdg_dir,
+                        *(worker for worker, _local in item.mapped_output_directories),
+                    )
+                }
+                if item.record_outputs
+                else {}
+            )
             exit_code, outputs = self._run(item)
             # Only a step with no declared outputs records them.
             if item.record_outputs and exit_code == 0:
@@ -474,26 +491,50 @@ def _read_work_item(args: Mapping[str, Any]) -> _DownloadedItem:
         pdg_temp=pdg_temp,
         scene_file=str(args.get("scene_file") or ""),
         record_outputs=bool(args.get("record_outputs")),
+        mapped_output_directories=tuple(
+            (str(worker), str(local))
+            for worker, local in args.get("mapped_output_directories") or ()
+        ),
     )
 
 
 def _record_outputs(
-    item: _DownloadedItem, outputs: Sequence[OutputFile], started: datetime
+    item: _DownloadedItem, outputs: Sequence[OutputFile], started: Mapping[str, Optional[int]]
 ) -> None:
     """Write the outputs for the adaptor to publish, with paths tokenized under ``__PDG_DIR__``.
 
-    A command that reported none gets a scan for the files it wrote since ``started``.
+    A command that reported none gets a scan for the files it wrote since each folder's
+    time in ``started``, in ``$PDG_DIR`` and in each extra output folder, which is
+    recorded by the workstation's path.
     """
     # The scan leaves out the payloads and the linked scene, which the command didn't write.
+    scanned: bool = not outputs
     hip_link: str = os.path.join(item.pdg_dir, os.path.basename(item.scene_file))
-    recorded: Sequence[OutputFile] = outputs or _scan_outputs(
-        item.pdg_dir,
-        exclude=(item.pdg_temp, hip_link if item.scene_file else ""),
-        since=started,
+    recorded: List[OutputFile] = (
+        _scan_outputs(
+            item.pdg_dir,
+            exclude=(item.pdg_temp, hip_link if item.scene_file else ""),
+            since=started[item.pdg_dir],
+        )
+        if scanned
+        else list(outputs)
     )
+    folders: Tuple[Tuple[str, str], ...] = item.mapped_output_directories if scanned else ()
     record: List[Dict[str, str]] = [
         {"path": _tokenize(o.path, item.pdg_dir), "tag": o.tag} for o in recorded
     ]
+    # A scan also covers each extra output folder, recorded by the workstation's path,
+    # which is the one the scheduler and PDG know.
+    for worker, local in folders:
+        record.extend(
+            {
+                "path": local.rstrip("/\\")
+                + "/"
+                + Path(o.path).relative_to(Path(os.path.abspath(worker))).as_posix(),
+                "tag": o.tag,
+            }
+            for o in _scan_outputs(worker, since=started[worker])
+        )
     # An error fails the item, since a success with no record gives the next step wrong inputs.
     with open(_outputs_file(item.pdg_temp, item.payload.item_name), "w", encoding="utf-8") as f:
         json.dump({"outputs": record}, f)
@@ -739,20 +780,38 @@ def _parse_pdg_results(lines: Iterable[str], pdg_dir: str) -> List[OutputFile]:
     return outputs
 
 
+def _read_file_system_time(folder: str) -> Optional[int]:
+    """The folder's file system time now, in nanoseconds, or None when the folder doesn't exist yet.
+
+    It's the mtime of a hidden file written there, because the file system's clock can lag
+    this process's, and the scan compares it with mtimes from the same clock.
+    """
+    handle: int
+    marker: str
+    try:
+        handle, marker = tempfile.mkstemp(prefix=".pdg-start-", dir=folder)
+    except FileNotFoundError:
+        return None
+    # Removed before the command runs, so no run, even a failed one, leaves it as an output.
+    try:
+        os.close(handle)
+        return os.stat(marker).st_mtime_ns
+    finally:
+        os.remove(marker)
+
+
 def _scan_outputs(
-    output_dir: str, *, exclude: Sequence[str] = (), since: Optional[datetime] = None
+    output_dir: str, *, exclude: Sequence[str] = (), since: Optional[int] = None
 ) -> List[OutputFile]:
     """Every regular file under the directory, for a command that reported none.
 
-    Skips hidden files, the excluded paths, and, with ``since``, files not
-    modified since then, so the inputs synced before the task are not reported.
+    Skips hidden files, the excluded paths, and, with ``since``, files modified before that
+    file system time in nanoseconds, so the inputs synced before the task are not reported.
     """
     root: Path = Path(os.path.abspath(output_dir))
     if not root.is_dir():
         return []
     excluded: List[Path] = [Path(os.path.abspath(e)) for e in exclude if e]
-    # Whole seconds, because some file systems store modification times that way.
-    cutoff: Optional[int] = math.floor(since.timestamp()) if since is not None else None
 
     def skipped(path: Path) -> bool:
         # Hidden names, and the excluded paths with everything under them.
@@ -773,7 +832,7 @@ def _scan_outputs(
         # Skip hidden and excluded files, anything that isn't a regular file, and older files.
         if skipped(path) or not path.is_file():
             continue
-        if cutoff is not None and path.stat().st_mtime < cutoff:
+        if since is not None and path.stat().st_mtime_ns < since:
             continue
         outputs.append(OutputFile(str(path)))
     return outputs

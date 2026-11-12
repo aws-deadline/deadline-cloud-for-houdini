@@ -46,8 +46,10 @@ _logger: logging.Logger = logging.getLogger(__name__)
 _SUCCEEDED: str = "SUCCEEDED"
 _FAILED: str = "FAILED"
 _CANCELED: str = "CANCELED"
-# NOT_COMPATIBLE means no worker on the queue can run the task: a real verdict.
-_FAILURES: FrozenSet[str] = frozenset({_FAILED, "NOT_COMPATIBLE"})
+# NOT_COMPATIBLE means no fleet on the queue can run the task yet. It is not a
+# result, because the task runs once a fleet that meets its host requirements is added.
+_NOT_COMPATIBLE: str = "NOT_COMPATIBLE"
+_FAILURES: FrozenSet[str] = frozenset({_FAILED})
 # The statuses of a task whose run has ended with a result.
 _RUN_ENDED: FrozenSet[str] = _FAILURES | {_SUCCEEDED}
 # The statuses of a task the farm is running now, or is about to run.
@@ -56,7 +58,7 @@ _RUN_IN_PROGRESS: FrozenSet[str] = frozenset(
 )
 # CANCELED is searched for so a cancellation is returned once. It is never
 # returned as a failure.
-_SEARCHED_STATUSES: List[str] = sorted(_FAILURES | {_SUCCEEDED, _CANCELED})
+_SEARCHED_STATUSES: List[str] = sorted(_FAILURES | {_SUCCEEDED, _CANCELED, _NOT_COMPATIBLE})
 
 # An update still being applied to a step's tasks. A task activated inside that
 # window is overwritten when the update lands.
@@ -371,6 +373,8 @@ class DeadlineFarmJob:
         self._last_reconciled_at: Optional[datetime] = None
         # Each task whose cancellation was returned, so it is returned once.
         self._cancellation_returned: Set[TaskKey] = set()
+        # The tasks already logged as waiting for a fleet, so each is logged once.
+        self._waiting_for_fleet: Set[TaskKey] = set()
         # The held counts by step that were logged last, so a log line is
         # written only when they change.
         self._last_logged_held_counts: Dict[str, int] = {}
@@ -1033,6 +1037,19 @@ class DeadlineFarmJob:
             if key not in self._cancellation_returned:
                 self._cancellation_returned.add(key)
                 outcomes.append(TaskOutcome(key=key, status=TaskStatus.CANCELED, ended_at=ended))
+            return
+
+        # A task no fleet can run waits for one, so the cook keeps its job.
+        if status == _NOT_COMPATIBLE:
+            if key not in self._waiting_for_fleet:
+                self._waiting_for_fleet.add(key)
+                _logger.warning(
+                    "No fleet on the queue can run task %s of step '%s' yet, so no worker has "
+                    "picked it up. The job waits until a fleet that meets the step's host "
+                    "requirements is added to the queue.",
+                    key.task_index,
+                    key.step_name,
+                )
             return
 
         # A failure the farm will retry is not final. If the scheduler node never

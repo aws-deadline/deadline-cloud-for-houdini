@@ -124,7 +124,7 @@ See [`docs/submission-hooks.md`][submission-hooks] in the base client library fo
 guidance.
 ## Houdini PDG (experimental)
 
-A PDG scheduler that cooks a TOP network as one Deadline Cloud job is under development, it is experimental and not yet functional. It is not installed by default; see the [PDG README](src/deadline/houdini_pdg/README.md) for its status.
+A PDG scheduler that cooks a TOP network as one Deadline Cloud job is under development. It is experimental and not installed by default. See the [PDG README](src/deadline/houdini_pdg/README.md) for how to try it.
 
 ## Viewing the Job Bundle that will be submitted
 

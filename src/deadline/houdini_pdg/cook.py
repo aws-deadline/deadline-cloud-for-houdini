@@ -21,7 +21,7 @@ from types import MappingProxyType
 from typing import AbstractSet, Callable, Dict, FrozenSet, List, Mapping, Optional, Set, Tuple
 
 from .diagnostics import CookJournal
-from .errors import GraphRefusedError, QuotaExceededError
+from .errors import GraphRefusedError, QuotaExceededError, format_advisories
 from .graph import (
     PDG_DIR_TOKEN,
     DeclaredFile,
@@ -49,7 +49,16 @@ from .ports import (
     WorkItemHandle,
 )
 from .scene_reads import ReadReport, SceneReads, match_reads
-from .validation import RefusalScenario, ValidationContext, Verdict, validate, waived
+from .validation import (
+    RefusalScenario,
+    ValidationContext,
+    Verdict,
+    check_cooked_from_cache,
+    check_no_farm_work,
+    environment_with_hip,
+    validate,
+    waived,
+)
 
 _logger: logging.Logger = logging.getLogger(__name__)
 
@@ -508,6 +517,7 @@ class Cook:
         self._last_heartbeat_at: Optional[datetime] = None
         # Set once by close, which only one thread calls for a given cook.
         self._summary: Optional[CookSummary] = None
+        self._refused_at_end: Optional[Verdict] = None
         # The journal's handler sees only what the logger lets through, so the
         # logger passes INFO for the life of the cook.
         self._log_handler: logging.Handler = services.journal.log_handler()
@@ -605,11 +615,15 @@ class Cook:
         A job whose tasks were all released is kept, since it may still be
         finishing. Any other phase either never had a job or already reached a
         verdict. From the close on, no result is recorded, so the summary counts
-        exactly what PDG was told.
+        exactly what PDG was told. A cook PDG ends before offering anything ends
+        REFUSED when a step in it was cooked from cache (see :meth:`refused_at_end`).
         """
         if self._summary is not None:
             return self._summary
         try:
+            # PDG offered nothing, so no check has run. Items it took from cache say why.
+            if not cancel and self._state.phase() is CookPhase.CONNECTED:
+                self._refuse_cook_that_offered_nothing()
             # Find what can never be released, and log it.
             resolving: bool = not cancel and self._state.phase() is CookPhase.RESOLVING
             never_offered: List[WorkItemSpec] = []
@@ -647,7 +661,10 @@ class Cook:
                     job.cancel()
                 elif job is not None:
                     job.fail()
-            summary: CookSummary = self._summarize(final, counts, stopped_by_user=cancel)
+            # A cancel that follows a quota refusal was the cook's own, not the artist's.
+            summary: CookSummary = self._summarize(
+                final, counts, stopped_by_user=cancel and self._refused_at_end is None
+            )
             self._summary = summary
             self._services.journal.closed(summary)
             return summary
@@ -656,6 +673,49 @@ class Cook:
             self._package_logger.removeHandler(self._log_handler)
             if self._package_logger.level != self._package_logger_previous_level:
                 self._package_logger.setLevel(self._package_logger_previous_level)
+
+    def refused_at_end(self) -> Optional[Verdict]:
+        """The refusal of a cook PDG ended before offering anything, for its cache or a quota."""
+        return self._refused_at_end
+
+    def _refuse_cook_that_offered_nothing(self) -> None:
+        """Refuse a cook PDG ended with no item offered, when a step was cooked from cache or there was no step."""
+        try:
+            nodes: Tuple[NodeInfo, ...] = tuple(self._host.read_graph())
+            ctx: ValidationContext = ValidationContext(
+                nodes=nodes,
+                snapshot=synthesize(nodes),
+                working_dir=self._settings.working_dir,
+                env=self._environment(),
+            )
+            # Items from cache say why, and a cook with no step at all says why too.
+            cached: Verdict = check_cooked_from_cache(ctx, offered_nothing=True)
+            found: Verdict = cached if cached.refusals else check_no_farm_work(ctx)
+        except Exception:
+            _logger.warning("Could not read which work items PDG cooked from cache.", exc_info=True)
+            return
+        self.refuse_before_any_offer(found)
+
+    def refuse_before_any_offer(self, found: Verdict) -> bool:
+        """Refuse a cook that has offered nothing yet, and return whether it did.
+
+        Used for a quota passed while generating and for a cook that offered nothing, and
+        kept for ``on_stop_cook``. With validation off, or after the snapshot, it only logs.
+        """
+        verdict: Verdict = found if self._settings.validate_graph else waived(found)
+        self._log_validation_verdict(verdict)
+        if not verdict.refusals:
+            return False
+        # The cook moves once from CONNECTED through SNAPSHOTTING to REFUSED, so the summary records it.
+        scenarios: Tuple[RefusalScenario, ...] = tuple(
+            dict.fromkeys(refusal.scenario for refusal in verdict.refusals)
+        )
+        if self._state.move(CookPhase.CONNECTED, CookPhase.SNAPSHOTTING) and self._state.refuse(
+            scenarios, from_phase=CookPhase.SNAPSHOTTING
+        ):
+            self._refused_at_end = verdict
+            return True
+        return False
 
     # -- submission --
 
@@ -767,6 +827,7 @@ class Cook:
                 snapshot=snapshot,
                 reads=report,
                 working_dir=self._settings.working_dir,
+                output_directories=self._settings.output_directories,
                 env=self._environment(),
             )
         )
@@ -832,24 +893,30 @@ class Cook:
             # Validation is told the walk did not run, so it says which checks it skipped.
             _logger.warning("The scene walk did not finish, so no data edges are added.")
             return provisional, None
-        report: ReadReport = match_reads(provisional, scene.reads, self._settings.working_dir)
+        report: ReadReport = match_reads(
+            provisional,
+            scene.reads,
+            self._settings.working_dir,
+            output_directories=self._settings.output_directories,
+        )
         return synthesize(nodes, data_edges=report.data_edges), report
 
     def _environment(self) -> Dict[str, str]:
         """This process's environment, with ``HIP`` from the saved scene when it is unset."""
-        env: Dict[str, str] = dict(os.environ)
-        if not env.get("HIP"):
-            hip_file: str = self._host.scene_files().hip_file
-            if hip_file:
-                env["HIP"] = os.path.dirname(hip_file)
-        return env
+        return (
+            os.environ.copy()
+            if os.environ.get("HIP")
+            else environment_with_hip(self._host.scene_files().hip_file)
+        )
 
-    @staticmethod
-    def _log_validation_verdict(verdict: Verdict) -> None:
+    def _log_validation_verdict(self, verdict: Verdict) -> None:
+        # Each advisory is logged, and all of them go on the node's Warning tab as one message.
         for advisory in verdict.advisories:
             _logger.warning(
                 "%s (%s): %s", advisory.subject, advisory.scenario.value, advisory.detail
             )
+        if verdict.advisories:
+            self._host.show_warning(format_advisories(verdict.advisories))
         for refusal in verdict.refusals:
             _logger.error(
                 "Refused, %s (%s): %s %s",
@@ -1288,7 +1355,7 @@ class PdgScheduler:
                 cook.close(cancel=False)
             raise
         try:
-            self._host.watch_generation(cook_set)
+            self._host.watch_generation(cook_set, cook.refuse_before_any_offer)
         except Exception:
             # Without it the first work item reads the graph at once.
             _logger.warning("Could not follow PDG's generation of the graph.", exc_info=True)
@@ -1336,6 +1403,8 @@ class PdgScheduler:
         """Close the open cook, canceling its job when asked.
 
         A start still running learns of the stop, and ends the cook it is starting.
+        Raises ``GraphRefusedError`` when PDG ended the cook with nothing offered
+        because it took a step's items from cache, or generation passed a quota.
         """
         # Drop the cook first, so the next start builds a fresh one.
         with self._lock:
@@ -1351,6 +1420,10 @@ class PdgScheduler:
                 cook.close(cancel=cancel)
             except Exception:
                 _logger.exception("Could not close the cook")
+            # The node shows the refusal, because no job and no other message says why.
+            refused: Optional[Verdict] = cook.refused_at_end()
+            if refused is not None:
+                raise GraphRefusedError(refused)
         return True
 
 
