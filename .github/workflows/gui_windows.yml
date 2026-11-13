@@ -5,7 +5,7 @@ on:
   # on mainline. Only the approved CI branch can trigger private execution.
   push:
     branches:
-      - feature/ci-tests
+      - feature_houdini-gui-ci
     paths:
       - .github/workflows/gui_windows.yml
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
   GUI:
     if: >-
       github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
-      (github.ref == 'refs/heads/mainline' || github.ref == 'refs/heads/feature/ci-tests')
+      (github.ref == 'refs/heads/mainline' || github.ref == 'refs/heads/feature_houdini-gui-ci')
     runs-on: windows-2025
     timeout-minutes: 60
     concurrency:

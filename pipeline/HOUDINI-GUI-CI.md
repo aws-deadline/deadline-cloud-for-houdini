@@ -37,6 +37,9 @@ The job supplies these values through secrets:
 
 The initial OIDC role needs the repository-specific private-resource opt-in.
 Trust must be restricted to the canonical repository's approved CI branches.
+Houdini branch rules reject slash-separated CI branches; infrastructure
+onboarding must set `gitHubRunnerTestBranch: 'feature_houdini-gui-ci'` when
+authorized to enable private-resource access.
 Do not expose these resources to forks or pull-request code.
 
 Start the tunnel before launching Houdini:
@@ -64,10 +67,10 @@ process tree before closing the tunnel.
 ## Workflow and evidence
 
 `gui_windows.yml` provides manual and reusable execution on `windows-2025`.
-Changing this workflow on `feature/ci-tests` also starts the initial trial,
+Changing this workflow on `feature_houdini-gui-ci` also starts the initial trial,
 before GitHub registers the new dispatch workflow on mainline.
 Private execution is limited to the canonical repository on `mainline` or
-`feature/ci-tests`. Its optional exact source SHA must belong to that trusted
+`feature_houdini-gui-ci`. Its optional exact source SHA must belong to that trusted
 branch history. The reviewed test harness is retained when testing an earlier
 production revision; source and harness SHAs are reported separately.
 
