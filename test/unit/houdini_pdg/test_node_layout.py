@@ -24,17 +24,25 @@ class FakeTemplate:
     """A ``hou.ParmTemplate``: a field, or a folder with the templates inside it."""
 
     def __init__(
-        self, name: str, label: str = "", children: Optional[List["FakeTemplate"]] = None
+        self,
+        name: str,
+        label: str = "",
+        children: Optional[List["FakeTemplate"]] = None,
+        hidden: bool = False,
     ) -> None:
         self._name: str = name
         self._label: str = label or name
         self.children: Optional[List[FakeTemplate]] = children
+        self._hidden: bool = hidden
 
     def name(self) -> str:
         return self._name
 
     def label(self) -> str:
         return self._label
+
+    def isHidden(self) -> bool:
+        return self._hidden
 
     def type(self) -> str:
         return "Folder" if self.children is not None else "String"
@@ -291,3 +299,51 @@ def test_a_node_with_no_queue_folder_keeps_the_definitions_layout(scene: FakeHou
     move_queue_folders_above_submit(node)
     assert not node.stores_layout
     assert node.folder("Shared Job Settings") == ["folder0", "folder1", "submit"]
+
+
+#: The buttons in the Deadline Cloud Settings folder after Farm and Queue, as in the node's script.
+_LOGIN_BUTTONS: Tuple[str, ...] = ("login", "logout", "settings")
+
+
+def _with_login_buttons(hidden: Set[str]) -> List[FakeTemplate]:
+    """The current definition's layout, with Login, Logout and Settings after Farm and Queue."""
+    # The buttons go at the end of the Deadline Cloud Settings folder, as in the node's script.
+    layout: List[FakeTemplate] = _definition()
+    settings: Optional[FakeTemplate] = _find_folder(layout, "Deadline Cloud Settings")
+    assert settings is not None and settings.children is not None
+    settings.children += [FakeTemplate(name, hidden=name in hidden) for name in _LOGIN_BUTTONS]
+    return layout
+
+
+@pytest.mark.parametrize(
+    "stored_hidden",
+    [set(), {"login", "logout", "settings"}],
+    ids=["all buttons shown", "all buttons hidden"],
+)
+def test_an_old_node_loads_with_login_and_logout_hidden_and_settings_shown(
+    scene: FakeHou, stored_hidden: Set[str]
+) -> None:
+    """A node saved with any of the buttons shown or hidden must load with the definition's flags."""
+    # The definition hides Login and Logout. The old node stored its own flags, with Conda.
+    stored: List[FakeTemplate] = _with_login_buttons(stored_hidden)
+    shared: Optional[FakeTemplate] = _find_folder(stored, "Shared Job Settings")
+    assert shared is not None and shared.children is not None
+    shared.children.insert(2, _conda())
+    values: Dict[str, Any] = {**_REAL_VALUES, **_CONDA_VALUES, "queue_env_do_not_use_Conda": (0,)}
+    node: FakeLayoutNode = FakeLayoutNode(
+        _with_login_buttons({"login", "logout"}), stored, set(_conda().names()), values
+    )
+    node.stores_layout = True
+    # After the rebuild each button has the definition's flag, and the Conda values are kept.
+    rebuild_layout_from_definition(node)
+    settings: Optional[FakeTemplate] = _find_folder(node.layout, "Deadline Cloud Settings")
+    assert settings is not None
+    hidden: Dict[str, bool] = {child.name(): child.isHidden() for child in settings.parmTemplates()}
+    assert hidden == {
+        "farm": False,
+        "queue": False,
+        "login": True,
+        "logout": True,
+        "settings": False,
+    }
+    assert {name: node.values[name] for name in _CONDA_VALUES} == _CONDA_VALUES

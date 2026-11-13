@@ -91,3 +91,101 @@ def test_the_job_number_parms_are_plain_integer_fields(parm: str) -> None:
     block: str = _parms(NODE_SCRIPT)[parm]
     assert re.search(r"type\s+integer", block)
     assert re.search(r'parmtag\s*\{\s*"sidefx::slider"\s+"none"\s*\}', block), parm
+
+
+def _flag(block: str, flag: str) -> bool:
+    """Whether a parm block carries a bare flag line, such as ``invisible`` or ``joinnext``."""
+    return bool(re.search(rf"^\s*{flag}\s*$", block, re.M))
+
+
+@pytest.mark.parametrize("parm", ["login", "logout"])
+def test_the_login_and_logout_buttons_are_hidden(parm: str) -> None:
+    """On macOS the login dialog can crash Houdini, so the node hides them as the ROP does."""
+    assert _flag(_parms(NODE_SCRIPT)[parm], "invisible"), parm
+
+
+@pytest.mark.parametrize("parm", ["settings", "update_queue_parameters", "submit"])
+def test_settings_update_queue_parameters_and_submit_stay_visible(parm: str) -> None:
+    """Without Settings on the node, the farm and queue only change through the config file."""
+    assert not _flag(_parms(NODE_SCRIPT)[parm], "invisible"), parm
+
+
+def _visible_rows() -> List[List[str]]:
+    """The parm rows the artist sees, in file order: joined parms share a row, hidden ones drop out."""
+    # A row ends at the first parm without ``joinnext``. Hidden parms are left out of the row.
+    rows: List[List[str]] = [[]]
+    for name, block in _parms(NODE_SCRIPT).items():
+        if not _flag(block, "invisible"):
+            rows[-1].append(name)
+        if not _flag(block, "joinnext"):
+            rows.append([])
+    return [row for row in rows if row]
+
+
+def test_settings_and_update_queue_parameters_share_one_row_after_farm_and_queue() -> None:
+    """The two buttons sat on one row before, and hiding Login and Logout must not split them."""
+    rows: List[List[str]] = _visible_rows()
+    start: int = rows.index(["farm"])
+    assert rows[start : start + 4] == [
+        ["farm"],
+        ["queue"],
+        ["settings", "update_queue_parameters"],
+        ["submit"],
+    ]
+
+
+def test_no_visible_parm_joins_a_hidden_one() -> None:
+    """A visible parm joined to a hidden one would leave a gap on its row where the hidden one was."""
+    # Walk the parms in file order, and check what each visible, joined parm joins.
+    blocks: List[Tuple[str, str]] = list(_parms(NODE_SCRIPT).items())
+    for (name, block), (next_name, next_block) in zip(blocks, blocks[1:]):
+        if _flag(block, "joinnext") and not _flag(block, "invisible"):
+            assert not _flag(next_block, "invisible"), (name, next_name)
+
+
+#: The commands that change the farm and queue, since the node's Settings window has no picker.
+_FARM_AND_QUEUE_COMMANDS: List[str] = [
+    "deadline config set defaults.farm_id",
+    "deadline config set defaults.queue_id",
+]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [os.path.join(_NODE, "Help"), os.path.join(_SRC, "houdini_pdg", "README.md")],
+    ids=["help", "readme"],
+)
+def test_the_docs_name_the_commands_that_change_the_farm_and_queue(path: str) -> None:
+    """The workstation settings window has no farm or queue, so the docs must name what does."""
+    with open(path, encoding="utf8") as f:
+        text: str = " ".join(f.read().split())
+    for command in _FARM_AND_QUEUE_COMMANDS:
+        assert command in text, command
+    assert "Update Queue Parameters" in text
+
+
+@pytest.mark.parametrize(
+    "path",
+    [os.path.join(_NODE, "Help"), os.path.join(_SRC, "houdini_pdg", "README.md")],
+    ids=["help", "readme"],
+)
+def test_the_docs_say_to_set_the_farm_region_after_the_farm(path: str) -> None:
+    """Setting the farm alone looks it up in the profile's region, and the region is stored per farm."""
+    # Read the text with its line breaks folded, then check the region command follows the farm one.
+    with open(path, encoding="utf8") as f:
+        text: str = " ".join(f.read().split())
+    farm: int = text.index("deadline config set defaults.farm_id")
+    region: int = text.find("deadline config set defaults.farm_region <region>")
+    assert region > farm
+    assert "another AWS Region" in text
+
+
+def test_the_help_does_not_say_settings_changes_the_farm_or_queue() -> None:
+    """Settings opens the workstation settings, which have no farm or queue to change."""
+    # Read the Settings parm's own entry, up to the next parm's entry.
+    help_text: str = _read(_NODE, "Help")
+    start: int = help_text.index("#id: settings")
+    end: int = help_text.index("#id:", start + 1)
+    entry: str = help_text[start:end]
+    assert "farm" not in entry and "queue" not in entry
+    assert "click __Settings__" not in help_text

@@ -11,7 +11,7 @@ def callback(kwargs):
     from deadline.houdini_pdg.houdini.host import move_queue_folders_above_submit
     from deadline_cloud_for_houdini.submitter import callback as rop_callback
 
-    # Login, Settings and Update Queue Parameters add the queue folders after Submit.
+    # Settings and Update Queue Parameters add the queue folders after Submit.
     rop_callback(kwargs)
     move_queue_folders_above_submit(kwargs["node"])
 

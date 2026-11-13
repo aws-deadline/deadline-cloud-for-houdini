@@ -512,6 +512,43 @@ def test_a_failed_queue_read_names_its_cause(
         _connect(build_network(PYRO_BONFIRE), FakeCloud(queue=[error]), tmp_path)
 
 
+@pytest.mark.parametrize(
+    "error, remedy",
+    [
+        (NoCredentialsError(), "`deadline auth login`"),
+        (_client_error("ResourceNotFoundException"), "`deadline config set defaults.queue_id"),
+    ],
+)
+def test_a_login_or_queue_error_names_a_remedy_the_artist_can_use(
+    scene: FakeHou, tmp_path: Path, error: Exception, remedy: str
+) -> None:
+    """A message must name a remedy that works: Login and Logout are hidden, and Settings has no queue."""
+    # Read the refusal, then check it names the remedy and no button that can't fix it.
+    with pytest.raises(CookSetupError) as raised:
+        _connect(build_network(PYRO_BONFIRE), FakeCloud(queue=[error]), tmp_path)
+    message: str = str(raised.value)
+    assert remedy in message
+    assert "Login button" not in message and "Logout" not in message
+    assert "Settings button" not in message
+
+
+def test_a_queue_not_found_message_says_to_set_the_farm_region_after_the_farm(
+    scene: FakeHou, tmp_path: Path
+) -> None:
+    """A farm in another region is looked up in the profile's region unless its region is set too."""
+    # Read the not-found refusal, then check the region command comes after the farm command.
+    with pytest.raises(CookSetupError) as raised:
+        _connect(
+            build_network(PYRO_BONFIRE),
+            FakeCloud(queue=[_client_error("ResourceNotFoundException")]),
+            tmp_path,
+        )
+    message: str = str(raised.value)
+    farm: int = message.index("`deadline config set defaults.farm_id")
+    region: int = message.find("`deadline config set defaults.farm_region <region>`")
+    assert region > farm
+
+
 def test_an_error_the_library_says_needs_a_login_asks_for_one(
     scene: FakeHou, tmp_path: Path
 ) -> None:
