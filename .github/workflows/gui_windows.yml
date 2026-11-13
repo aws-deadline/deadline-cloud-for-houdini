@@ -1,6 +1,13 @@
 name: Houdini GUI Integration Tests - Windows
 
 on:
+  # Allows the initial trial before this new dispatch workflow is registered
+  # on mainline. Only the approved CI branch can trigger private execution.
+  push:
+    branches:
+      - feature/ci-tests
+    paths:
+      - .github/workflows/gui_windows.yml
   workflow_dispatch:
     inputs:
       source_sha:

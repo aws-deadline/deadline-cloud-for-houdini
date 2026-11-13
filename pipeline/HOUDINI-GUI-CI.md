@@ -64,6 +64,8 @@ process tree before closing the tunnel.
 ## Workflow and evidence
 
 `gui_windows.yml` provides manual and reusable execution on `windows-2025`.
+Changing this workflow on `feature/ci-tests` also starts the initial trial,
+before GitHub registers the new dispatch workflow on mainline.
 Private execution is limited to the canonical repository on `mainline` or
 `feature/ci-tests`. Its optional exact source SHA must belong to that trusted
 branch history. The reviewed test harness is retained when testing an earlier
