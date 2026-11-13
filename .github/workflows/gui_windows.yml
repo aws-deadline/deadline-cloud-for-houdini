@@ -1,0 +1,154 @@
+name: Houdini GUI Integration Tests - Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact trusted source commit to test; empty uses this branch
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+    secrets:
+      AWS_OIDC_ROLE_ARN:
+        required: true
+      AWS_REGION:
+        required: true
+      INSTALLER_BUCKET:
+        required: true
+      INSTALLER_BUCKET_EXPECTED_OWNER:
+        required: true
+      LICENSE_ROLE_ARN:
+        required: true
+      BASTION_INSTANCE_TAG:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  GUI:
+    if: >-
+      github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
+      (github.ref == 'refs/heads/mainline' || github.ref == 'refs/heads/feature/ci-tests')
+    runs-on: windows-2025
+    timeout-minutes: 60
+    concurrency:
+      group: houdini-integration-tests
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+      - name: Validate exact trusted source
+        shell: pwsh
+        env:
+          REQUESTED_SHA: ${{ inputs.source_sha }}
+        run: |
+          $sha = $env:REQUESTED_SHA
+          if (-not $sha) { $sha = $env:GITHUB_SHA }
+          if ($sha -notmatch '^[0-9a-f]{40}$') { throw 'Provide a full source commit SHA.' }
+          git merge-base --is-ancestor $sha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Source must belong to this trusted branch history.' }
+          # Preserve the reviewed harness while selecting an exact production
+          # revision. Overlay only test/CI files, never production source.
+          $harness = "$env:RUNNER_TEMP/houdini-gui-harness"
+          New-Item -ItemType Directory "$harness/pipeline", "$harness/test" -Force | Out-Null
+          Copy-Item test/houdini_submitter_ui "$harness/test/" -Recurse
+          foreach ($file in 'check-windows-gui-desktop.ps1', 'windows-license-tunnel.ps1',
+            'install-houdini-gui-windows.py', 'prepare-houdini-gui-dependencies.py',
+            'run-houdini-gui-windows.ps1', 'run-houdini-gui-baseline.py') {
+            Copy-Item "pipeline/$file" "$harness/pipeline/"
+          }
+          Copy-Item requirements-gui-testing.txt $harness
+          git checkout --detach $sha
+          if ($LASTEXITCODE -ne 0) { throw 'Source checkout failed.' }
+          Copy-Item "$harness/pipeline/*" pipeline/ -Force
+          if (Test-Path test/houdini_submitter_ui) {
+            Remove-Item test/houdini_submitter_ui -Recurse -Force
+          }
+          Copy-Item "$harness/test/houdini_submitter_ui" test/ -Recurse -Force
+          Copy-Item "$harness/requirements-gui-testing.txt" . -Force
+          git lfs pull --include="test/integ/**"
+          if ($LASTEXITCODE -ne 0) { throw 'Reference image acquisition failed.' }
+          "Tested source: $sha" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "Test harness: $env:GITHUB_SHA" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "HOUDINI_GUI_TESTED_SHA=$sha" | Out-File $env:GITHUB_ENV -Append
+      - name: Verify this job's unlocked interactive desktop
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory "$env:RUNNER_TEMP/houdini-gui-artifacts" -Force | Out-Null
+          ./pipeline/check-windows-gui-desktop.ps1 *> "$env:RUNNER_TEMP/houdini-gui-artifacts/desktop.txt"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Prepare isolated test environment
+        shell: pwsh
+        run: |
+          python -m venv "$env:RUNNER_TEMP/houdini-gui-env"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $python = "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe"
+          & $python -m pip install -e . -r requirements-testing.txt -r requirements-integ-testing.txt -r requirements-gui-testing.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $python pipeline/prepare-houdini-gui-dependencies.py --directory "$env:RUNNER_TEMP/houdini-gui-dcc-deps"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "HOUDINI_GUI_DEPENDENCIES=$env:RUNNER_TEMP/houdini-gui-dcc-deps" | Out-File $env:GITHUB_ENV -Append
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Install scanned and verified Houdini 22.0.368
+        shell: pwsh
+        env:
+          INSTALLER_BUCKET: ${{ secrets.INSTALLER_BUCKET }}
+          INSTALLER_BUCKET_EXPECTED_OWNER: ${{ secrets.INSTALLER_BUCKET_EXPECTED_OWNER }}
+        run: |
+          & "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" pipeline/install-houdini-gui-windows.py `
+            --version 22.0.368 --directory "$env:RUNNER_TEMP/houdini-gui-runtime" --github-env $env:GITHUB_ENV
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Start developer license tunnel
+        shell: pwsh
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          LICENSE_ROLE_ARN: ${{ secrets.LICENSE_ROLE_ARN }}
+          BASTION_INSTANCE_TAG: ${{ secrets.BASTION_INSTANCE_TAG }}
+        run: ./pipeline/windows-license-tunnel.ps1
+      - name: Run real GUI and local non-GUI baseline
+        shell: pwsh
+        run: |
+          ./pipeline/run-houdini-gui-windows.ps1 `
+            -Python "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" `
+            -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts"
+      - name: Restore runner license route
+        if: always()
+        shell: pwsh
+        run: ./pipeline/run-houdini-gui-windows.ps1 -Restore
+      - name: Close owned license tunnel
+        if: always()
+        shell: pwsh
+        run: ./pipeline/windows-license-tunnel.ps1 -Cleanup
+      - name: Record tested source
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory "$env:RUNNER_TEMP/houdini-gui-artifacts" -Force | Out-Null
+          "$env:HOUDINI_GUI_TESTED_SHA" | Set-Content "$env:RUNNER_TEMP/houdini-gui-artifacts/source-sha.txt"
+          "$env:GITHUB_SHA" | Set-Content "$env:RUNNER_TEMP/houdini-gui-artifacts/harness-sha.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: houdini-windows-gui-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/houdini-gui-artifacts/
+            ${{ runner.temp }}/houdini-windows-license-status.txt
+            ${{ runner.temp }}/houdini-gui-runtime/installer.log
+          if-no-files-found: warn

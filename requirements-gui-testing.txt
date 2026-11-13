@@ -1,0 +1,3 @@
+# Real Windows UI automation and local mock Deadline requests.
+deadline-cloud-test-fixtures == 0.18.26
+xa11y == 0.15.4
