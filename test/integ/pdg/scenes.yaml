@@ -1,0 +1,111 @@
+# The scenes the PDG integ tests cook, each with the result its cook must give.
+#
+# A scene is built by a script in scene_builders/ when the test runs (source: builder),
+# or is a .hip file in the folder PDG_TEST_SCENES_DIR names (source: external), saved
+# there under the name given here and pinned by its SHA-256.
+#
+# Fields:
+#   id           the pytest ID, lowercase snake_case
+#   kind         cook: the scene must cook as a job | refusal: it must be refused
+#   set          smoke: every run | full: only `hatch run integ:test_pdg_full`
+#   cook_node    the node to cook; omitted means the TOP network's display node
+#   requires     what the farm's workers need, named in failure messages
+#   max_minutes  how long the whole cook may take before the test cancels its job
+#   expect       outcome is cook.json's "outcome"; steps must equal the snapshot's
+#                steps exactly; host_requirements must be held by every step
+#
+# Expected steps were measured with a generate and the scheduler's validation in hython.
+version: 1
+scenes:
+  - id: minimal_cook
+    kind: cook
+    set: smoke
+    source:
+      builder: minimal_cook.py
+    requires: []
+    max_minutes: 27                     # 2.7 times the slowest of 3 measured minimal cooks, 9.8 min
+    expect:
+      outcome: succeeded
+      steps:
+        - {name: write_geometry_ropfetch1, task_count: 5, declares_outputs: true}
+        - {name: copy_geometry, task_count: 5, declares_outputs: true}
+        - {name: merge_geometry_ropfetch1, task_count: 1, declares_outputs: true}
+
+  - id: minimal_cook_host_requirements
+    kind: cook
+    set: smoke
+    source:
+      builder: minimal_cook_host_requirements.py
+    requires: [linux workers]
+    max_minutes: 27                     # 2.7 times the slowest of 3 measured minimal cooks, 9.8 min
+    expect:
+      outcome: succeeded
+      steps:
+        - {name: write_geometry_ropfetch1, task_count: 5, declares_outputs: true}
+        - {name: copy_geometry, task_count: 5, declares_outputs: true}
+        - {name: merge_geometry_ropfetch1, task_count: 1, declares_outputs: true}
+      host_requirements:
+        attributes: [{name: attr.worker.os.family, anyOf: [linux]}]
+
+  - id: pyro_bonfire_small
+    kind: cook
+    set: smoke
+    source:
+      external: pyroBonfire_openh264.hip
+      sha256: 2b2439e9b8806b903f3b46fcd7f1382569958942207b27d2894ec24e554cc083
+    requires: [imagemagick, hffmpeg]
+    max_minutes: 45                     # 2.7 times the slowest measured cook, 16.7 min
+    expect:
+      outcome: succeeded
+      steps:
+        - {name: ropfetch_pyro_cache, task_count: 6, declares_outputs: true}
+        - {name: ropfetch_sparks_cache, task_count: 6, declares_outputs: true}
+        - {name: ropfetch_karma, task_count: 6, declares_outputs: true}
+        - {name: overlaytext_pyro_bonfire_ropfetch1, task_count: 6, declares_outputs: true}
+        - {name: mosaic_bonfire, task_count: 1, declares_outputs: true}
+        - {name: bonfire_montage_video, task_count: 1, declares_outputs: false}
+
+  # The full set has not been cooked on a farm. Its 180-minute limits are a judgment,
+  # not a measurement: too low cancels a good cook, too high holds the queue longer on a
+  # cook that hangs.
+  - id: pyro_bonfire_large
+    kind: cook
+    set: full
+    source:
+      external: pyroBonfire_DEMO.hip
+      sha256: 7efe83172569816399242f4794ac258a4fa49c4e3721da65555c5107b6b2cb1b
+    requires: [imagemagick, hffmpeg]
+    max_minutes: 180                    # a judgment, not measured
+    expect:
+      outcome: succeeded
+      steps:
+        - {name: ropfetch_pyro_cache, task_count: 720, declares_outputs: true}
+        - {name: ropfetch_sparks_cache, task_count: 720, declares_outputs: true}
+        - {name: ropfetch_karma, task_count: 480, declares_outputs: true}
+        - {name: overlaytext_pyro_bonfire_ropfetch1, task_count: 480, declares_outputs: true}
+        - {name: mosaic_bonfire, task_count: 80, declares_outputs: true}
+        - {name: bonfire_montage_video, task_count: 1, declares_outputs: false}
+
+  - id: orca_guided_ocean
+    kind: cook
+    set: full
+    source:
+      external: orca_guided_ocean_v31.hip
+      sha256: 96e4084050e3983904056a502f9e2f8d56c8f0af9ca86f5e6e6501c57911d011
+    cook_node: /obj/topnet1/guided_ocean   # the display node cooks only 2 of the 11 steps
+    requires: []                        # not known until a farm cook
+    max_minutes: 180                    # a judgment, not measured
+    expect:
+      outcome: succeeded
+      steps:
+        - {name: boat_anim, task_count: 1, declares_outputs: true}
+        - {name: wavetank, task_count: 479, declares_outputs: true}
+        - {name: flip_sim, task_count: 240, declares_outputs: true}
+        - {name: mask, task_count: 240, declares_outputs: true}
+        - {name: spectra, task_count: 1, declares_outputs: true}
+        - {name: surfaced, task_count: 240, declares_outputs: true}
+        - {name: ww_source, task_count: 240, declares_outputs: true}
+        - {name: ww_sim, task_count: 240, declares_outputs: true}
+        - {name: ww_volumes, task_count: 240, declares_outputs: true}
+        - {name: ropusd1_ropfetch1, task_count: 239, declares_outputs: true}
+        - {name: guided_ocean, task_count: 239, declares_outputs: true}
