@@ -5,8 +5,10 @@
 The tests submit only to the farm and queue that ``PDG_INTEG_FARM_ID`` and
 ``PDG_INTEG_QUEUE_ID`` name, through a copy of the user's Deadline config. Reading a job
 changes nothing: ``read_farm_view`` returns the Deadline Cloud job and the files its tasks
-uploaded, and ``compare_cook_with_farm`` compares that with the cook's own record. The one
-change the tests make on the farm is ``cancel_job``, for a cook that ran out of time.
+uploaded, and ``compare_cook_with_farm`` compares that with the cook's own record.
+``jobs_created_since`` finds the jobs one cook made, which a refused cook must not have.
+The one change the tests make on the farm is ``cancel_job``, for a cook test's job that
+ran out of time, or a job made by a cook that should have been refused.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ import re
 from collections import defaultdict
 from configparser import ConfigParser
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import (
     Any,
@@ -51,6 +54,13 @@ _MANIFEST_SUFFIX: str = "_output"
 
 # A session action ID is ``sessionaction-<session>-<n>``, and its session is ``session-<session>``.
 _SESSION_ACTION_ID: Pattern[str] = re.compile(r"^sessionaction-(?P<session>.+)-[0-9]+$")
+
+# The job parameters every PDG job carries: the job's name, and the cook's ID.
+_JOB_NAME_PARAMETER: str = "CookName"
+_COOK_ID_PARAMETER: str = "PdgCookId"
+
+# The most results SearchJobs returns in one page.
+_SEARCH_PAGE_SIZE: int = 100
 
 
 @dataclass(frozen=True)
@@ -95,7 +105,8 @@ def write_deadline_config(farm_queue: FarmQueue, into: Path) -> Path:
 def cancel_job(
     farm_queue: FarmQueue, job_id: str, *, deadline_client: Optional[Any] = None
 ) -> None:
-    """Cancel a job this test run created. Used only when a cook test times out.
+    """Cancel a job this test run created: a cook test's job that ran out of time, or a job
+    made by a cook that should have been refused.
 
     The client defaults to the workstation's Deadline Cloud login. Tests pass their own.
     """
@@ -123,6 +134,63 @@ def cancel_job_of_cook(
     job_id: Optional[str] = json.loads(cook_json_path.read_text(encoding="utf-8")).get("job_id")
     if job_id:
         cancel_job(farm_queue, job_id, deadline_client=deadline_client)
+
+
+def jobs_created_since(
+    farm_queue: FarmQueue,
+    since: datetime,
+    *,
+    cook_id: Optional[str],
+    job_name: str,
+    deadline_client: Optional[Any] = None,
+) -> List[str]:
+    """IDs of the jobs on the queue created at or after ``since`` that carry this job name
+    (job parameter ``CookName``) or, when given, this cook ID (``PdgCookId``). SearchJobs only.
+
+    A refusal test uses it to show that its cook made no job. The client defaults to the
+    workstation's Deadline Cloud login. Tests pass their own.
+    """
+    deadline: Any = deadline_client or api.get_boto3_client("deadline")
+
+    # A job of this cook carries its name, and its cook ID once the cook has one.
+    this_cook: List[Dict[str, Any]] = [_parameter_equals(_JOB_NAME_PARAMETER, job_name)]
+    if cook_id:
+        this_cook.append(_parameter_equals(_COOK_ID_PARAMETER, cook_id))
+    filters: Dict[str, Any] = {
+        "operator": "AND",
+        "filters": [
+            {
+                "dateTimeFilter": {
+                    "name": "CREATED_AT",
+                    "operator": "GREATER_THAN_EQUAL_TO",
+                    "dateTime": since,
+                }
+            },
+            {"groupFilter": {"operator": "OR", "filters": this_cook}},
+        ],
+    }
+
+    # Each page names the offset of the next, and the last page names none.
+    job_ids: List[str] = []
+    offsets: List[int] = [0]
+    for offset in offsets:
+        page: Mapping[str, Any] = deadline.search_jobs(
+            farmId=farm_queue.farm_id,
+            queueIds=[farm_queue.queue_id],
+            filterExpressions=filters,
+            itemOffset=offset,
+            pageSize=_SEARCH_PAGE_SIZE,
+        )
+        job_ids += [job["jobId"] for job in page["jobs"]]
+        following: Optional[int] = page.get("nextItemOffset")
+        if following is not None:
+            offsets.append(following)
+    return job_ids
+
+
+def _parameter_equals(name: str, value: str) -> Dict[str, Any]:
+    """A SearchJobs filter that matches a job whose parameter ``name`` is ``value``."""
+    return {"parameterFilter": {"name": name, "operator": "EQUAL", "value": value}}
 
 
 @dataclass(frozen=True)

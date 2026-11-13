@@ -166,6 +166,7 @@ export PDG_TEST_SCENES_DIR=~/pdg-test-scenes   # only for scenes you download
 hatch run integ:test_pdg                  # the smoke set
 hatch run integ:test_pdg_full             # also the large scenes
 hatch run integ:test_pdg -k minimal_cook  # one scene; other arguments go to pytest
+hatch run integ:test_pdg -k refused       # only the refusal tests, which make no job
 ```
 
 Both scripts run `scripts/run_pdg_integ_tests.py`, which automated runs can call directly. When `PDG_INTEG_FARM_ID` or `PDG_INTEG_QUEUE_ID` is unset, it offers your default farm and queue by name and ID in an interactive terminal, and uses them for that run only if you answer `y`. Otherwise it exits with status 2 and runs no tests. A plain `hatch run integ:test` skips the PDG tests and says why.
@@ -180,12 +181,12 @@ The tests need hython with a Houdini license, your Deadline Cloud login, and `ha
 
 ### Test scenes
 
-`test/integ/pdg/scenes.yaml` lists every scene and the result its cook must give: its outcome, its steps and their task counts, and for one scene the host requirements every step must carry. A scene is either:
+`test/integ/pdg/scenes.yaml` lists every scene and the result its cook must give. A scene that must cook lists its outcome, its steps and their task counts, and for one scene the host requirements every step must carry. A scene that must be refused lists every refusal its cook logs. A scene is either:
 
 - **built**: a script in `test/integ/pdg/scene_builders/` builds it in hython when the test runs; or
 - **external**: a `.hip` file you download into `PDG_TEST_SCENES_DIR`. Save each one under the file name `scenes.yaml` gives it. Its SHA-256 is pinned there, so a different file is refused.
 
-`max_minutes` is how long a cook may take. A cook that runs longer is killed, and its job is canceled.
+`max_minutes` is how long a cook may take. A cook that runs longer is killed, and its job is canceled. Each built refusal scene is the smallest graph that triggers one refusal.
 
 ### What a cook test checks
 
@@ -196,6 +197,17 @@ The tests need hython with a Houdini license, your Deadline Cloud login, and `ha
 - the comparison finds no difference between the cook, PDG's work items and the farm: each task's status, the files it uploaded, and their tags.
 
 The same comparison runs by hand on any cook's debug directory: `hatch run integ:compare_pdg_cook_with_farm <debug_dir>`.
+
+### What a refusal test checks
+
+`test_refused_scene_creates_no_job` cooks each scene that must be refused in the same way. It passes when:
+
+- the cook ends within `max_minutes`;
+- the cook's `Refused, <subject> (<scenario>)` log lines and the scene's expected refusals pair one to one: each expected refusal takes its own line with the same scenario and a subject that contains `subject_contains`, and no line is left over;
+- one of the scheduler node's errors holds "The graph was refused (";
+- SearchJobs finds no job on the queue, created since the test started, with the cook's job name or cook ID. The search starts 5 minutes early, so a workstation clock ahead of the service's can't hide a job. A job it finds is canceled, and the test fails, naming it.
+
+Every cook's job name is `pdg-integ-<scene id>-<8 random hex digits>`, so the search can't find another run's job. A refusal test builds no worker wheels.
 
 ## Troubleshooting
 
