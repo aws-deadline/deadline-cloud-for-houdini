@@ -518,7 +518,7 @@ def _merge_json_file(path: str, updates: Mapping[str, Any]) -> None:
 
 
 def _snapshot_payload(snapshot: GraphSnapshot) -> Dict[str, Any]:
-    """The job's shape as submitted: totals, and each step's tasks and dependencies."""
+    """The job's shape as submitted: totals, and each step's tasks, dependencies and work items."""
     return {
         "total_tasks": snapshot.total_tasks,
         "step_count": len(snapshot.steps),
@@ -539,6 +539,9 @@ def _snapshot_payload(snapshot: GraphSnapshot) -> Dict[str, Any]:
                 # Every step in a snapshot has at least one item.
                 "first_item": step.items[0].name,
                 "last_item": step.items[-1].name,
+                # A step's items are in task-index order, so the task with TaskIndex i runs
+                # items[i]. Nothing else outside the cook records which task ran which item.
+                "items": [item.name for item in step.items],
             }
             for step in snapshot.steps
         ],

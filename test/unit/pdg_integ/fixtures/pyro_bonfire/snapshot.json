@@ -1,0 +1,131 @@
+{
+  "total_tasks": 26,
+  "step_count": 6,
+  "leaf_steps": [
+    "bonfire_montage_video"
+  ],
+  "nodes_mapping_to_nothing": [
+    "partitionbyattribute1",
+    "partitionbyattribute2",
+    "partitionbyframe1",
+    "waitforall1",
+    "wedge1",
+    "wedge2"
+  ],
+  "steps_with_remapped_indices": [],
+  "steps_without_items": [],
+  "steps": [
+    {
+      "name": "ropfetch_pyro_cache",
+      "task_count": 6,
+      "task_range": "0-5",
+      "depends_on": [],
+      "depends_on_for_data": [],
+      "declares_outputs": true,
+      "first_item": "ropfetch_pyro_cache_9",
+      "last_item": "ropfetch_pyro_cache_14",
+      "items": [
+        "ropfetch_pyro_cache_9",
+        "ropfetch_pyro_cache_10",
+        "ropfetch_pyro_cache_11",
+        "ropfetch_pyro_cache_12",
+        "ropfetch_pyro_cache_13",
+        "ropfetch_pyro_cache_14"
+      ]
+    },
+    {
+      "name": "ropfetch_sparks_cache",
+      "task_count": 6,
+      "task_range": "0-5",
+      "depends_on": [
+        "ropfetch_pyro_cache"
+      ],
+      "depends_on_for_data": [],
+      "declares_outputs": true,
+      "first_item": "ropfetch_sparks_cache_21",
+      "last_item": "ropfetch_sparks_cache_26",
+      "items": [
+        "ropfetch_sparks_cache_21",
+        "ropfetch_sparks_cache_22",
+        "ropfetch_sparks_cache_23",
+        "ropfetch_sparks_cache_24",
+        "ropfetch_sparks_cache_25",
+        "ropfetch_sparks_cache_26"
+      ]
+    },
+    {
+      "name": "ropfetch_karma",
+      "task_count": 6,
+      "task_range": "0-5",
+      "depends_on": [
+        "ropfetch_pyro_cache",
+        "ropfetch_sparks_cache"
+      ],
+      "depends_on_for_data": [
+        "ropfetch_pyro_cache",
+        "ropfetch_sparks_cache"
+      ],
+      "declares_outputs": true,
+      "first_item": "ropfetch_karma_33",
+      "last_item": "ropfetch_karma_38",
+      "items": [
+        "ropfetch_karma_33",
+        "ropfetch_karma_34",
+        "ropfetch_karma_35",
+        "ropfetch_karma_36",
+        "ropfetch_karma_37",
+        "ropfetch_karma_38"
+      ]
+    },
+    {
+      "name": "overlaytext_pyro_bonfire_ropfetch1",
+      "task_count": 6,
+      "task_range": "0-5",
+      "depends_on": [
+        "ropfetch_karma"
+      ],
+      "depends_on_for_data": [],
+      "declares_outputs": true,
+      "first_item": "overlaytext_pyro_bonfire_ropfetch1_39",
+      "last_item": "overlaytext_pyro_bonfire_ropfetch1_44",
+      "items": [
+        "overlaytext_pyro_bonfire_ropfetch1_39",
+        "overlaytext_pyro_bonfire_ropfetch1_40",
+        "overlaytext_pyro_bonfire_ropfetch1_41",
+        "overlaytext_pyro_bonfire_ropfetch1_42",
+        "overlaytext_pyro_bonfire_ropfetch1_43",
+        "overlaytext_pyro_bonfire_ropfetch1_44"
+      ]
+    },
+    {
+      "name": "mosaic_bonfire",
+      "task_count": 1,
+      "task_range": "0-0",
+      "depends_on": [
+        "overlaytext_pyro_bonfire_ropfetch1"
+      ],
+      "depends_on_for_data": [],
+      "declares_outputs": true,
+      "first_item": "mosaic_bonfire_46",
+      "last_item": "mosaic_bonfire_46",
+      "items": [
+        "mosaic_bonfire_46"
+      ]
+    },
+    {
+      "name": "bonfire_montage_video",
+      "task_count": 1,
+      "task_range": "0-0",
+      "depends_on": [
+        "mosaic_bonfire"
+      ],
+      "depends_on_for_data": [],
+      "declares_outputs": false,
+      "first_item": "bonfire_montage_video_48",
+      "last_item": "bonfire_montage_video_48",
+      "items": [
+        "bonfire_montage_video_48"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,314 @@
+[
+ {
+  "node": "ropfetch_pyro_cache",
+  "name": "ropfetch_pyro_cache_9",
+  "index": 9,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/pyro_cache/wedge0/pyro_cache.w0.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_pyro_cache",
+  "name": "ropfetch_pyro_cache_10",
+  "index": 10,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/pyro_cache/wedge1/pyro_cache.w1.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_pyro_cache",
+  "name": "ropfetch_pyro_cache_11",
+  "index": 11,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/pyro_cache/wedge2/pyro_cache.w2.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_pyro_cache",
+  "name": "ropfetch_pyro_cache_12",
+  "index": 12,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/pyro_cache/wedge3/pyro_cache.w3.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_pyro_cache",
+  "name": "ropfetch_pyro_cache_13",
+  "index": 13,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/pyro_cache/wedge4/pyro_cache.w4.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_pyro_cache",
+  "name": "ropfetch_pyro_cache_14",
+  "index": 14,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/pyro_cache/wedge5/pyro_cache.w5.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_sparks_cache",
+  "name": "ropfetch_sparks_cache_21",
+  "index": 21,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/sparks_cache/wedge0/sparks_cache.w0.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_sparks_cache",
+  "name": "ropfetch_sparks_cache_22",
+  "index": 22,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/sparks_cache/wedge1/sparks_cache.w1.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_sparks_cache",
+  "name": "ropfetch_sparks_cache_23",
+  "index": 23,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/sparks_cache/wedge2/sparks_cache.w2.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_sparks_cache",
+  "name": "ropfetch_sparks_cache_24",
+  "index": 24,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/sparks_cache/wedge3/sparks_cache.w3.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_sparks_cache",
+  "name": "ropfetch_sparks_cache_25",
+  "index": 25,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/sparks_cache/wedge4/sparks_cache.w4.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_sparks_cache",
+  "name": "ropfetch_sparks_cache_26",
+  "index": 26,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/geo/sparks_cache/wedge5/sparks_cache.w5.0001.bgeo.sc",
+    "tag": "file/geo"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_karma",
+  "name": "ropfetch_karma_33",
+  "index": 33,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/render/karma_bonfire/wedge0/karma_bonfire.w0.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_karma",
+  "name": "ropfetch_karma_34",
+  "index": 34,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/render/karma_bonfire/wedge1/karma_bonfire.w1.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_karma",
+  "name": "ropfetch_karma_35",
+  "index": 35,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/render/karma_bonfire/wedge2/karma_bonfire.w2.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_karma",
+  "name": "ropfetch_karma_36",
+  "index": 36,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/render/karma_bonfire/wedge3/karma_bonfire.w3.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_karma",
+  "name": "ropfetch_karma_37",
+  "index": 37,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/render/karma_bonfire/wedge4/karma_bonfire.w4.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "ropfetch_karma",
+  "name": "ropfetch_karma_38",
+  "index": 38,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/render/karma_bonfire/wedge5/karma_bonfire.w5.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "overlaytext_pyro_bonfire_ropfetch1",
+  "name": "overlaytext_pyro_bonfire_ropfetch1_39",
+  "index": 39,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/images/overlaytext_pyro_bonfire/wedge0/overlaytext_pyro_bonfire.w0.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "overlaytext_pyro_bonfire_ropfetch1",
+  "name": "overlaytext_pyro_bonfire_ropfetch1_40",
+  "index": 40,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/images/overlaytext_pyro_bonfire/wedge1/overlaytext_pyro_bonfire.w1.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "overlaytext_pyro_bonfire_ropfetch1",
+  "name": "overlaytext_pyro_bonfire_ropfetch1_41",
+  "index": 41,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/images/overlaytext_pyro_bonfire/wedge2/overlaytext_pyro_bonfire.w2.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "overlaytext_pyro_bonfire_ropfetch1",
+  "name": "overlaytext_pyro_bonfire_ropfetch1_42",
+  "index": 42,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/images/overlaytext_pyro_bonfire/wedge3/overlaytext_pyro_bonfire.w3.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "overlaytext_pyro_bonfire_ropfetch1",
+  "name": "overlaytext_pyro_bonfire_ropfetch1_43",
+  "index": 43,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/images/overlaytext_pyro_bonfire/wedge4/overlaytext_pyro_bonfire.w4.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "overlaytext_pyro_bonfire_ropfetch1",
+  "name": "overlaytext_pyro_bonfire_ropfetch1_44",
+  "index": 44,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/images/overlaytext_pyro_bonfire/wedge5/overlaytext_pyro_bonfire.w5.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "mosaic_bonfire",
+  "name": "mosaic_bonfire_46",
+  "index": 46,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/images/mosaic_bonfire/mosaic_bonfire.0001.png",
+    "tag": "file/image/png"
+   }
+  ]
+ },
+ {
+  "node": "bonfire_montage_video",
+  "name": "bonfire_montage_video_48",
+  "index": 48,
+  "state": "CookedSuccess",
+  "outputs": [
+   {
+    "path": "/projects/fx/shots/bonfire/video/bonfire_montage_video.mp4",
+    "tag": "file/video"
+   }
+  ]
+ }
+]

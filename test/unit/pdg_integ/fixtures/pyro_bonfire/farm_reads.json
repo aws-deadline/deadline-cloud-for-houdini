@@ -1,0 +1,1175 @@
+{
+ "get_job": {
+  "jobId": "job-exjob000000000000000000000000001",
+  "name": "pyroBonfire",
+  "lifecycleStatus": "CREATE_COMPLETE",
+  "lifecycleStatusMessage": "Job creation completed successfully",
+  "priority": 50,
+  "createdAt": "2026-11-10 17:09:55.236000+00:00",
+  "startedAt": "2026-11-10 17:11:38.705000+00:00",
+  "endedAt": "2026-11-10 17:25:26.697000+00:00",
+  "taskRunStatus": "SUCCEEDED",
+  "taskRunStatusCounts": {
+   "PENDING": 0,
+   "READY": 0,
+   "RUNNING": 0,
+   "ASSIGNED": 0,
+   "STARTING": 0,
+   "SCHEDULED": 0,
+   "INTERRUPTING": 0,
+   "SUSPENDED": 0,
+   "CANCELED": 0,
+   "FAILED": 0,
+   "SUCCEEDED": 26,
+   "NOT_COMPATIBLE": 0
+  },
+  "taskFailureRetryCount": 0,
+  "maxFailedTasksCount": 20,
+  "maxRetriesPerTask": 1,
+  "parameters": {
+   "CondaPackages": {
+    "string": "houdini=21.0.* houdini-openjd=0.7.* imagemagick"
+   },
+   "CondaChannels": {
+    "string": "deadline-cloud-v2 deadline-cloud conda-forge"
+   },
+   "ChannelPriority": {
+    "string": "strict"
+   },
+   "CookName": {
+    "string": "pyroBonfire"
+   },
+   "PdgCookId": {
+    "string": "0123456789abcdef0123456789abcdef"
+   },
+   "JaBucket": {
+    "string": "example-job-attachments"
+   },
+   "JaRootPrefix": {
+    "string": "DeadlineCloud"
+   },
+   "HipFile": {
+    "path": "/projects/fx/shots/bonfire/pyroBonfire.hip"
+   },
+   "PdgDir": {
+    "path": "/projects/fx/shots/bonfire"
+   },
+   "AdaptorWheels": {
+    "path": "/projects/fx/wheels"
+   },
+   "OverrideAdaptorName": {
+    "string": "houdini-openjd"
+   }
+  }
+ },
+ "get_queue": {
+  "jobAttachmentSettings": {
+   "s3BucketName": "example-job-attachments",
+   "rootPrefix": "DeadlineCloud"
+  },
+  "displayName": "Test queue"
+ },
+ "list_steps": [
+  {
+   "stepId": "step-exstep00000000000000000000000001",
+   "name": "mosaic_bonfire",
+   "lifecycleStatus": "UPDATE_SUCCEEDED",
+   "lifecycleStatusMessage": "Tasks updated to SUSPENDED: 1. Tasks failed to update: 0. Tasks skipped: 0.",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 1,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "updatedAt": "2026-11-10 17:09:59.771000+00:00",
+   "startedAt": "2026-11-10 17:22:00.692000+00:00",
+   "endedAt": "2026-11-10 17:23:19.692000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 1,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 1,
+    "consumersUnresolved": 0
+   }
+  },
+  {
+   "stepId": "step-exstep00000000000000000000000002",
+   "name": "ropfetch_pyro_cache",
+   "lifecycleStatus": "CREATE_COMPLETE",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 6,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "startedAt": "2026-11-10 17:11:38.692000+00:00",
+   "endedAt": "2026-11-10 17:14:53.692000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 0,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 2,
+    "consumersUnresolved": 0
+   }
+  },
+  {
+   "stepId": "step-exstep00000000000000000000000003",
+   "name": "overlaytext_pyro_bonfire_ropfetch1",
+   "lifecycleStatus": "UPDATE_SUCCEEDED",
+   "lifecycleStatusMessage": "Tasks updated to SUSPENDED: 6. Tasks failed to update: 0. Tasks skipped: 0.",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 6,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "updatedAt": "2026-11-10 17:09:59.594000+00:00",
+   "startedAt": "2026-11-10 17:19:30.692000+00:00",
+   "endedAt": "2026-11-10 17:21:17.692000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 1,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 1,
+    "consumersUnresolved": 0
+   }
+  },
+  {
+   "stepId": "step-exstep00000000000000000000000004",
+   "name": "ropfetch_karma",
+   "lifecycleStatus": "UPDATE_SUCCEEDED",
+   "lifecycleStatusMessage": "Tasks updated to SUSPENDED: 6. Tasks failed to update: 0. Tasks skipped: 0.",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 6,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "updatedAt": "2026-11-10 17:09:59.418000+00:00",
+   "startedAt": "2026-11-10 17:17:31.693000+00:00",
+   "endedAt": "2026-11-10 17:19:18.692000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 2,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 1,
+    "consumersUnresolved": 0
+   }
+  },
+  {
+   "stepId": "step-exstep00000000000000000000000005",
+   "name": "bonfire_montage_video",
+   "lifecycleStatus": "UPDATE_SUCCEEDED",
+   "lifecycleStatusMessage": "Tasks updated to SUSPENDED: 1. Tasks failed to update: 0. Tasks skipped: 0.",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 1,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "updatedAt": "2026-11-10 17:09:59.927000+00:00",
+   "startedAt": "2026-11-10 17:24:02.692000+00:00",
+   "endedAt": "2026-11-10 17:25:26.692000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 1,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 0,
+    "consumersUnresolved": 0
+   }
+  },
+  {
+   "stepId": "step-exstep00000000000000000000000006",
+   "name": "ropfetch_sparks_cache",
+   "lifecycleStatus": "UPDATE_SUCCEEDED",
+   "lifecycleStatusMessage": "Tasks updated to SUSPENDED: 6. Tasks failed to update: 0. Tasks skipped: 0.",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 6,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "updatedAt": "2026-11-10 17:09:59.192000+00:00",
+   "startedAt": "2026-11-10 17:15:36.692000+00:00",
+   "endedAt": "2026-11-10 17:17:08.693000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 1,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 1,
+    "consumersUnresolved": 0
+   }
+  }
+ ],
+ "get_step": {
+  "step-exstep00000000000000000000000001": {
+   "stepId": "step-exstep00000000000000000000000001",
+   "name": "mosaic_bonfire",
+   "lifecycleStatus": "UPDATE_SUCCEEDED",
+   "lifecycleStatusMessage": "Tasks updated to SUSPENDED: 1. Tasks failed to update: 0. Tasks skipped: 0.",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 1,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "updatedAt": "2026-11-10 17:09:59.771000+00:00",
+   "startedAt": "2026-11-10 17:22:00.692000+00:00",
+   "endedAt": "2026-11-10 17:23:19.692000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 1,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 1,
+    "consumersUnresolved": 0
+   },
+   "parameterSpace": {
+    "parameters": [
+     {
+      "name": "TaskIndex",
+      "type": "INT"
+     }
+    ]
+   }
+  },
+  "step-exstep00000000000000000000000002": {
+   "stepId": "step-exstep00000000000000000000000002",
+   "name": "ropfetch_pyro_cache",
+   "lifecycleStatus": "CREATE_COMPLETE",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 6,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "startedAt": "2026-11-10 17:11:38.692000+00:00",
+   "endedAt": "2026-11-10 17:14:53.692000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 0,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 2,
+    "consumersUnresolved": 0
+   },
+   "parameterSpace": {
+    "parameters": [
+     {
+      "name": "TaskIndex",
+      "type": "INT"
+     }
+    ]
+   }
+  },
+  "step-exstep00000000000000000000000003": {
+   "stepId": "step-exstep00000000000000000000000003",
+   "name": "overlaytext_pyro_bonfire_ropfetch1",
+   "lifecycleStatus": "UPDATE_SUCCEEDED",
+   "lifecycleStatusMessage": "Tasks updated to SUSPENDED: 6. Tasks failed to update: 0. Tasks skipped: 0.",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 6,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "updatedAt": "2026-11-10 17:09:59.594000+00:00",
+   "startedAt": "2026-11-10 17:19:30.692000+00:00",
+   "endedAt": "2026-11-10 17:21:17.692000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 1,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 1,
+    "consumersUnresolved": 0
+   },
+   "parameterSpace": {
+    "parameters": [
+     {
+      "name": "TaskIndex",
+      "type": "INT"
+     }
+    ]
+   }
+  },
+  "step-exstep00000000000000000000000004": {
+   "stepId": "step-exstep00000000000000000000000004",
+   "name": "ropfetch_karma",
+   "lifecycleStatus": "UPDATE_SUCCEEDED",
+   "lifecycleStatusMessage": "Tasks updated to SUSPENDED: 6. Tasks failed to update: 0. Tasks skipped: 0.",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 6,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "updatedAt": "2026-11-10 17:09:59.418000+00:00",
+   "startedAt": "2026-11-10 17:17:31.693000+00:00",
+   "endedAt": "2026-11-10 17:19:18.692000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 2,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 1,
+    "consumersUnresolved": 0
+   },
+   "parameterSpace": {
+    "parameters": [
+     {
+      "name": "TaskIndex",
+      "type": "INT"
+     }
+    ]
+   }
+  },
+  "step-exstep00000000000000000000000005": {
+   "stepId": "step-exstep00000000000000000000000005",
+   "name": "bonfire_montage_video",
+   "lifecycleStatus": "UPDATE_SUCCEEDED",
+   "lifecycleStatusMessage": "Tasks updated to SUSPENDED: 1. Tasks failed to update: 0. Tasks skipped: 0.",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 1,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "updatedAt": "2026-11-10 17:09:59.927000+00:00",
+   "startedAt": "2026-11-10 17:24:02.692000+00:00",
+   "endedAt": "2026-11-10 17:25:26.692000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 1,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 0,
+    "consumersUnresolved": 0
+   },
+   "parameterSpace": {
+    "parameters": [
+     {
+      "name": "TaskIndex",
+      "type": "INT"
+     }
+    ]
+   }
+  },
+  "step-exstep00000000000000000000000006": {
+   "stepId": "step-exstep00000000000000000000000006",
+   "name": "ropfetch_sparks_cache",
+   "lifecycleStatus": "UPDATE_SUCCEEDED",
+   "lifecycleStatusMessage": "Tasks updated to SUSPENDED: 6. Tasks failed to update: 0. Tasks skipped: 0.",
+   "taskRunStatus": "SUCCEEDED",
+   "taskRunStatusCounts": {
+    "PENDING": 0,
+    "READY": 0,
+    "RUNNING": 0,
+    "ASSIGNED": 0,
+    "STARTING": 0,
+    "SCHEDULED": 0,
+    "INTERRUPTING": 0,
+    "SUSPENDED": 0,
+    "CANCELED": 0,
+    "FAILED": 0,
+    "SUCCEEDED": 6,
+    "NOT_COMPATIBLE": 0
+   },
+   "taskFailureRetryCount": 0,
+   "createdAt": "2026-11-10 17:09:55.236000+00:00",
+   "updatedAt": "2026-11-10 17:09:59.192000+00:00",
+   "startedAt": "2026-11-10 17:15:36.692000+00:00",
+   "endedAt": "2026-11-10 17:17:08.693000+00:00",
+   "dependencyCounts": {
+    "dependenciesResolved": 1,
+    "dependenciesUnresolved": 0,
+    "consumersResolved": 1,
+    "consumersUnresolved": 0
+   },
+   "parameterSpace": {
+    "parameters": [
+     {
+      "name": "TaskIndex",
+      "type": "INT"
+     }
+    ]
+   }
+  }
+ },
+ "list_tasks": {
+  "step-exstep00000000000000000000000001": [
+   {
+    "taskId": "task-exstep00000000000000000000000001-0",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:23:13.820000+00:00",
+    "endedAt": "2026-11-10 17:23:18.572000+00:00",
+    "updatedAt": "2026-11-10 17:21:35.503000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000001-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "0"
+     }
+    }
+   }
+  ],
+  "step-exstep00000000000000000000000002": [
+   {
+    "taskId": "task-exstep00000000000000000000000002-0",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:14:42.362000+00:00",
+    "endedAt": "2026-11-10 17:14:52.827000+00:00",
+    "updatedAt": "2026-11-10 17:10:01.230000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000002-4",
+    "parameters": {
+     "TaskIndex": {
+      "int": "0"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000002-1",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:14:42.265000+00:00",
+    "endedAt": "2026-11-10 17:14:49.937000+00:00",
+    "updatedAt": "2026-11-10 17:10:01.228000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000003-4",
+    "parameters": {
+     "TaskIndex": {
+      "int": "1"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000002-2",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:14:42.077000+00:00",
+    "endedAt": "2026-11-10 17:14:49.661000+00:00",
+    "updatedAt": "2026-11-10 17:10:01.247000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000004-4",
+    "parameters": {
+     "TaskIndex": {
+      "int": "2"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000002-3",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:14:41.967000+00:00",
+    "endedAt": "2026-11-10 17:14:49.616000+00:00",
+    "updatedAt": "2026-11-10 17:10:01.202000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000005-4",
+    "parameters": {
+     "TaskIndex": {
+      "int": "3"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000002-4",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:14:41.863000+00:00",
+    "endedAt": "2026-11-10 17:14:49.442000+00:00",
+    "updatedAt": "2026-11-10 17:10:01.261000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000006-4",
+    "parameters": {
+     "TaskIndex": {
+      "int": "4"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000002-5",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:14:42.183000+00:00",
+    "endedAt": "2026-11-10 17:14:49.868000+00:00",
+    "updatedAt": "2026-11-10 17:10:01.251000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000007-4",
+    "parameters": {
+     "TaskIndex": {
+      "int": "5"
+     }
+    }
+   }
+  ],
+  "step-exstep00000000000000000000000003": [
+   {
+    "taskId": "task-exstep00000000000000000000000003-0",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:21:04.972000+00:00",
+    "endedAt": "2026-11-10 17:21:10.679000+00:00",
+    "updatedAt": "2026-11-10 17:19:26.448000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000008-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "0"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000003-1",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:21:05.764000+00:00",
+    "endedAt": "2026-11-10 17:21:13.154000+00:00",
+    "updatedAt": "2026-11-10 17:19:21.512000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000009-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "1"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000003-2",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:21:05.115000+00:00",
+    "endedAt": "2026-11-10 17:21:10.715000+00:00",
+    "updatedAt": "2026-11-10 17:19:26.439000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000010-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "2"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000003-3",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:21:04.768000+00:00",
+    "endedAt": "2026-11-10 17:21:10.451000+00:00",
+    "updatedAt": "2026-11-10 17:19:31.537000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000011-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "3"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000003-4",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:21:05.446000+00:00",
+    "endedAt": "2026-11-10 17:21:11.142000+00:00",
+    "updatedAt": "2026-11-10 17:19:21.500000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000012-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "4"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000003-5",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:21:10.909000+00:00",
+    "endedAt": "2026-11-10 17:21:16.390000+00:00",
+    "updatedAt": "2026-11-10 17:19:31.539000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000011-6",
+    "parameters": {
+     "TaskIndex": {
+      "int": "5"
+     }
+    }
+   }
+  ],
+  "step-exstep00000000000000000000000004": [
+   {
+    "taskId": "task-exstep00000000000000000000000004-0",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:18:57.399000+00:00",
+    "endedAt": "2026-11-10 17:19:09.012000+00:00",
+    "updatedAt": "2026-11-10 17:17:18.464000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000013-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "0"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000004-1",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:18:57.496000+00:00",
+    "endedAt": "2026-11-10 17:19:08.124000+00:00",
+    "updatedAt": "2026-11-10 17:17:18.432000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000014-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "1"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000004-2",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:18:57.189000+00:00",
+    "endedAt": "2026-11-10 17:19:08.818000+00:00",
+    "updatedAt": "2026-11-10 17:17:18.461000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000015-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "2"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000004-3",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:18:57.328000+00:00",
+    "endedAt": "2026-11-10 17:19:13.749000+00:00",
+    "updatedAt": "2026-11-10 17:17:18.466000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000016-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "3"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000004-4",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:18:57.027000+00:00",
+    "endedAt": "2026-11-10 17:19:08.699000+00:00",
+    "updatedAt": "2026-11-10 17:17:20.847000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000017-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "4"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000004-5",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:19:08.614000+00:00",
+    "endedAt": "2026-11-10 17:19:18.108000+00:00",
+    "updatedAt": "2026-11-10 17:17:20.845000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000014-6",
+    "parameters": {
+     "TaskIndex": {
+      "int": "5"
+     }
+    }
+   }
+  ],
+  "step-exstep00000000000000000000000005": [
+   {
+    "taskId": "task-exstep00000000000000000000000005-0",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:25:21.269000+00:00",
+    "endedAt": "2026-11-10 17:25:25.883000+00:00",
+    "updatedAt": "2026-11-10 17:23:34.102000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000018-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "0"
+     }
+    }
+   }
+  ],
+  "step-exstep00000000000000000000000006": [
+   {
+    "taskId": "task-exstep00000000000000000000000006-0",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:16:49.257000+00:00",
+    "endedAt": "2026-11-10 17:16:56.780000+00:00",
+    "updatedAt": "2026-11-10 17:15:12.418000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000019-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "0"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000006-1",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:16:49.044000+00:00",
+    "endedAt": "2026-11-10 17:16:56.636000+00:00",
+    "updatedAt": "2026-11-10 17:15:06.621000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000020-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "1"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000006-2",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:16:48.977000+00:00",
+    "endedAt": "2026-11-10 17:16:56.562000+00:00",
+    "updatedAt": "2026-11-10 17:15:12.487000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000021-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "2"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000006-3",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:16:49.774000+00:00",
+    "endedAt": "2026-11-10 17:16:57.516000+00:00",
+    "updatedAt": "2026-11-10 17:15:12.504000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000022-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "3"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000006-4",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:16:58.630000+00:00",
+    "endedAt": "2026-11-10 17:17:08.009000+00:00",
+    "updatedAt": "2026-11-10 17:15:12.471000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000023-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "4"
+     }
+    }
+   },
+   {
+    "taskId": "task-exstep00000000000000000000000006-5",
+    "createdAt": "2026-11-10 17:09:55.236000+00:00",
+    "runStatus": "SUCCEEDED",
+    "failureRetryCount": 0,
+    "startedAt": "2026-11-10 17:16:54.223000+00:00",
+    "endedAt": "2026-11-10 17:17:01.844000+00:00",
+    "updatedAt": "2026-11-10 17:15:12.500000+00:00",
+    "latestSessionActionId": "sessionaction-exsession00000000000000000000024-5",
+    "parameters": {
+     "TaskIndex": {
+      "int": "5"
+     }
+    }
+   }
+  ]
+ },
+ "s3_objects": [
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000001/task-exstep00000000000000000000000001-0/2026-11-10T17:23:13.820080Z_sessionaction-exsession00000000000000000000001-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"32f0f152acd698dc28889762429119d0\",\"mtime\":1794331395332316,\"path\":\"shots/bonfire/images/mosaic_bonfire/mosaic_bonfire.0001.png\",\"size\":79066},{\"hash\":\"ed9c9c26cd2938811ad4822af6b32fb0\",\"mtime\":1794331395087549,\"path\":\"shots/bonfire/pdgtemp/data/mosaic_bonfire_46.json.gz\",\"size\":1286}],\"totalSize\":80352}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000001/task-exstep00000000000000000000000001-0/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-0/2026-11-10T17:14:42.362468Z_sessionaction-exsession00000000000000000000002-4/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"d2bee8caefba37fecc3c98d26dd790d0\",\"mtime\":1794330888790602,\"path\":\"shots/bonfire/geo/pyro_cache/wedge0/pyro_cache.w0.0001.bgeo.sc\",\"size\":600936},{\"hash\":\"96ea4d85b2be071267bf4609c7bdc637\",\"mtime\":1794330883852764,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_pyro_cache_9.json.gz\",\"size\":1118}],\"totalSize\":602054}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-0/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-1/2026-11-10T17:14:42.265549Z_sessionaction-exsession00000000000000000000003-4/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"3609e172c8d73d09db83a52e74c99462\",\"mtime\":1794330886837855,\"path\":\"shots/bonfire/geo/pyro_cache/wedge1/pyro_cache.w1.0001.bgeo.sc\",\"size\":600931},{\"hash\":\"59b79934401d9d38ccc9b729c9495cd6\",\"mtime\":1794330883486145,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_pyro_cache_10.json.gz\",\"size\":1122}],\"totalSize\":602053}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-1/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-2/2026-11-10T17:14:42.077025Z_sessionaction-exsession00000000000000000000004-4/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"9b1f11a2884447c9a3c5cdfd7e5cc866\",\"mtime\":1794330886801440,\"path\":\"shots/bonfire/geo/pyro_cache/wedge2/pyro_cache.w2.0001.bgeo.sc\",\"size\":600952},{\"hash\":\"4ec948bb59bd421602b0c6c0a6070c94\",\"mtime\":1794330883330876,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_pyro_cache_11.json.gz\",\"size\":1124}],\"totalSize\":602076}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-2/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-3/2026-11-10T17:14:41.967227Z_sessionaction-exsession00000000000000000000005-4/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"425a2dcc16e32b74006a55fdf1c19191\",\"mtime\":1794330886591244,\"path\":\"shots/bonfire/geo/pyro_cache/wedge3/pyro_cache.w3.0001.bgeo.sc\",\"size\":35751},{\"hash\":\"307b73765475ed33d1b4ba912a21adb2\",\"mtime\":1794330883228123,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_pyro_cache_12.json.gz\",\"size\":1121}],\"totalSize\":36872}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-3/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-4/2026-11-10T17:14:41.863586Z_sessionaction-exsession00000000000000000000006-4/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"72f0bb774f156e815972ef14e448961a\",\"mtime\":1794330886461859,\"path\":\"shots/bonfire/geo/pyro_cache/wedge4/pyro_cache.w4.0001.bgeo.sc\",\"size\":35753},{\"hash\":\"edae0ff11ecfe0e6b3ce1fc5299ecf0f\",\"mtime\":1794330883115772,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_pyro_cache_13.json.gz\",\"size\":1124}],\"totalSize\":36877}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-4/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-5/2026-11-10T17:14:42.183753Z_sessionaction-exsession00000000000000000000007-4/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"7f2c4f6f05e9b248ceae7929338d2ee9\",\"mtime\":1794330886731373,\"path\":\"shots/bonfire/geo/pyro_cache/wedge5/pyro_cache.w5.0001.bgeo.sc\",\"size\":35747},{\"hash\":\"a1f966d880c30691f6e21f4911081a48\",\"mtime\":1794330883419009,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_pyro_cache_14.json.gz\",\"size\":1126}],\"totalSize\":36873}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000002/task-exstep00000000000000000000000002-5/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-0/2026-11-10T17:21:04.972474Z_sessionaction-exsession00000000000000000000008-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"8f0c52f4bea0bcae38fdd026936f2e4c\",\"mtime\":1794331267345617,\"path\":\"shots/bonfire/images/overlaytext_pyro_bonfire/wedge0/overlaytext_pyro_bonfire.w0.0001.png\",\"size\":32757},{\"hash\":\"ca16d5cb67a7e988768fac876b0f91dc\",\"mtime\":1794331266218135,\"path\":\"shots/bonfire/pdgtemp/data/overlaytext_pyro_bonfire_ropfetch1_39.json.gz\",\"size\":1212}],\"totalSize\":33969}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-0/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-1/2026-11-10T17:21:05.764312Z_sessionaction-exsession00000000000000000000009-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"3e4e4fd80ca4542714af0ce65663a773\",\"mtime\":1794331268823980,\"path\":\"shots/bonfire/images/overlaytext_pyro_bonfire/wedge1/overlaytext_pyro_bonfire.w1.0001.png\",\"size\":32607},{\"hash\":\"07a95a6971ad9bc010ad46ae9bde9237\",\"mtime\":1794331267314770,\"path\":\"shots/bonfire/pdgtemp/data/overlaytext_pyro_bonfire_ropfetch1_40.json.gz\",\"size\":1213}],\"totalSize\":33820}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-1/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-2/2026-11-10T17:21:05.115639Z_sessionaction-exsession00000000000000000000010-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"2cc052c4f3b86b467dd6fe1f1b696e3b\",\"mtime\":1794331267438685,\"path\":\"shots/bonfire/images/overlaytext_pyro_bonfire/wedge2/overlaytext_pyro_bonfire.w2.0001.png\",\"size\":32772},{\"hash\":\"ccc9e6907ba194b55b1ce8a558254952\",\"mtime\":1794331266342783,\"path\":\"shots/bonfire/pdgtemp/data/overlaytext_pyro_bonfire_ropfetch1_41.json.gz\",\"size\":1214}],\"totalSize\":33986}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-2/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-3/2026-11-10T17:21:04.768366Z_sessionaction-exsession00000000000000000000011-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"94e3a34b579da486bfda05c484c3e0f6\",\"mtime\":1794331267116770,\"path\":\"shots/bonfire/images/overlaytext_pyro_bonfire/wedge3/overlaytext_pyro_bonfire.w3.0001.png\",\"size\":33551},{\"hash\":\"ce0b072bbf6071430fb63d879dab72fc\",\"mtime\":1794331266007113,\"path\":\"shots/bonfire/pdgtemp/data/overlaytext_pyro_bonfire_ropfetch1_42.json.gz\",\"size\":1210}],\"totalSize\":34761}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-3/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-4/2026-11-10T17:21:05.446410Z_sessionaction-exsession00000000000000000000012-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"d27a3b9f1372db04b699ea5365bc3a78\",\"mtime\":1794331267828897,\"path\":\"shots/bonfire/images/overlaytext_pyro_bonfire/wedge4/overlaytext_pyro_bonfire.w4.0001.png\",\"size\":33447},{\"hash\":\"3c1df5cd058cdb3ff0c491801636870a\",\"mtime\":1794331266712755,\"path\":\"shots/bonfire/pdgtemp/data/overlaytext_pyro_bonfire_ropfetch1_43.json.gz\",\"size\":1215}],\"totalSize\":34662}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-4/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-5/2026-11-10T17:21:10.909908Z_sessionaction-exsession00000000000000000000011-6/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"dda4d869c3b90fa5e3e764f17ed8620d\",\"mtime\":1794331272656923,\"path\":\"shots/bonfire/images/overlaytext_pyro_bonfire/wedge5/overlaytext_pyro_bonfire.w5.0001.png\",\"size\":33590},{\"hash\":\"4326ce4a18ec0416cf20a65414c62c68\",\"mtime\":1794331271764711,\"path\":\"shots/bonfire/pdgtemp/data/overlaytext_pyro_bonfire_ropfetch1_44.json.gz\",\"size\":1216}],\"totalSize\":34806}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000003/task-exstep00000000000000000000000003-5/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-0/2026-11-10T17:18:57.399019Z_sessionaction-exsession00000000000000000000013-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"ba1e3e37f87224dfdd1159657f6e5de3\",\"mtime\":1794331138679434,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_karma_33.json.gz\",\"size\":1175},{\"hash\":\"a707071a8bd8103988ff78b0aa321ac0\",\"mtime\":1794331145066643,\"path\":\"shots/bonfire/render/karma_bonfire/wedge0/karma_bonfire.w0.0001.png\",\"size\":6460}],\"totalSize\":7635}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-0/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-1/2026-11-10T17:18:57.496840Z_sessionaction-exsession00000000000000000000014-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"0c4ec9700bae019420dea6a721e9c0dd\",\"mtime\":1794331138701703,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_karma_34.json.gz\",\"size\":1177},{\"hash\":\"a707071a8bd8103988ff78b0aa321ac0\",\"mtime\":1794331144835219,\"path\":\"shots/bonfire/render/karma_bonfire/wedge1/karma_bonfire.w1.0001.png\",\"size\":6460}],\"totalSize\":7637}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-1/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-2/2026-11-10T17:18:57.189022Z_sessionaction-exsession00000000000000000000015-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"01baa7227908797aac1eae2ea5d0f09f\",\"mtime\":1794331138418834,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_karma_35.json.gz\",\"size\":1178},{\"hash\":\"a707071a8bd8103988ff78b0aa321ac0\",\"mtime\":1794331145122713,\"path\":\"shots/bonfire/render/karma_bonfire/wedge2/karma_bonfire.w2.0001.png\",\"size\":6460}],\"totalSize\":7638}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-2/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-3/2026-11-10T17:18:57.328058Z_sessionaction-exsession00000000000000000000016-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"2ea91be472fa844b6b919b5b11155ebc\",\"mtime\":1794331138870536,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_karma_36.json.gz\",\"size\":1175},{\"hash\":\"a1380885fccd534cf7d9784ba54725bf\",\"mtime\":1794331149372947,\"path\":\"shots/bonfire/render/karma_bonfire/wedge3/karma_bonfire.w3.0001.png\",\"size\":7415}],\"totalSize\":8590}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-3/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-4/2026-11-10T17:18:57.027772Z_sessionaction-exsession00000000000000000000017-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"34aab0222b3d005526fb01495afb9cf9\",\"mtime\":1794331138223197,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_karma_37.json.gz\",\"size\":1179},{\"hash\":\"a29b47dedecb1c7fd633b53a50180a2c\",\"mtime\":1794331144773378,\"path\":\"shots/bonfire/render/karma_bonfire/wedge4/karma_bonfire.w4.0001.png\",\"size\":7391}],\"totalSize\":8570}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-4/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-5/2026-11-10T17:19:08.614350Z_sessionaction-exsession00000000000000000000014-6/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"e4383d54c98643e17884edbc4e268493\",\"mtime\":1794331149508328,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_karma_38.json.gz\",\"size\":1180},{\"hash\":\"a29b47dedecb1c7fd633b53a50180a2c\",\"mtime\":1794331154765501,\"path\":\"shots/bonfire/render/karma_bonfire/wedge5/karma_bonfire.w5.0001.png\",\"size\":7391}],\"totalSize\":8571}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000004/task-exstep00000000000000000000000004-5/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000005/task-exstep00000000000000000000000005-0/2026-11-10T17:25:21.269560Z_sessionaction-exsession00000000000000000000018-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"141503c148bead3bdd7bc6d9559e8e42\",\"mtime\":1794331522518392,\"path\":\"shots/bonfire/pdgtemp/data/bonfire_montage_video_48.json.gz\",\"size\":1221},{\"hash\":\"d4d66937c72251c08d81c054566fd24d\",\"mtime\":1794331522607704,\"path\":\"shots/bonfire/pdgtemp/data/bonfire_montage_video_48.outputs.json\",\"size\":91},{\"hash\":\"9bde4d1bd50ee35c1c3b65e82a5e1b51\",\"mtime\":1794331522557150,\"path\":\"shots/bonfire/temp/bonfire_montage_video.framelist.txt\",\"size\":120},{\"hash\":\"fedbc2b1f617bd4d7f9a499fc7b564c2\",\"mtime\":1794331522601023,\"path\":\"shots/bonfire/video/bonfire_montage_video.mp4\",\"size\":29471}],\"totalSize\":30903}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000005/task-exstep00000000000000000000000005-0/__pdg_results.json",
+   "Metadata": {},
+   "Body": "{\"version\": 1, \"outputs\": [{\"path\": \"__PDG_DIR__/video/bonfire_montage_video.mp4\", \"tag\": \"file/video\"}]}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000005/task-exstep00000000000000000000000005-0/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-0/2026-11-10T17:16:49.257244Z_sessionaction-exsession00000000000000000000019-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"097d4b01524bc4dc1af17774c7c3e80e\",\"mtime\":1794331013329739,\"path\":\"shots/bonfire/geo/sparks_cache/wedge0/sparks_cache.w0.0001.bgeo.sc\",\"size\":34028},{\"hash\":\"074b7edb5b6f9503888ede12bde00a7e\",\"mtime\":1794331010437959,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_sparks_cache_21.json.gz\",\"size\":1160}],\"totalSize\":35188}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-0/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-1/2026-11-10T17:16:49.044437Z_sessionaction-exsession00000000000000000000020-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"e9d37bf4711e603a87b3ac71bf344cdf\",\"mtime\":1794331013194225,\"path\":\"shots/bonfire/geo/sparks_cache/wedge1/sparks_cache.w1.0001.bgeo.sc\",\"size\":26681},{\"hash\":\"95ef90457a40164079d4ff70b7a14377\",\"mtime\":1794331010288519,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_sparks_cache_22.json.gz\",\"size\":1161}],\"totalSize\":27842}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-1/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-2/2026-11-10T17:16:48.977238Z_sessionaction-exsession00000000000000000000021-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"1d03bb10764d00f2d79fa1f15e7c45a9\",\"mtime\":1794331013094573,\"path\":\"shots/bonfire/geo/sparks_cache/wedge2/sparks_cache.w2.0001.bgeo.sc\",\"size\":11783},{\"hash\":\"1af96f89d491cb8842ad82a0f7e67b90\",\"mtime\":1794331010214375,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_sparks_cache_23.json.gz\",\"size\":1163}],\"totalSize\":12946}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-2/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-3/2026-11-10T17:16:49.774547Z_sessionaction-exsession00000000000000000000022-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"2e2fd85abd240480bd7db9563c005ac3\",\"mtime\":1794331013824507,\"path\":\"shots/bonfire/geo/sparks_cache/wedge3/sparks_cache.w3.0001.bgeo.sc\",\"size\":34035},{\"hash\":\"bd7849d55f56ba50d0ff129de867ffae\",\"mtime\":1794331010946970,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_sparks_cache_24.json.gz\",\"size\":1160}],\"totalSize\":35195}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-3/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-4/2026-11-10T17:16:58.630194Z_sessionaction-exsession00000000000000000000023-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"073bfa4836c0af00dd65f5ef6cacf522\",\"mtime\":1794331024283236,\"path\":\"shots/bonfire/geo/sparks_cache/wedge4/sparks_cache.w4.0001.bgeo.sc\",\"size\":26632},{\"hash\":\"64f0dc27ffa155fe65271d60e616d745\",\"mtime\":1794331020122819,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_sparks_cache_25.json.gz\",\"size\":1165}],\"totalSize\":27797}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-4/pdg_workitem.json.gz"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-5/2026-11-10T17:16:54.223397Z_sessionaction-exsession00000000000000000000024-5/ex000000000000000000000000hash01_output",
+   "Metadata": {
+    "asset-root": "/projects/fx"
+   },
+   "Body": "{\"hashAlg\":\"xxh128\",\"manifestVersion\":\"2023-03-03\",\"paths\":[{\"hash\":\"973792fa6909cffc52f46fc1a5dc3c21\",\"mtime\":1794331018287940,\"path\":\"shots/bonfire/geo/sparks_cache/wedge5/sparks_cache.w5.0001.bgeo.sc\",\"size\":11792},{\"hash\":\"938a7109860e3d45d169e1062e575202\",\"mtime\":1794331015429628,\"path\":\"shots/bonfire/pdgtemp/data/ropfetch_sparks_cache_26.json.gz\",\"size\":1166}],\"totalSize\":12958}"
+  },
+  {
+   "Key": "DeadlineCloud/Manifests/farm-exfarm00000000000000000000000001/queue-exqueue0000000000000000000000001/job-exjob000000000000000000000000001/step-exstep00000000000000000000000006/task-exstep00000000000000000000000006-5/pdg_workitem.json.gz"
+  }
+ ]
+}
