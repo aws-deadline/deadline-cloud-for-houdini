@@ -95,6 +95,7 @@
                 name    "login"
                 label   "Login"
                 type    button
+                invisible
                 joinnext
                 default { "0" }
                 parmtag { "script_callback" "hou.phm().callback(kwargs)" }
@@ -105,6 +106,7 @@
                 name    "logout"
                 label   "Logout"
                 type    button
+                invisible
                 joinnext
                 default { "0" }
                 parmtag { "script_callback" "hou.phm().callback(kwargs)" }
