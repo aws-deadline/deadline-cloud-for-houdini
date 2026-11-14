@@ -37,8 +37,8 @@ The job supplies these values through secrets:
 
 The initial OIDC role needs the repository-specific private-resource opt-in.
 Trust must be restricted to the canonical repository's approved CI branches.
-Houdini branch rules reject slash-separated CI branches; infrastructure
-onboarding must set `gitHubRunnerTestBranch: 'feature_houdini-gui-ci'` when
+Houdini branch creation is restricted; this trial reuses an existing branch. Infrastructure
+onboarding must set `gitHubRunnerTestBranch: 'fix-publish-python-version'` when
 authorized to enable private-resource access.
 Do not expose these resources to forks or pull-request code.
 
@@ -67,10 +67,12 @@ process tree before closing the tunnel.
 ## Workflow and evidence
 
 `gui_windows.yml` provides manual and reusable execution on `windows-2025`.
-Changing this workflow on `feature_houdini-gui-ci` also starts the initial trial,
+Changing this workflow on `fix-publish-python-version` also starts the initial trial,
 before GitHub registers the new dispatch workflow on mainline.
+An independent `ubuntu-latest` job records Linux runner availability and its
+OS/source metadata; it runs no Houdini test cases and uses no private resources.
 Private execution is limited to the canonical repository on `mainline` or
-`feature_houdini-gui-ci`. Its optional exact source SHA must belong to that trusted
+`fix-publish-python-version`. Its optional exact source SHA must belong to that trusted
 branch history. The reviewed test harness is retained when testing an earlier
 production revision; source and harness SHAs are reported separately.
 

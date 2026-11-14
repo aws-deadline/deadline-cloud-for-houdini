@@ -5,7 +5,7 @@ on:
   # on mainline. Only the approved CI branch can trigger private execution.
   push:
     branches:
-      - feature_houdini-gui-ci
+      - fix-publish-python-version
     paths:
       - .github/workflows/gui_windows.yml
   workflow_dispatch:
@@ -37,10 +37,25 @@ permissions:
   contents: read
 
 jobs:
+  LinuxRunner:
+    name: Standard Linux runner availability (no Houdini tests)
+    if: >-
+      github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
+      github.ref == 'refs/heads/fix-publish-python-version'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record Linux runner and source
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          cat /etc/os-release >> "$GITHUB_STEP_SUMMARY"
+          uname -a >> "$GITHUB_STEP_SUMMARY"
+          printf '\nSource: %s\nNo Houdini test cases ran in this job.\n' "$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
   GUI:
     if: >-
       github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
-      (github.ref == 'refs/heads/mainline' || github.ref == 'refs/heads/feature_houdini-gui-ci')
+      (github.ref == 'refs/heads/mainline' || github.ref == 'refs/heads/fix-publish-python-version')
     runs-on: windows-2025
     timeout-minutes: 60
     concurrency:
