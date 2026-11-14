@@ -1,6 +1,6 @@
 # Houdini Windows GUI CI
 
-No standard GitHub Windows GUI result or GPU requirement has been established.
+No standard GitHub Windows Houdini GUI result or GPU requirement has been established.
 The initial real-GUI export/render baseline has been exercised on an authorized
 Windows Server 2022 workstation with Houdini FX 22.0.368 and an A10G.
 
@@ -12,6 +12,17 @@ Qt 6.8.3 and test-runner Python 3.12.10 against production source
 native viewport capture, mock-only requests, exported-bundle local renders,
 license restoration and test-owned process/storage cleanup were verified.
 This workstation result does not validate `windows-2025`.
+
+The first GitHub trial on 2026-11-14, [run 43531286558](https://github.com/aws-deadline/deadline-cloud-for-houdini/actions/runs/43531286558),
+tested source/harness `e7116a46ef9de99f4c0ccbcab0eb8690940aa3a6`.
+Its independent `ubuntu-latest` availability job passed (Ubuntu 26.04.1,
+image 20261111.196.1). The `windows-2025` job used Windows Server 2025
+Datacenter 10.0.26100, image 20261103.298.1, with Hyper-V Video driver
+10.0.26100.1150. Session 2 was interactive and its input desktop unlocked.
+Dependency preparation passed, but AWS credential setup failed because
+`AWS_REGION` was unavailable. Houdini installation, licensing and all GUI
+and non-GUI test cases were not executed; there are no pytest counts for
+this run. This is a configuration prerequisite, not a graphics failure.
 
 The first trial targets `windows-2025` and the real Houdini GUI. The existing
 `hython` integration tests do not establish desktop or graphics compatibility.
@@ -109,8 +120,9 @@ for these submitter interactions.
 
 - Private installer/licensing resource opt-in and approved CI branch access are
   external prerequisites. Do not change IAM, secrets or access while testing.
-- The initial workflow has not run on GitHub. Its standard-runner result is
-  required before requesting GPU access. Do not treat the A10G workstation's
+- The initial GitHub workflow reached desktop/dependency preflight, then stopped
+  at missing AWS region configuration. Actual standard-runner Houdini execution
+  is required before requesting GPU access. Do not treat the A10G workstation's
   success as evidence that a GPU is required.
 - The tested baseline is intentionally limited to Houdini 22.0.368; the existing
   repository pins 19.5.805, 20.0.896, 20.5.613 and 21.0.440 as well. Their Python
