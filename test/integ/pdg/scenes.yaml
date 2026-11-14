@@ -10,11 +10,15 @@
 #   set          smoke: every run | full: only `hatch run integ:test_pdg_full`
 #   cook_node    the node to cook; omitted means the TOP network's display node
 #   requires     what the farm's workers need, named in failure messages
-#   max_minutes  how long the whole cook may take before the test cancels its job
+#   max_minutes  how long the whole cook may take before the test stops it and cancels
+#                any job it made
 #   expect       outcome is cook.json's "outcome"; steps must equal the snapshot's
-#                steps exactly; host_requirements must be held by every step
+#                steps exactly; host_requirements must be held by every step;
+#                refusals must pair one to one with the refusals the cook logs, each
+#                with the same scenario and a subject that contains subject_contains
 #
-# Expected steps were measured with a generate and the scheduler's validation in hython.
+# Expected steps and refusals were measured with a generate and the scheduler's
+# validation in hython.
 version: 1
 scenes:
   - id: minimal_cook
@@ -109,3 +113,191 @@ scenes:
         - {name: ww_volumes, task_count: 240, declares_outputs: true}
         - {name: ropusd1_ropfetch1, task_count: 239, declares_outputs: true}
         - {name: guided_ocean, task_count: 239, declares_outputs: true}
+
+  # The scenes that must be refused. Each built one is the smallest graph that triggers
+  # one refusal; the two downloaded ones are artist scenes the scheduler refuses. Their
+  # max_minutes is 2.7 times the slowest of 5 measured farm runs of the refusal tests,
+  # rounded up to a whole minute. A test's time includes building the scene and the job
+  # search, so it is longer than the cook alone.
+
+  - id: dynamic_node
+    kind: refusal
+    set: smoke
+    source:
+      builder: dynamic_node.py
+    max_minutes: 1                      # slowest measured test 9.4 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: dynamic_node, subject_contains: write_when_cooked}
+
+  - id: in_process_node
+    kind: refusal
+    set: smoke
+    source:
+      builder: in_process_node.py
+    max_minutes: 1                      # slowest measured test 8.1 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: in_process_node, subject_contains: list_in_process}
+
+  - id: in_process_step
+    kind: refusal
+    set: smoke
+    source:
+      builder: in_process_step.py
+    max_minutes: 1                      # slowest measured test 8.3 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: in_process_step, subject_contains: write_in_process}
+
+  - id: runtime_file_unproduced
+    kind: refusal
+    set: smoke
+    source:
+      builder: runtime_file_unproduced.py
+    max_minutes: 1                      # slowest measured test 8.2 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: runtime_file_unproduced, subject_contains: never_written.bgeo.sc}
+
+  - id: rop_batch
+    kind: refusal
+    set: smoke
+    source:
+      builder: rop_batch.py
+    max_minutes: 1                      # slowest measured test 8.6 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: rop_batch, subject_contains: write_batched}
+
+  - id: multiple_schedulers
+    kind: refusal
+    set: smoke
+    source:
+      builder: multiple_schedulers.py
+    max_minutes: 1                      # slowest measured test 7.9 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: multiple_schedulers, subject_contains: write_locally}
+
+  - id: service_node
+    kind: refusal
+    set: smoke
+    source:
+      builder: service_node.py
+    max_minutes: 1                      # slowest measured test 8.2 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: service_node, subject_contains: write_as_service}
+
+  - id: quota_exceeded
+    kind: refusal
+    set: smoke
+    source:
+      builder: quota_exceeded.py
+    max_minutes: 1                      # slowest measured test 10.4 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: quota_exceeded, subject_contains: write_too_many}
+        - {scenario: quota_exceeded, subject_contains: "this cook"}
+
+  - id: output_outside_cook
+    kind: refusal
+    set: smoke
+    source:
+      builder: output_outside_cook.py
+    max_minutes: 1                      # slowest measured test 8.2 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: output_outside_cook, subject_contains: write_outside}
+
+  - id: local_file_unreachable
+    kind: refusal
+    set: smoke
+    source:
+      builder: local_file_unreachable.py
+    max_minutes: 1                      # slowest measured test 8.3 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: local_file_unreachable, subject_contains: "read_missing parm 'file'"}
+
+  - id: attribute_as_variable
+    kind: refusal
+    set: smoke
+    source:
+      builder: attribute_as_variable.py
+    max_minutes: 1                      # slowest measured test 8.1 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: attribute_as_variable, subject_contains: "parm 'sopoutput'"}
+
+  - id: cached_outputs
+    kind: refusal
+    set: smoke
+    source:
+      builder: cached_outputs.py
+    max_minutes: 1                      # slowest measured test 7.9 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: cached_outputs, subject_contains: write_cached}
+
+  - id: unsaved_scene
+    kind: refusal
+    set: smoke
+    source:
+      builder: unsaved_scene.py
+      saved: false                      # cook_scene_in_hython.py builds it and cooks it unsaved
+    max_minutes: 1                      # slowest measured test 4.0 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: unsaved_scene, subject_contains: untitled.hip}
+
+  - id: no_farm_work
+    kind: refusal
+    set: smoke
+    source:
+      builder: no_farm_work.py
+    max_minutes: 1                      # slowest measured test 7.7 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: no_farm_work, subject_contains: items}
+
+  - id: city_builder
+    kind: refusal
+    set: smoke
+    source:
+      external: city_builder_DEMO.hip
+      sha256: 115ca06763f7df2a8e70368a2e5365efdac4f8ebd4510938c5ed9af427385f4f
+    max_minutes: 1                      # slowest measured test 4.2 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: in_process_step, subject_contains: filecopy_compiled}
+        - {scenario: in_process_step, subject_contains: filecopy_compiled1}
+        - {scenario: multiple_schedulers, subject_contains: city_geo_ropfetch1}
+
+  - id: volume_advection
+    kind: refusal
+    set: smoke
+    source:
+      external: pdg_volume_advection_01.hip
+      sha256: 5b5cb93efeda97d512003a22358ed4dba0b8f3ba68aa2da9814ef174548a131a
+    max_minutes: 1                      # slowest measured test 4.7 s
+    expect:
+      outcome: refused
+      refusals:
+        - {scenario: attribute_as_variable, subject_contains: "mantra1 parm 'vm_picture'"}

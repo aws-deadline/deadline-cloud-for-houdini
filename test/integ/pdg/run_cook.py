@@ -5,6 +5,9 @@
 ``run_cook`` starts hython on ``cook_scene_in_hython.py``, which writes
 ``cook_result.json`` in the scene's folder. ``read_cook_result`` turns that file into a
 ``CookResult``, and ``describe_cook`` gives a failed test's message what it needs to know.
+For a scene that must be refused, ``cancel_jobs_of_refused_cook`` finds and cancels any
+job the cook made, ``refusal_problems`` judges the cook, and ``refusal_failure`` gives the
+refusal test's failure message.
 """
 
 from __future__ import annotations
@@ -16,15 +19,16 @@ import signal
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from deadline.houdini_pdg.ports import OutputFile
 
 from .compare_cook_with_farm import PdgWorkItem
 from .cook_scene_in_hython import RESULT_VERSION, find_debug_dir
-from .scenes import SCENE_BUILDERS_DIR, TestScene
+from .farm import FarmQueue, cancel_job, jobs_created_since
+from .scenes import SCENE_BUILDERS_DIR, ExpectedRefusal, TestScene
 
 #: The hython script that cooks one scene.
 COOK_SCRIPT: Path = Path(__file__).parent / "cook_scene_in_hython.py"
@@ -35,8 +39,15 @@ RESULT_FILE_NAME: str = "cook_result.json"
 #: The file hython's output goes to, in the scene's folder.
 HYTHON_LOG_NAME: str = "hython.log"
 
+#: The start of the error a refusal puts on the scheduler node, after the node's label.
+REFUSAL_HEADER: str = "The graph was refused ("
+
 # How many random bytes, written as hex, make each job's name unique to its cook.
 _JOB_NAME_RANDOM_BYTES: int = 4
+
+# How long before the test's start the job search begins. A workstation clock ahead of
+# the service's would otherwise hide a job. A longer window only searches more jobs.
+_CLOCK_SKEW_MARGIN: timedelta = timedelta(minutes=5)
 
 
 @dataclass(frozen=True)
@@ -136,6 +147,128 @@ def describe_cook(scene: TestScene, result: CookResult) -> str:
         "hython log": str(result.hython_log),
     }
     return "\n" + "\n".join(f"{name}: {value}" for name, value in lines.items())
+
+
+def cancel_jobs_of_refused_cook(
+    farm_queue: FarmQueue,
+    result: CookResult,
+    *,
+    test_started_at: datetime,
+    deadline_client: Optional[Any] = None,
+) -> List[str]:
+    """Cancel every job on the queue made by a cook that should have been refused, and
+    return their IDs. A refused cook makes none, so the list is normally empty.
+
+    A job found would run on a shared queue. The search covers jobs created since the
+    test started, less a margin for clock skew, that carry the cook's job name or its
+    cook ID. The client defaults to the workstation's Deadline Cloud login. Tests pass their own.
+    """
+    jobs: List[str] = jobs_created_since(
+        farm_queue,
+        test_started_at - _CLOCK_SKEW_MARGIN,
+        cook_id=read_cook_id(result.debug_dir),
+        job_name=result.job_name,
+        deadline_client=deadline_client,
+    )
+    for job_id in jobs:
+        cancel_job(farm_queue, job_id, deadline_client=deadline_client)
+    return jobs
+
+
+def refusal_failure(scene: TestScene, result: CookResult, canceled_jobs: Sequence[str]) -> str:
+    """Why the refusal test of this cook fails, followed by ``describe_cook``'s lines, or
+    ``""`` when the test passes.
+
+    The test fails when the cook made a job, which the caller has canceled, or when
+    ``refusal_problems`` finds anything wrong with the cook.
+    """
+    # A job the cook made goes first, since it is the worst way a refusal can go wrong.
+    problems: List[str] = refusal_problems(scene, result)
+    if canceled_jobs:
+        problems.insert(0, f"The cook made job(s) {', '.join(canceled_jobs)}, now canceled.")
+    if not problems:
+        return ""
+    return "\n".join(problems) + describe_cook(scene, result)
+
+
+def refusal_problems(scene: TestScene, result: CookResult) -> List[str]:
+    """What is wrong with the cook of a scene that must be refused, one line each, or nothing.
+
+    The cook must end within the scene's time limit. Its logged refusals and the scene's
+    expected ones must pair one to one: each expected refusal takes its own logged refusal
+    with the same scenario and a subject that contains ``subject_contains``, and no logged
+    refusal is left over. One of the scheduler node's errors must hold the refusal header,
+    which only a refusal puts there.
+    """
+    problems: List[str] = []
+    if result.timed_out:
+        problems.append(f"The cook ran past {scene.max_minutes:g} min.")
+
+    # Every refusal that found no pair, on either side.
+    missing, extra = match_refusals(scene.expected_refusals, result.logged_refusals)
+    problems += [
+        f"Not logged: a {r.scenario} refusal whose subject contains '{r.subject_contains}'."
+        for r in missing
+    ]
+    problems += [f"Logged but not expected: {r.subject} ({r.scenario})." for r in extra]
+
+    if not any(REFUSAL_HEADER in error for error in result.scheduler_errors):
+        problems.append(f"No error on the scheduler node holds '{REFUSAL_HEADER}'.")
+    return problems
+
+
+def match_refusals(
+    expected: Sequence[ExpectedRefusal], logged: Sequence[LoggedRefusal]
+) -> Tuple[Tuple[ExpectedRefusal, ...], Tuple[LoggedRefusal, ...]]:
+    """Pair as many expected refusals as possible each with its own logged refusal, and
+    return the expected and the logged refusals left without a pair.
+
+    A logged refusal fits an expected one when the scenarios are equal and its subject
+    contains ``subject_contains``. Pairing in order isn't enough: an expected refusal that
+    fits any subject could take the only logged refusal a narrower one fits.
+    """
+    # The logged refusals each expected refusal fits, by position.
+    fits: List[List[int]] = [
+        [
+            index
+            for index, refusal in enumerate(logged)
+            if refusal.scenario == want.scenario and want.subject_contains in refusal.subject
+        ]
+        for want in expected
+    ]
+    # Which expected refusal holds each logged refusal that has been paired.
+    holder: Dict[int, int] = {}
+
+    def pair(want: int, tried: Set[int]) -> bool:
+        """Give expected refusal ``want`` a logged refusal: a free one, or one whose holder
+        can move to another. Each logged refusal is tried once per search."""
+        for index in fits[want]:
+            if index in tried:
+                continue
+            tried.add(index)
+            if index not in holder or pair(holder[index], tried):
+                holder[index] = want
+                return True
+        return False
+
+    paired: Set[int] = {want for want in range(len(expected)) if pair(want, set())}
+    return (
+        tuple(want for position, want in enumerate(expected) if position not in paired),
+        tuple(refusal for index, refusal in enumerate(logged) if index not in holder),
+    )
+
+
+def read_cook_id(debug_dir: Optional[Path]) -> Optional[str]:
+    """The cook's ID from the cook.json in its debug directory, or None when there is none.
+
+    A refusal at the cook's start writes no debug directory, so the cook has no ID.
+    """
+    # The scheduler writes cook.json, with the cook's ID, when the cook starts.
+    cook_json: Optional[Path] = debug_dir / "cook.json" if debug_dir is not None else None
+    if cook_json is None or not cook_json.is_file():
+        return None
+    cook_id: Optional[str] = json.loads(cook_json.read_text(encoding="utf-8")).get("cook_id")
+    return cook_id
 
 
 def read_cook_result(path: Path, *, hython_log: Path) -> CookResult:

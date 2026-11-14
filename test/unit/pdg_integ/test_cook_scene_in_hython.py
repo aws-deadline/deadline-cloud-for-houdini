@@ -3,8 +3,8 @@
 """Tests for the parts of the hython cook script that can run without Houdini.
 
 They cover how the script reads the cook's refusal lines, finds the cook's debug
-directory, sets up the scheduler node, and copies PDG's work items. Houdini's node and
-PDG objects are small stand-ins with only what the script uses.
+directory, sets up the scheduler node, reads the node's errors, and copies PDG's work
+items. Houdini's node and PDG objects are small stand-ins with only what the script uses.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from test.integ.pdg.cook_scene_in_hython import (
     find_debug_dir,
     find_or_create_scheduler,
     read_pdg_work_items,
+    read_scheduler_errors,
     set_scheduler_parms,
 )
 
@@ -291,3 +292,40 @@ def test_every_work_item_is_recorded_with_its_state_name_and_local_outputs() -> 
         },
         {"node": "wedge", "name": "wedge_1", "index": 0, "state": "CookedFail", "outputs": []},
     ]
+
+
+class _EventsContext:
+    """A graph context holding events that hand errors to the scheduler node until processed."""
+
+    def __init__(self, scheduler: "_SchedulerWithEvents", pending: List[str]) -> None:
+        self._scheduler: _SchedulerWithEvents = scheduler
+        self._pending: List[str] = pending
+
+    def waitAllEvents(self) -> None:
+        """Process the events, which puts their errors on the node."""
+        self._scheduler.shown += self._pending
+        self._pending = []
+
+
+class _SchedulerWithEvents:
+    """A scheduler node that shows only the errors whose events were processed."""
+
+    def __init__(self) -> None:
+        self.shown: List[str] = []
+
+    def errors(self) -> Tuple[str, ...]:
+        """The errors on the node now."""
+        return tuple(self.shown)
+
+
+def test_the_scheduler_nodes_errors_are_read_after_pdgs_events() -> None:
+    """A refusal at the cook's start reaches the node only through an event, so the error is
+    read after the events are processed. Reading it straight away would find no error and
+    fail every test of a scene refused at the start.
+    """
+    # The refusal's error is still an event when the cook returns.
+    scheduler: _SchedulerWithEvents = _SchedulerWithEvents()
+    context: _EventsContext = _EventsContext(scheduler, ["The graph was refused (1 refusal(s))"])
+    cook_node: Any = type("CookNode", (), {"getPDGGraphContext": lambda _self: context})()
+
+    assert read_scheduler_errors(cook_node, scheduler) == ["The graph was refused (1 refusal(s))"]
