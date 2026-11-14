@@ -142,6 +142,8 @@ filterwarnings = [
 markers = [
   "submitter: mark a test as using the submitter.",
   "adaptor: mark a test as using the adaptor.",
+  "pdg: mark a test as cooking a PDG scene on a Deadline Cloud farm.",
+  "pdg_full: mark a PDG test as cooking a large scene, run only by test_pdg_full.",
 ]
 
 [tool.coverage.run]

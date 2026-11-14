@@ -151,6 +151,52 @@ This template:
 
 See `job_bundle_integ_tests/README.md` for details.
 
+## PDG Integration Tests
+
+The PDG integ tests cook TOP networks with the Deadline Cloud Scheduler node on a real Deadline Cloud farm, then check the cook against the farm task by task. The scheduler is experimental. The tests submit real jobs, so they run only when you name the farm and queue they may submit to.
+
+### Running
+
+```bash
+export HYTHON_EXECUTABLE="/opt/hfs<VERSION>/bin/hython"
+export PDG_INTEG_FARM_ID=farm-...
+export PDG_INTEG_QUEUE_ID=queue-...
+export PDG_TEST_SCENES_DIR=~/pdg-test-scenes   # only for scenes you download
+
+hatch run integ:test_pdg                  # the smoke set
+hatch run integ:test_pdg_full             # also the large scenes
+hatch run integ:test_pdg -k minimal_cook  # one scene; other arguments go to pytest
+```
+
+Both scripts run `scripts/run_pdg_integ_tests.py`, which automated runs can call directly. When `PDG_INTEG_FARM_ID` or `PDG_INTEG_QUEUE_ID` is unset, it offers your default farm and queue by name and ID in an interactive terminal, and uses them for that run only if you answer `y`. Otherwise it exits with status 2 and runs no tests. A plain `hatch run integ:test` skips the PDG tests and says why.
+
+| Variable | What it does |
+|----------|--------------|
+| `PDG_INTEG_FARM_ID`, `PDG_INTEG_QUEUE_ID` | The farm and queue the test jobs go to. hython gets them through a copy of your Deadline config, so your own config is not changed. |
+| `PDG_TEST_SCENES_DIR` | The folder holding the downloaded scenes. With the farm set, a test of such a scene fails if this is unset or the file is missing. |
+| `HYTHON_EXECUTABLE` or `HOUDINI_VERSION` | Which hython cooks, found as for the other integ tests. |
+
+The tests need hython with a Houdini license, your Deadline Cloud login, and `hatch` on your `PATH`. Your Houdini packages are skipped, so a dev install of another checkout isn't loaded. hython loads this checkout's scheduler and submitter, with the dependencies in `plugin_env_<major.minor>`. That folder is built with the dev install's builder the first time; delete it to rebuild it. Each session builds this checkout's wheel, and downloads the `deadline` and `openjd-adaptor-runtime` wheels at the versions in that folder, and the workers install them.
+
+### Test scenes
+
+`test/integ/pdg/scenes.yaml` lists every scene and the result its cook must give: its outcome, its steps and their task counts, and for one scene the host requirements every step must carry. A scene is either:
+
+- **built**: a script in `test/integ/pdg/scene_builders/` builds it in hython when the test runs; or
+- **external**: a `.hip` file you download into `PDG_TEST_SCENES_DIR`. Save each one under the file name `scenes.yaml` gives it. Its SHA-256 is pinned there, so a different file is refused.
+
+`max_minutes` is how long a cook may take. A cook that runs longer is killed, and its job is canceled.
+
+### What a cook test checks
+
+`test_scene_cooks_end_to_end` cooks each scene through the TOP Cook button's path, `cookWorkItems(block=True)`, in its own temporary folder. It passes when:
+
+- the cook ends within `max_minutes`;
+- `cook.json`'s outcome and the snapshot's steps equal `scenes.yaml`;
+- the comparison finds no difference between the cook, PDG's work items and the farm: each task's status, the files it uploaded, and their tags.
+
+The same comparison runs by hand on any cook's debug directory: `hatch run integ:compare_pdg_cook_with_farm <debug_dir>`.
+
 ## Troubleshooting
 
 ### Tests fail with "queue parameters" errors

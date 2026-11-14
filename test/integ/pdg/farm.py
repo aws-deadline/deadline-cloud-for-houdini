@@ -1,17 +1,23 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
-"""The farm's side of one PDG cook: the Deadline Cloud job, and the files its tasks uploaded.
+"""The farm the PDG integ tests use, and the farm's side of one PDG cook.
 
-Everything here only reads from Deadline Cloud and S3. ``compare_cook_with_farm``
-compares the result with the cook's own record.
+The tests submit only to the farm and queue that ``PDG_INTEG_FARM_ID`` and
+``PDG_INTEG_QUEUE_ID`` name, through a copy of the user's Deadline config. Reading a job
+changes nothing: ``read_farm_view`` returns the Deadline Cloud job and the files its tasks
+uploaded, and ``compare_cook_with_farm`` compares that with the cook's own record. The one
+change the tests make on the farm is ``cancel_job``, for a cook that ran out of time.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import defaultdict
+from configparser import ConfigParser
 from dataclasses import dataclass
+from pathlib import Path
 from typing import (
     Any,
     DefaultDict,
@@ -26,11 +32,19 @@ from typing import (
 )
 
 from deadline.client import api
+from deadline.client.config import config_file
 from deadline.job_attachments.asset_manifests.decode import decode_manifest
 from deadline.job_attachments.models import JobAttachmentS3Settings
 
 from deadline.houdini_pdg.ports import OutputFile, TaskAddress
 from deadline.houdini_pdg.task_storage import S3TaskStorage
+
+#: The variables naming the farm and queue the tests submit to.
+FARM_ID_VARIABLE: str = "PDG_INTEG_FARM_ID"
+QUEUE_ID_VARIABLE: str = "PDG_INTEG_QUEUE_ID"
+
+#: The file name of the Deadline config copy that ``write_deadline_config`` writes.
+DEADLINE_CONFIG_NAME: str = "deadline_config"
 
 # Job attachments ends the key of every output manifest with this.
 _MANIFEST_SUFFIX: str = "_output"
@@ -45,6 +59,70 @@ class FarmQueue:
 
     farm_id: str
     queue_id: str
+
+
+def farm_queue_from_env(env: Mapping[str, str] = os.environ) -> Optional[FarmQueue]:
+    """``PDG_INTEG_FARM_ID`` and ``PDG_INTEG_QUEUE_ID``, or None when either is unset or empty."""
+    # An empty value counts as unset, as an exported but blank variable would be.
+    farm_id: str = env.get(FARM_ID_VARIABLE, "")
+    queue_id: str = env.get(QUEUE_ID_VARIABLE, "")
+    if not farm_id or not queue_id:
+        return None
+    return FarmQueue(farm_id=farm_id, queue_id=queue_id)
+
+
+def write_deadline_config(farm_queue: FarmQueue, into: Path) -> Path:
+    """A copy of the user's Deadline config with the default farm and queue set to ``farm_queue``.
+
+    hython gets the copy's path through ``DEADLINE_CONFIG_FILE_PATH``, so the cook submits
+    to ``farm_queue`` with the user's login, and the user's own config is not changed.
+    """
+    # The copy starts from the user's file, so it keeps their profile and login settings.
+    config: ConfigParser = ConfigParser()
+    user_config: Path = config_file.get_config_file_path()
+    if user_config.is_file():
+        config.read_string(user_config.read_text(encoding="utf-8"))
+
+    # The queue's setting is kept under the farm's, so the farm is set first.
+    config_file.set_setting("defaults.farm_id", farm_queue.farm_id, config=config)
+    config_file.set_setting("defaults.queue_id", farm_queue.queue_id, config=config)
+    copy: Path = into / DEADLINE_CONFIG_NAME
+    with copy.open("w", encoding="utf-8") as copy_file:
+        config.write(copy_file)
+    return copy
+
+
+def cancel_job(
+    farm_queue: FarmQueue, job_id: str, *, deadline_client: Optional[Any] = None
+) -> None:
+    """Cancel a job this test run created. Used only when a cook test times out.
+
+    The client defaults to the workstation's Deadline Cloud login. Tests pass their own.
+    """
+    deadline: Any = deadline_client or api.get_boto3_client("deadline")
+    deadline.update_job(
+        farmId=farm_queue.farm_id,
+        queueId=farm_queue.queue_id,
+        jobId=job_id,
+        targetTaskRunStatus="CANCELED",
+    )
+
+
+def cancel_job_of_cook(
+    farm_queue: FarmQueue, debug_dir: Optional[Path], *, deadline_client: Optional[Any] = None
+) -> None:
+    """Cancel the job a cook submitted, which the cook.json in its debug directory names.
+
+    A cook with no debug directory, no cook.json, or no job ID in it submitted no job, so
+    nothing is canceled. Used only when a cook test times out, so its job doesn't keep running.
+    """
+    # The scheduler records the job's ID in cook.json when it submits the job.
+    cook_json_path: Optional[Path] = debug_dir / "cook.json" if debug_dir is not None else None
+    if cook_json_path is None or not cook_json_path.is_file():
+        return
+    job_id: Optional[str] = json.loads(cook_json_path.read_text(encoding="utf-8")).get("job_id")
+    if job_id:
+        cancel_job(farm_queue, job_id, deadline_client=deadline_client)
 
 
 @dataclass(frozen=True)
