@@ -430,6 +430,8 @@ class FakeHou:
     libraries: Dict[str, str] = field(default_factory=dict)
     #: The ``hou.ui.triggerUpdate`` calls, which nothing should make.
     updates: int = 0
+    #: The callbacks added with ``hou.ui.addSelectionCallback``, in order.
+    selection_callbacks: List[Callable[[List[Any]], None]] = field(default_factory=list)
 
     def trigger_update(self) -> None:
         """``hou.ui.triggerUpdate``: count the call."""
@@ -457,7 +459,10 @@ def install_hou(monkeypatch: pytest.MonkeyPatch, hip_file: str) -> FakeHou:
         "hipFile": state.hip_file,
         "text": types.SimpleNamespace(expandString=expand),
         "ui": types.SimpleNamespace(
-            displayMessage=state.messages, triggerUpdate=state.trigger_update
+            displayMessage=state.messages,
+            triggerUpdate=state.trigger_update,
+            addSelectionCallback=state.selection_callbacks.append,
+            selectionCallbacks=lambda: tuple(state.selection_callbacks),
         ),
         "isUIAvailable": lambda: state.ui,
         "OperationFailed": OperationFailed,

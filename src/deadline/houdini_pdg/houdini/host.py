@@ -9,6 +9,7 @@ there while Houdini's UI runs, so every scene read runs on the main thread.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import glob
 import logging
 import os
@@ -32,6 +33,8 @@ from typing import (
 
 import hou  # type: ignore[import-not-found]
 import pdg  # type: ignore[import-not-found]
+from deadline.client import api as deadline_api
+from deadline.client import config as deadline_config
 
 from ..errors import (
     CookSetupError,
@@ -1344,6 +1347,332 @@ def rebuild_layout_from_definition(node: Any) -> None:
     move_queue_folders_above_submit(node)
     for name, value in values.items():
         node.parmTuple(name).set(value)
+
+
+# -- the node's Farm and Queue menus -----------------------------------------
+
+#: The entry a menu adds after the current value while it has no list: its list is loading, the
+#: login failed or the list failed, or no farm is saved. Each token is one no ID can be, so a
+#: pick of it is never saved.
+_LOADING: Tuple[str, str] = ("__loading__", "Loading...")
+_LOG_IN: Tuple[str, str] = (
+    "__log_in__",
+    "Log in with Deadline Cloud Monitor or `deadline auth login`",
+)
+_LIST_ERROR_TOKEN: str = "__list_error__"
+_CHOOSE_A_FARM: Tuple[str, str] = ("__choose_a_farm__", "Choose a farm first")
+#: The tokens of the one entry a fetch keeps when it gets no list: no login, or an error.
+_FAILED_FETCH_TOKENS: FrozenSet[str] = frozenset({_LOG_IN[0], _LIST_ERROR_TOKEN})
+
+#: The key of the farm list. Each queue list is keyed by its farm's ID.
+_FARMS: str = ""
+
+#: The start of every log line about the menus, so a console search finds them all.
+_MENUS_LOG: str = "Farm and Queue menus:"
+
+
+def _list_name(key: str) -> str:
+    """How the log names the list for ``key``."""
+    return "farms" if key == _FARMS else f"queues of farm {key}"
+
+
+def _start_daemon_thread(job: Callable[[], None]) -> None:
+    """Run ``job`` in a thread that doesn't keep Houdini from exiting."""
+    threading.Thread(target=job, daemon=True).start()
+
+
+def _run_later_on_main_thread(job: Callable[[], None]) -> None:
+    """Queue ``job`` for Houdini's main thread, and return at once."""
+    import hdefereval  # type: ignore[import-not-found]
+
+    hdefereval.executeDeferred(job)
+
+
+class FarmAndQueueMenus:
+    """The lists behind the node's Farm and Queue menus, kept for the Houdini session.
+
+    A menu only reads a list. A missing list loads in a background thread, so Houdini's
+    main thread makes no AWS call. Each entry is an ``(id, label)`` pair.
+    """
+
+    def __init__(
+        self,
+        api: Any = deadline_api,
+        config: Any = deadline_config,
+        start_thread: Callable[[Callable[[], None]], None] = _start_daemon_thread,
+        run_later_on_main_thread: Callable[[Callable[[], None]], None] = _run_later_on_main_thread,
+    ) -> None:
+        self._api: Any = api
+        self._config: Any = config
+        self._start_thread: Callable[[Callable[[], None]], None] = start_thread
+        self._run_later_on_main_thread: Callable[[Callable[[], None]], None] = (
+            run_later_on_main_thread
+        )
+        # The lists, the ones loading, each listed farm's region, and the name of every farm and
+        # queue seen this session by its ID, shared with the threads.
+        self._lock: threading.Lock = threading.Lock()
+        self._lists: Dict[str, List[Tuple[str, str]]] = {}
+        self._loading: Set[str] = set()
+        self._farm_regions: Dict[str, str] = {}
+        self._names: Dict[str, str] = {}
+        self._watching_selection: bool = False
+
+    def list_menu_items(self, parm_name: str, current: str) -> List[str]:
+        """The ``farm`` or ``queue`` menu as Houdini wants it: each token, then its label.
+
+        ``current`` is the parm's value. Until the list loads, the menu lists that value first,
+        so Houdini shows its label without drawing the menu again when the list arrives.
+        """
+        from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
+            _NONE_SELECTED_TEXT,
+        )
+
+        farm_id: str = get_workstation_setting("defaults.farm_id", self._config)
+        key: str = _FARMS if parm_name == "farm" else farm_id
+        # Queues are listed per farm, so with no farm there is nothing to load.
+        no_farm: bool = parm_name == "queue" and not farm_id
+        with self._lock:
+            loaded: Optional[List[Tuple[str, str]]] = None if no_farm else self._lists.get(key)
+            current_label: str = self._names.get(current, current)
+        if loaded is None and not no_farm:
+            self._start_loading(key)
+        # Without a list, the current value comes first with the name seen for it, or its ID
+        # when no name was seen, then the entry saying why there is no list.
+        none_selected: Tuple[str, str] = ("", _NONE_SELECTED_TEXT)
+        current_entry: Tuple[str, str] = (current, current_label) if current else none_selected
+        placeholder: Optional[Tuple[str, str]] = (
+            _CHOOSE_A_FARM
+            if no_farm
+            else (
+                _LOADING
+                if loaded is None
+                else loaded[0] if loaded and loaded[0][0] in _FAILED_FETCH_TOKENS else None
+            )
+        )
+        # A loaded list starts with an entry for no choice, which an empty value matches.
+        entries: List[Tuple[str, str]] = (
+            [current_entry, placeholder]
+            if placeholder is not None
+            else [none_selected, *(loaded or [])]
+        )
+        # Houdini runs this on every redraw, so it logs one line.
+        shown: str = (
+            f'"{placeholder[1]}"'
+            if placeholder is not None
+            else f"the loaded list of {len(entries) - 1} item(s)"
+        )
+        labels: Dict[str, str] = dict(entries)
+        _logger.info(
+            "%s the %s menu shows %s, and its value %r shows as %s.",
+            _MENUS_LOG,
+            parm_name,
+            shown,
+            current,
+            repr(labels[current]) if current in labels else "no entry",
+        )
+        items: List[str] = [text for entry in entries for text in entry]
+        return items
+
+    def load_lists(self, reload: bool = False) -> None:
+        """Start loading the farm list and the saved farm's queue list, unless they're loaded.
+
+        ``reload`` drops the loaded lists first, so a new login or profile shows its own.
+        The names seen stay, so the menus still name the saved farm and queue while they load.
+        """
+        with self._lock:
+            if reload:
+                self._lists.clear()
+            missing: List[str] = [
+                key
+                for key in (_FARMS, get_workstation_setting("defaults.farm_id", self._config))
+                if key not in self._lists
+            ]
+        for key in missing:
+            self._start_loading(key)
+
+    def save_pick(self, node: Any, parm_name: str, update: Callable[[], None]) -> None:
+        """Save the farm or queue picked in the node's menu as deadline-cloud does, then ``update``.
+
+        A pick of the saved one, or of an entry that isn't a listed ID, saves nothing.
+        """
+        picked: str = node.parm(parm_name).evalAsString()
+        saved: str = get_workstation_setting(f"defaults.{parm_name}_id", self._config)
+        key: str = (
+            _FARMS
+            if parm_name == "farm"
+            else get_workstation_setting("defaults.farm_id", self._config)
+        )
+        # Read under the lock the loading threads write with. A login or error entry is no ID.
+        with self._lock:
+            listed: Set[str] = {
+                entry_id
+                for entry_id, _ in self._lists.get(key, [])
+                if entry_id not in _FAILED_FETCH_TOKENS
+            }
+            region: str = self._farm_regions.get(picked, "")
+        if picked == saved or picked not in listed:
+            node.parm(parm_name).set(saved)
+            return
+        # The same settings, in the same order, as deadline-cloud's select_farm and select_queue,
+        # whose controller needs Qt.
+        set_setting: Callable[[str, str], None] = self._config.set_setting
+        if parm_name == "farm":
+            set_setting("defaults.farm_id", picked)
+            if region:
+                set_setting("defaults.farm_region", region)
+            set_setting("defaults.queue_id", "")
+            # The new farm's queues load again at once, so Queue doesn't wait for a click.
+            with self._lock:
+                self._lists.pop(picked, None)
+            self._start_loading(picked)
+        else:
+            set_setting("defaults.queue_id", picked)
+        set_setting("settings.storage_profile_id", "")
+        update()
+
+    def show_saved_ids(self, node: Any) -> None:
+        """Set the node's Farm and Queue back to the saved IDs, which are the menus' tokens.
+
+        Call it right after the ROP's update, which writes the names. Each name is kept for
+        its ID, so a menu still names the saved farm or queue before its list loads.
+        """
+        from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
+            _NONE_SELECTED_TEXT,
+            _REFRESHING_TEXT,
+        )
+
+        for parm_name in ("farm", "queue"):
+            parm: Any = node.parm(parm_name)
+            written: str = parm.evalAsString()
+            saved: str = get_workstation_setting(f"defaults.{parm_name}_id", self._config)
+            # The ROP writes the ID itself when it may not read the name, and its own text when
+            # nothing is saved or its update stopped early. Neither is a name.
+            if written not in ("", saved, _REFRESHING_TEXT, _NONE_SELECTED_TEXT):
+                with self._lock:
+                    self._names[saved] = written
+            parm.set(saved)
+
+    def _show_saved_queue(self, farm_id: str) -> None:
+        """Set each scheduler node's Queue to the saved queue, or to empty if it isn't listed.
+
+        Runs on Houdini's main thread once ``farm_id``'s queues load. Empty is the token of the
+        menu's none selected entry.
+        """
+        saved_farm: str = get_workstation_setting("defaults.farm_id", self._config)
+        saved: str = get_workstation_setting("defaults.queue_id", self._config)
+        with self._lock:
+            entries: Optional[List[Tuple[str, str]]] = self._lists.get(farm_id)
+        # A list for another farm isn't the one Queue shows, and a reload's own list comes later.
+        if farm_id != saved_farm or entries is None:
+            reason: str = "aren't the saved farm's" if farm_id != saved_farm else "aren't loaded"
+            _logger.debug(
+                "%s saved farm %r, queue %r. The queues of farm %r %s, so no node is set.",
+                _MENUS_LOG,
+                saved_farm,
+                saved,
+                farm_id,
+                reason,
+            )
+            return
+        # A login or error entry is no list, so Queue keeps the saved queue, which its menu
+        # then lists first.
+        ids: Set[str] = {entry_id for entry_id, _ in entries}
+        shown: str = saved if saved in ids or bool(ids & _FAILED_FETCH_TOKENS) else ""
+        # Only a changed value is set, since a set may mark a scene that just opened as unsaved.
+        set_count: int = 0
+        for node in hou.nodeType(hou.topNodeTypeCategory(), _NODE_TYPE).instances():
+            queue: Any = node.parm("queue")
+            if queue.evalAsString() != shown:
+                queue.set(shown)
+                set_count += 1
+        _logger.debug(
+            "%s saved farm %r, queue %r. Queue shows %r, set on %d node(s).",
+            _MENUS_LOG,
+            saved_farm,
+            saved,
+            shown,
+            set_count,
+        )
+
+    def _load_for_selected_scheduler(self, selection: List[Any]) -> None:
+        """Start the lists when a scheduler node is selected, so they're ready when its parms show."""
+        if any(_call(_call(item, "type"), "name") == _NODE_TYPE for item in selection):
+            self.load_lists()
+
+    def _start_loading(self, key: str) -> None:
+        """Start one thread that loads the list for ``key``, unless one is already loading it.
+
+        The first one also starts watching the selection, which needs Houdini's UI.
+        """
+        # hython loads scenes on the farm too, where nothing shows the lists.
+        if not hou.isUIAvailable():
+            return
+        with self._lock:
+            if key in self._loading:
+                return
+            self._loading.add(key)
+        _logger.debug("%s started loading the %s.", _MENUS_LOG, _list_name(key))
+        if not self._watching_selection:
+            hou.ui.addSelectionCallback(self._load_for_selected_scheduler)
+            self._watching_selection = True
+        self._start_thread(functools.partial(self._load_list, key))
+
+    def _load_list(self, key: str) -> None:
+        """Load the farm list, or the queues of farm ``key``. Runs in a background thread."""
+        # Any error is shown as the menu's one entry, since a thread has nowhere to raise it.
+        # ``landed`` names a login or error entry for the log, and is empty for a real list.
+        entries: List[Tuple[str, str]]
+        regions: Dict[str, str]
+        landed: str
+        try:
+            status: Any = self._api.check_authentication_status()
+            if status != self._api.AwsAuthenticationStatus.AUTHENTICATED:
+                entries, regions, landed = [_LOG_IN], {}, "the login entry"
+            elif key == _FARMS:
+                farms: List[Dict[str, Any]] = self._api.list_farms()["farms"]
+                entries, regions, landed = (
+                    [(farm["farmId"], farm["displayName"]) for farm in farms],
+                    {farm["farmId"]: farm["region"] for farm in farms},
+                    "",
+                )
+            else:
+                with self._lock:
+                    region: Optional[str] = self._farm_regions.get(key)
+                queues: List[Dict[str, Any]] = self._api.list_queues(farmId=key, region=region)[
+                    "queues"
+                ]
+                entries, regions, landed = (
+                    [(queue["queueId"], queue["displayName"]) for queue in queues],
+                    {},
+                    "",
+                )
+        except Exception as error:
+            entries, regions, landed = (
+                [(_LIST_ERROR_TOKEN, f"The list couldn't load: {error}")],
+                {},
+                f"the error entry ({error})",
+            )
+        # The lists are sorted by name, ignoring case, as deadline-cloud's own lists are.
+        entries.sort(key=lambda entry: (entry[1].casefold(), entry[0]))
+        with self._lock:
+            self._lists[key] = entries
+            self._farm_regions.update(regions)
+            if not landed:
+                self._names.update(entries)
+            self._loading.discard(key)
+        _logger.info(
+            "%s loaded the %s: %s.",
+            _MENUS_LOG,
+            _list_name(key),
+            landed or f"{len(entries)} item(s)",
+        )
+        # Only the main thread may set a parm, so the saved queue is shown from there.
+        if key != _FARMS:
+            self._run_later_on_main_thread(functools.partial(self._show_saved_queue, key))
+
+
+#: The node's menus, shared by every scheduler node in the session.
+farm_and_queue_menus: FarmAndQueueMenus = FarmAndQueueMenus()
 
 
 # -- the node's Submit button ------------------------------------------------

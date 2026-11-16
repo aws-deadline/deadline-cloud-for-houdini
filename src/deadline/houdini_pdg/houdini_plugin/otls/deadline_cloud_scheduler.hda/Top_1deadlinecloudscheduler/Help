@@ -24,6 +24,45 @@ as this version of the node does, and keeps the queue's parameters, such as its
 Conda packages, with their values. Any other spare parameter on the node is
 removed too, because it can't be told apart from an older version's tabs.
 
+== Farm and queue ==
+
+Pick the farm and queue in the __Farm__ and __Queue__ menus on the Shared
+Job Settings tab. A pick is saved to the AWS Deadline Cloud workstation
+configuration at once, so the ROP and every scheduler node use it too. After
+you pick a farm or a queue, the queue's parameters update. Picking a farm
+clears the queue, so Queue shows __<none selected>__ until you pick one. Once
+its list loads, each menu lists __<none selected>__ first, and picking it
+changes nothing. The Conda Packages and Conda Channels fields appear only for
+a queue whose queue environments define them.
+
+The menus load their lists in the background, when you select the node or
+open a menu. Until its list arrives, a menu shows the saved farm or queue and
+lists __Loading...__ under it. It shows the saved one by name, or by its ID
+when neither a list nor the node's update has read the name yet. The lists
+load only while you're logged in. If you aren't, each menu says to log in. Log in
+outside Houdini, with Deadline Cloud Monitor or by running
+`deadline auth login` in a terminal, then click __Update Queue Parameters__
+to load the lists again. A list that fails to load shows its error in the
+menu.
+
+The node has no storage profile menu, and a pick clears the default storage
+profile, as a pick in the ROP does. Set it in a Deadline Cloud ROP, or with
+`deadline config set settings.storage_profile_id <storage-profile-id>`.
+
+__Settings__ on the same tab opens the AWS Deadline Cloud workstation
+settings, which don't include the farm and queue. You can also set the farm
+and queue in a terminal, and then click __Update Queue Parameters__:
+
+{{{
+deadline config set defaults.farm_id <farm-id>
+deadline config set defaults.queue_id <queue-id>
+}}}
+
+If the farm is in another AWS Region, also run
+`deadline config set defaults.farm_region <region>` after setting the farm.
+Then click __Update Queue Parameters__, so the node shows the new farm and
+queue and refreshes the queue's parameters.
+
 == Cooking ==
 
 You can start a cook in two ways. Both run the same checks first, and a
@@ -116,28 +155,22 @@ Max Worker Count:
 Farm:
     #id: farm
     The default farm of the AWS Deadline Cloud workstation configuration.
+    Pick one to save it there. The parameter holds the farm's ID.
 
 Queue:
     #id: queue
     The default queue of the AWS Deadline Cloud workstation configuration.
-
-Login:
-    #id: login
-    Log in to AWS Deadline Cloud.
-
-Logout:
-    #id: logout
-    Log out of AWS Deadline Cloud.
+    Pick one to save it there. The parameter holds the queue's ID.
 
 Settings:
     #id: settings
-    Change the AWS Deadline Cloud workstation configuration shared by all
-    tools, including the default farm and queue.
+    Open the AWS Deadline Cloud workstation settings shared by all tools,
+    such as the AWS profile and the job attachments options.
 
 Update Queue Parameters:
     #id: update_queue_parameters
-    Show the default farm and queue again, and refresh the queue's parameters,
-    such as its Conda packages.
+    Read the default farm and queue again, and refresh the queue's parameters,
+    such as its Conda packages. It also loads the Farm and Queue menus again.
 
 Submit:
     #id: submit
