@@ -13,6 +13,7 @@ import os
 import platform
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -119,3 +120,9 @@ def scenes_dir() -> Optional[Path]:
     """The folder ``PDG_TEST_SCENES_DIR`` names, or None. A test of an external scene needs it."""
     folder: str = os.environ.get(SCENES_DIR_VARIABLE, "")
     return Path(folder).expanduser() if folder else None
+
+
+@pytest.fixture
+def test_started_at() -> datetime:
+    """The time, in UTC, as the test starts. A refusal test looks for jobs made since then."""
+    return datetime.now(timezone.utc)

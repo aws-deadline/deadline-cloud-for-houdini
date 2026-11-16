@@ -11,7 +11,8 @@ Runs inside hython, which ``run_cook`` starts::
 It starts the cook the way the TOP Cook button does, with ``cookWorkItems(block=True)``,
 which returns once the cook has ended. Then it writes ``cook_result.json``: what pytest
 needs and can only read inside hython. That is PDG's work items, the scheduler node's
-errors, the refusal lines the cook logged, and the cook's debug directory.
+errors once PDG's events are processed, the refusal lines the cook logged, and the
+cook's debug directory.
 
 The farm and queue come from the Deadline config that ``DEADLINE_CONFIG_FILE_PATH``
 names. The scene's changes to its scheduler node are not saved, and workers load the
@@ -85,6 +86,7 @@ def main(argv: Sequence[str]) -> int:
     started_at: str = _utc_now()
     start_refused: bool = _cook(cook_node)
     returned_at: str = _utc_now()
+    scheduler_errors: List[str] = read_scheduler_errors(cook_node, scheduler)
 
     # Everything the test reads after the cook, written in one file.
     debug_dir: Optional[str] = find_debug_dir(scheduler.parm("working_dir").eval())
@@ -98,7 +100,7 @@ def main(argv: Sequence[str]) -> int:
         "start_refused": start_refused,
         "debug_dir": debug_dir,
         "logged_refusals": refusal_lines.refusals,
-        "scheduler_errors": list(scheduler.errors()),
+        "scheduler_errors": scheduler_errors,
         "pdg_work_items": read_pdg_work_items(cook_node),
     }
     Path(args.result).write_text(json.dumps(result, indent=2), encoding="utf-8")
@@ -147,6 +149,17 @@ def set_scheduler_parms(scheduler: Any, *, job_name: str, debug_level: int, whee
     if wheels:
         scheduler.parm("include_adaptor_wheels").set(1)
         scheduler.parm("adaptor_wheels").set(wheels)
+
+
+def read_scheduler_errors(cook_node: Any, scheduler: Any) -> List[str]:
+    """The scheduler node's errors once the cook has ended.
+
+    PDG hands the scheduler's error to the node as an event, and hython delivers it only
+    when the graph's events are processed. A refusal at the cook's start shows no error
+    on the node until then, so the events are processed first.
+    """
+    cook_node.getPDGGraphContext().waitAllEvents()
+    return list(scheduler.errors())
 
 
 def read_pdg_work_items(cook_node: Any) -> List[Dict[str, Any]]:

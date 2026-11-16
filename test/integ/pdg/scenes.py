@@ -17,6 +17,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Set, Tuple
 
+import pytest
 import yaml
 
 #: The checked-in list of test scenes.
@@ -123,6 +124,20 @@ def load_scenes(path: Path) -> Tuple[TestScene, ...]:
         seen.add(scene.scene_id)
         scenes.append(scene)
     return tuple(scenes)
+
+
+def scene_params(kind: SceneKind, path: Path = SCENES_FILE) -> List[Any]:
+    """One pytest param per scene of this kind, by its ID. A full-set scene carries the
+    ``pdg_full`` mark, so it runs only in a full run."""
+    return [
+        pytest.param(
+            scene,
+            id=scene.scene_id,
+            marks=[pytest.mark.pdg_full] if scene.scene_set is SceneSet.FULL else [],
+        )
+        for scene in load_scenes(path)
+        if scene.kind is kind
+    ]
 
 
 def prepare_scene_file(

@@ -9,7 +9,7 @@ and the farm agrees with the cook, and with PDG, about every task.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import pytest
 
@@ -17,25 +17,11 @@ from .compare_cook_with_farm import CookFarmComparison, CookRecord, compare_cook
 from .compare_cook_with_farm import format_comparison, read_cook_record
 from .farm import FarmQueue, cancel_job_of_cook, read_farm_view
 from .run_cook import CookResult, describe_cook, run_cook
-from .scenes import SCENES_FILE, ExpectedStep, SceneKind, SceneSet, TestScene, load_scenes
-from .scenes import prepare_scene_file
-
-
-def _cook_scene_params() -> List[Any]:
-    """One pytest param per cook scene, by its ID. A full-set scene runs only in a full run."""
-    return [
-        pytest.param(
-            scene,
-            id=scene.scene_id,
-            marks=[pytest.mark.pdg_full] if scene.scene_set is SceneSet.FULL else [],
-        )
-        for scene in load_scenes(SCENES_FILE)
-        if scene.kind is SceneKind.COOK
-    ]
+from .scenes import ExpectedStep, SceneKind, TestScene, prepare_scene_file, scene_params
 
 
 @pytest.mark.pdg
-@pytest.mark.parametrize("scene", _cook_scene_params())
+@pytest.mark.parametrize("scene", scene_params(SceneKind.COOK))
 def test_scene_cooks_end_to_end(
     scene: TestScene,
     farm_queue: FarmQueue,
