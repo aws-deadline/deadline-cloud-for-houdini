@@ -78,8 +78,14 @@ Get-Command session-manager-plugin -ErrorAction Stop | Out-Null
 if (Test-Path -LiteralPath $directory) {
     throw 'License tunnel state already exists; clean up the previous session first.'
 }
-if (Get-NetTCPConnection -State Listen -LocalPort $licensePort -ErrorAction SilentlyContinue) {
-    throw 'The local SideFX license port is already in use.'
+# Allocate a separate loopback port without replacing an existing listener
+# on 1715 or stopping the process that owns it.
+$listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+try {
+    $listener.Start()
+    $localPort = $listener.LocalEndpoint.Port
+} finally {
+    $listener.Stop()
 }
 New-Item -ItemType Directory -Path $directory | Out-Null
 
@@ -103,7 +109,7 @@ region = $env:AWS_REGION
     $process = Start-Process aws -ArgumentList @(
         'ssm', 'start-session', '--target', $bastions[0],
         '--document-name', 'DccInteg-PortForwardToLicenseServer',
-        '--parameters', "portNumber=$licensePort,localPortNumber=$licensePort",
+        '--parameters', "portNumber=$licensePort,localPortNumber=$localPort",
         '--profile', 'license'
     ) -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError $errorLog -PassThru
     @{pid = $process.Id; start_ticks = $process.StartTime.ToUniversalTime().Ticks} |
@@ -115,7 +121,11 @@ region = $env:AWS_REGION
         if ($process.HasExited) { throw 'License tunnel exited before readiness.' }
         $client = New-Object System.Net.Sockets.TcpClient
         try {
-            if ($client.ConnectAsync('127.0.0.1', $licensePort).Wait(1000) -and $client.Connected) {
+            if ($client.ConnectAsync('127.0.0.1', $localPort).Wait(1000) -and $client.Connected) {
+                $env:HOUDINI_GUI_LICENSE_PORT = "$localPort"
+                if ($env:GITHUB_ENV) {
+                    "HOUDINI_GUI_LICENSE_PORT=$localPort" | Out-File $env:GITHUB_ENV -Append
+                }
                 'SideFX local license forwarder is listening; GUI license checkout is not yet verified.' |
                     Tee-Object -FilePath $status | Write-Output
                 exit 0

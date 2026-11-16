@@ -137,7 +137,7 @@ jobs:
           & "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" pipeline/install-houdini-gui-windows.py `
             --version 22.0.368 --directory "$env:RUNNER_TEMP/houdini-gui-runtime" --github-env $env:GITHUB_ENV
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Start developer license tunnel
+      - name: Start developer license tunnel on an isolated local port
         shell: pwsh
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}

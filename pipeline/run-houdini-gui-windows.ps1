@@ -33,7 +33,14 @@ $original = $match.Groups[1].Value.Trim()
 $credentials = @{}
 $testExit = 1
 try {
-    & $hserver -S 'http://127.0.0.1:1715' *> $null
+    $licensePort = 1715
+    if ($env:HOUDINI_GUI_LICENSE_PORT) {
+        if (-not [int]::TryParse($env:HOUDINI_GUI_LICENSE_PORT, [ref]$licensePort) -or
+            $licensePort -lt 1 -or $licensePort -gt 65535) {
+            throw 'The local SideFX tunnel port is invalid.'
+        }
+    }
+    & $hserver -S "http://127.0.0.1:$licensePort" *> $null
     if ($LASTEXITCODE -ne 0) { throw 'Cannot configure this runner for the SideFX tunnel.' }
     foreach ($entry in Get-ChildItem Env:) {
         if ($entry.Name -like 'AWS_*' -or $entry.Name -like 'ACTIONS_ID_TOKEN_*') {

@@ -24,6 +24,13 @@ Dependency preparation passed, but AWS credential setup failed because
 and non-GUI test cases were not executed; there are no pytest counts for
 this run. This is a configuration prerequisite, not a graphics failure.
 
+The second attempt on 2026-11-16 passed OIDC, desktop/dependency checks, installer
+SHA256 verification and installation of Houdini 22.0.368. It stopped before
+license role assumption because local port 1715 was occupied. The job did not
+record the listener's owner. Neither suite ran, and no graphics conclusion can
+be drawn. The tunnel now allocates its own local port while retaining remote
+port 1715; the launcher consumes that port and restores the original route.
+
 The first trial targets `windows-2025` and the real Houdini GUI. The existing
 `hython` integration tests do not establish desktop or graphics compatibility.
 Keep Deadline submissions on the local test-fixtures mock and run exported
@@ -33,7 +40,10 @@ bundles locally through the adaptor.
 
 `windows-license-tunnel.ps1` follows the existing DCC CI pattern: short-lived
 GitHub OIDC credentials, role chaining, and SSM forwarding through the approved
-`DccInteg-PortForwardToLicenseServer` document. SideFX uses local port 1715.
+`DccInteg-PortForwardToLicenseServer` document. SideFX uses remote port 1715.
+The hosted tunnel allocates a separate local loopback port and passes it to
+the launcher through `HOUDINI_GUI_LICENSE_PORT`, preserving any existing
+listener on local port 1715.
 It does not configure Houdini, install a license, or change the workstation's
 license-server settings.
 
