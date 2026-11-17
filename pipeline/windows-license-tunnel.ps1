@@ -106,6 +106,27 @@ region = $env:AWS_REGION
     if ($bastions.Count -ne 1 -or $bastions[0] -notmatch '^i-[0-9a-f]{8}([0-9a-f]{9})?$') {
         throw 'Expected exactly one running license bastion.'
     }
+    # Inspect routing without publishing the document's private contents.
+    # This is diagnostic only; a role without GetDocument can still forward.
+    $document = & aws ssm get-document --name DccInteg-PortForwardToLicenseServer `
+        --profile license --query Content --output text 2>$errorLog
+    $documentStatus = 'unavailable'
+    if ($LASTEXITCODE -eq 0) {
+        $documentText = $document -join "`n"
+        $documentStatus = 'unknown destination'
+        foreach ($entry in @(
+            @{pattern = 'lic-sidefx'; label = 'SideFX vendor alias'},
+            @{pattern = 'lic-sn01-02'; label = 'current primary license host'},
+            @{pattern = 'lic-sn01-01'; label = 'legacy primary license host'}
+        )) {
+            if ($documentText -match [regex]::Escape($entry.pattern)) {
+                $documentStatus = $entry.label
+                break
+            }
+        }
+    }
+    "SSM document inspection: $documentStatus" |
+        Out-File $status -Append
     $process = Start-Process aws -ArgumentList @(
         'ssm', 'start-session', '--target', $bastions[0],
         '--document-name', 'DccInteg-PortForwardToLicenseServer',
@@ -127,7 +148,7 @@ region = $env:AWS_REGION
                     "HOUDINI_GUI_LICENSE_PORT=$localPort" | Out-File $env:GITHUB_ENV -Append
                 }
                 'SideFX local license forwarder is listening; GUI license checkout is not yet verified.' |
-                    Tee-Object -FilePath $status | Write-Output
+                    Tee-Object -FilePath $status -Append | Write-Output
                 exit 0
             }
         } catch {

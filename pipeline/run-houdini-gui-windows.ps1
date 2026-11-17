@@ -41,6 +41,7 @@ try {
         }
     }
     $expectedRoute = "http://127.0.0.1:$licensePort"
+    $env:HOUDINI_GUI_LICENSE_SERVER = $expectedRoute
     & $hserver -S $expectedRoute *> $null
     if ($LASTEXITCODE -ne 0) { throw 'Cannot configure this runner for the SideFX tunnel.' }
     $configured = & $hserver -l 2>&1 | Out-String

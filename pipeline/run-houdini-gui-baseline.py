@@ -18,6 +18,49 @@ from deadline_test_fixtures.deadline_mock import (
 )
 
 
+def verify_license_endpoint(artifacts: Path, process_job_type) -> None:
+    """Test the SideFX protocol through the tunnel, not just its local socket."""
+    executable = Path(os.environ["HYTHON_EXECUTABLE"]).with_name("sesictrl.exe")
+    command = [str(executable), "ping", "--host", os.environ["HOUDINI_GUI_LICENSE_SERVER"]]
+    result = {"protocol_verified": False}
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    job = None
+    try:
+        job = process_job_type(process)
+        stdout, stderr = process.communicate(timeout=60)
+        result["exit_code"] = process.returncode
+        result["protocol_verified"] = process.returncode == 0 and "Successfully pinged" in stdout
+        if not result["protocol_verified"]:
+            output = (stdout + stderr).lower()
+            result["reason"] = next(
+                (
+                    label
+                    for signature, label in (
+                        ("connection refused", "Remote connection refused."),
+                        ("unable to connect", "SideFX service connection failed."),
+                        ("could not connect", "SideFX service connection failed."),
+                        ("timed out", "SideFX service connection timed out."),
+                        ("unauthorized", "SideFX service rejected authorization."),
+                    )
+                    if signature in output
+                ),
+                "SideFX protocol ping failed; raw output withheld.",
+            )
+            raise RuntimeError(result["reason"])
+    except subprocess.TimeoutExpired as exc:
+        result["reason"] = "SideFX protocol ping timed out after 60 seconds."
+        raise RuntimeError(result["reason"]) from exc
+    finally:
+        if job is not None:
+            job.close()
+        elif process.poll() is None:
+            process.kill()
+        process.communicate(timeout=30)
+        (artifacts / "license-endpoint.json").write_text(
+            json.dumps(result, indent=2), encoding="utf-8"
+        )
+
+
 def verify_license(artifacts: Path, process_job_type) -> None:
     """Check a real checkout without publishing license-server inventories."""
     command = [
@@ -71,6 +114,7 @@ def main() -> int:
 
     artifacts = args.artifacts.resolve()
     artifacts.mkdir(parents=True, exist_ok=True)
+    verify_license_endpoint(artifacts, WindowsProcessJob)
     verify_license(artifacts, WindowsProcessJob)
     (artifacts / "openjd-state").mkdir(exist_ok=False)
     server = MockDeadlineServerProcess(MockDeadlineScenario()).start()
