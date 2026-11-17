@@ -40,8 +40,17 @@ try {
             throw 'The local SideFX tunnel port is invalid.'
         }
     }
-    & $hserver -S "http://127.0.0.1:$licensePort" *> $null
+    $expectedRoute = "http://127.0.0.1:$licensePort"
+    & $hserver -S $expectedRoute *> $null
     if ($LASTEXITCODE -ne 0) { throw 'Cannot configure this runner for the SideFX tunnel.' }
+    $configured = & $hserver -l 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot verify the configured hserver route.' }
+    $configuredMatch = [regex]::Match($configured, 'License Server:\s+([^\r\n]+)')
+    $routeVerified = $configuredMatch.Success -and
+        $configuredMatch.Groups[1].Value.Trim() -eq $expectedRoute
+    @{loopback_port = $licensePort; route_verified = $routeVerified} |
+        ConvertTo-Json | Set-Content "$Artifacts/license-route.json"
+    if (-not $routeVerified) { throw 'hserver did not retain the requested loopback license route.' }
     foreach ($entry in Get-ChildItem Env:) {
         if ($entry.Name -like 'AWS_*' -or $entry.Name -like 'ACTIONS_ID_TOKEN_*') {
             $credentials[$entry.Name] = $entry.Value

@@ -18,6 +18,48 @@ from deadline_test_fixtures.deadline_mock import (
 )
 
 
+def verify_license(artifacts: Path, process_job_type) -> None:
+    """Check a real checkout without publishing license-server inventories."""
+    command = [
+        os.environ["HYTHON_EXECUTABLE"],
+        "-c",
+        (
+            "import hou, json; print(json.dumps(dict("
+            "version=hou.applicationVersionString(), category=hou.licenseCategory().name())))"
+        ),
+    ]
+    result = {"checkout_verified": False}
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    job = None
+    try:
+        job = process_job_type(process)
+        stdout, stderr = process.communicate(timeout=60)
+        result["exit_code"] = process.returncode
+        if process.returncode:
+            result["reason"] = (
+                "No Houdini license could be checked out."
+                if "No licenses could be found" in stderr
+                else "Houdini license preflight failed; raw output withheld."
+            )
+            raise RuntimeError(result["reason"])
+        metadata = json.loads(stdout.strip())
+        if metadata["version"] != os.environ["HOUDINI_VERSION"]:
+            raise RuntimeError("License preflight used an unexpected Houdini version.")
+        result.update(checkout_verified=True, **metadata)
+    except subprocess.TimeoutExpired as exc:
+        result["reason"] = "Houdini license checkout timed out after 60 seconds."
+        raise RuntimeError(result["reason"]) from exc
+    finally:
+        if job is not None:
+            job.close()
+        elif process.poll() is None:
+            process.kill()
+        process.communicate(timeout=30)
+        (artifacts / "license-preflight.json").write_text(
+            json.dumps(result, indent=2), encoding="utf-8"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifacts", type=Path, required=True)
@@ -29,6 +71,7 @@ def main() -> int:
 
     artifacts = args.artifacts.resolve()
     artifacts.mkdir(parents=True, exist_ok=True)
+    verify_license(artifacts, WindowsProcessJob)
     (artifacts / "openjd-state").mkdir(exist_ok=False)
     server = MockDeadlineServerProcess(MockDeadlineScenario()).start()
     try:

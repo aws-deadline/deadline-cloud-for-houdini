@@ -1,6 +1,7 @@
 # Houdini Windows GUI CI
 
-No standard GitHub Windows Houdini GUI result or GPU requirement has been established.
+The standard GitHub Windows trial has failed during licensing and GUI startup;
+the GPU requirement has not yet been established.
 The initial real-GUI export/render baseline has been exercised on an authorized
 Windows Server 2022 workstation with Houdini FX 22.0.368 and an A10G.
 
@@ -30,6 +31,44 @@ license role assumption because local port 1715 was occupied. The job did not
 record the listener's owner. Neither suite ran, and no graphics conclusion can
 be drawn. The tunnel now allocates its own local port while retaining remote
 port 1715; the launcher consumes that port and restores the original route.
+
+The next [run, 43979672955](https://github.com/aws-deadline/deadline-cloud-for-houdini/actions/runs/43979672955),
+tested source/harness `51a1190b1a72c6ff96b6a83515331ade944fa7c2` on
+Windows Server 2025 Datacenter 10.0.26100, build 26100, using `windows-2025`
+and Houdini 22.0.368. Its Linux availability job passed. OIDC, installer
+verification/installation and the local SSM listener passed; the listener used
+port 50813. The complete baseline ran: GUI 0 passed, 0 failed, 2 errors, 0 skipped;
+non-GUI 0 passed, 9 failed, 0 errors, 0 skipped. The non-GUI applications reported
+that no licenses could be found. Both GUI fixtures timed out, and their desktop
+screenshots show Houdini License Administrator 22.0.368 reporting that the
+installed driver cannot run OpenGL 3.3. The desktop was interactive and unlocked,
+with Hyper-V Video driver 10.0.26100.1150. License-route restoration and owned
+process/tunnel cleanup passed.
+
+This demonstrates a graphics startup failure in License Administrator, but does
+not establish compatibility of a licensed Houdini submitter GUI. The launcher
+now verifies the applied hserver route and performs an actual, bounded hython
+license checkout before pytest. Preflight failures retain sanitized diagnostics
+and restore the route; they must be reported as setup failures with no pytest
+counts, not as passing or skipped tests.
+
+Read-only inspection of the working workstation's existing SSH configuration
+confirmed that its SideFX forward targets `lic-sidefx:1715`. The CI document's
+destination still needs verification: `ssm:GetDocument` through the existing
+developer port-forwarding role was denied. Do not change the document, role,
+server configuration or entitlements without authorization.
+
+For a subsequent isolated software-graphics trial, Mesa documents
+[LLVMpipe on Windows](https://docs.mesa3d.org/drivers/llvmpipe.html): an
+application-local `opengl32.dll` and `libgallium_wgl.dll` can provide software
+OpenGL without replacing the system graphics driver. That trial still requires
+a pinned, verified build and an actual licensed Houdini GUI run, including
+viewport capture and the complete baseline. It has not been executed.
+The current [SideFX Houdini 22 requirements](https://www.sidefx.com/Support/system-requirements/)
+require GL 4.0 and say lower than GL 3.3 will not run; they do not support Windows
+Server. The current environment-variable reference does not document
+`HOUDINI_OGL_SOFTWARE` as a supported fallback. Neither those requirements nor
+an independent OpenGL probe should substitute for the requested GUI trial.
 
 The first trial targets `windows-2025` and the real Houdini GUI. The existing
 `hython` integration tests do not establish desktop or graphics compatibility.

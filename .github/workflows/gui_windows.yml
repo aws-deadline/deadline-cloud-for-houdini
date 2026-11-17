@@ -144,7 +144,7 @@ jobs:
           LICENSE_ROLE_ARN: ${{ secrets.LICENSE_ROLE_ARN }}
           BASTION_INSTANCE_TAG: ${{ secrets.BASTION_INSTANCE_TAG }}
         run: ./pipeline/windows-license-tunnel.ps1
-      - name: Run real GUI and local non-GUI baseline
+      - name: Verify license checkout and run real GUI and local non-GUI baseline
         shell: pwsh
         run: |
           ./pipeline/run-houdini-gui-windows.ps1 `
