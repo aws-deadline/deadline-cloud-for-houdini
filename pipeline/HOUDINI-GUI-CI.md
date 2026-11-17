@@ -53,10 +53,22 @@ and restore the route; they must be reported as setup failures with no pytest
 counts, not as passing or skipped tests.
 
 Read-only inspection of the working workstation's existing SSH configuration
-confirmed that its SideFX forward targets `lic-sidefx:1715`. The CI document's
+confirmed that its port 1715 forward targets the dedicated SideFX host. The CI document's
 destination still needs verification: `ssm:GetDocument` through the existing
 developer port-forwarding role was denied. Do not change the document, role,
 server configuration or entitlements without authorization.
+
+The diagnostic [run 43987277250](https://github.com/aws-deadline/deadline-cloud-for-houdini/actions/runs/43987277250)
+on 2026-11-17 tested source/harness
+`3092ae2b9809d6f420bd2253f91e739e7b5e2ebc` with the same OS, Houdini build
+and runner label. OIDC, installation, unlocked desktop and SSM listener checks
+passed. `license-route.json` confirms hserver retained the requested loopback
+route on port 50263. `license-preflight.json` records actual hython exit code 3
+and no successful license checkout. Setup failed before pytest: zero GUI or
+non-GUI test cases executed, with no pytest pass/fail/error/skip results. Original
+route restoration and owned tunnel cleanup passed. Further baseline execution
+is blocked on a usable SideFX license through this CI path; verifying or fixing
+the remote document target and server entitlements requires the licensing owner.
 
 For a subsequent isolated software-graphics trial, Mesa documents
 [LLVMpipe on Windows](https://docs.mesa3d.org/drivers/llvmpipe.html): an

@@ -68,7 +68,7 @@ try {
     if ($GuiOnly) { $selection += '--gui-only' }
     & $Python pipeline/run-houdini-gui-baseline.py --artifacts $Artifacts @selection *> "$Artifacts/pytest.log"
     $testExit = $LASTEXITCODE
-    "pytest_exit=$testExit" | Set-Content "$Artifacts/exit.txt"
+    "baseline_exit=$testExit" | Set-Content "$Artifacts/exit.txt"
     Get-Content "$Artifacts/pytest.log"
 } finally {
     $ErrorActionPreference = 'Stop'
