@@ -31,6 +31,24 @@ function Write-TunnelFailureCategory {
 function Stop-OwnedTunnel {
     $terminationFailed = $false
     try {
+        # Preserve only known transport diagnostics before deleting private
+        # session output. Session IDs, credentials and license data stay private.
+        $text = (Get-Content -LiteralPath $log, $errorLog -Raw -ErrorAction SilentlyContinue) -join "`n"
+        $diagnostics = @{}
+        foreach ($signature in @(
+            'Connection to destination port failed',
+            'Connection refused', 'Failed to connect', 'Waiting for connections',
+            'Connection accepted', 'AccessDenied', 'ExpiredToken',
+            'TargetNotConnected', 'InvalidDocument', 'Session timed out'
+        )) {
+            $diagnostics[$signature] = [regex]::Matches(
+                $text, [regex]::Escape($signature), 'IgnoreCase'
+            ).Count
+        }
+        $artifactDirectory = Join-Path $env:RUNNER_TEMP 'houdini-gui-artifacts'
+        New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
+        $diagnostics | ConvertTo-Json |
+            Set-Content (Join-Path $artifactDirectory 'ssm-transport-summary.json')
         if (Test-Path -LiteralPath $log) {
             $match = [regex]::Match(
                 (Get-Content -LiteralPath $log -Raw),

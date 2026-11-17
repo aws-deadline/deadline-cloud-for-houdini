@@ -87,7 +87,8 @@ jobs:
           Copy-Item test/houdini_submitter_ui "$harness/test/" -Recurse
           foreach ($file in 'check-windows-gui-desktop.ps1', 'windows-license-tunnel.ps1',
             'install-houdini-gui-windows.py', 'prepare-houdini-gui-dependencies.py',
-            'run-houdini-gui-windows.ps1', 'run-houdini-gui-baseline.py') {
+            'run-houdini-gui-windows.ps1', 'run-houdini-gui-baseline.py',
+            'diagnose-sidefx-tunnel.py') {
             Copy-Item "pipeline/$file" "$harness/pipeline/"
           }
           Copy-Item requirements-gui-testing.txt $harness
@@ -144,6 +145,11 @@ jobs:
           LICENSE_ROLE_ARN: ${{ secrets.LICENSE_ROLE_ARN }}
           BASTION_INSTANCE_TAG: ${{ secrets.BASTION_INSTANCE_TAG }}
         run: ./pipeline/windows-license-tunnel.ps1
+      - name: Diagnose SideFX HTTP transport and protocol before checkout
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" pipeline/diagnose-sidefx-tunnel.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify SideFX service, license checkout and real GUI baseline
         shell: pwsh
         run: |
