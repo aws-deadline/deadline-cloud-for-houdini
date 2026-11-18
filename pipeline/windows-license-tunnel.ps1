@@ -29,6 +29,7 @@ function Write-TunnelFailureCategory {
 }
 
 function Stop-OwnedTunnel {
+    if (-not (Test-Path -LiteralPath $directory)) { return }
     $terminationFailed = $false
     try {
         # Preserve only known transport diagnostics before deleting private

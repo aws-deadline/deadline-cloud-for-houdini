@@ -171,24 +171,36 @@ jobs:
           & "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" pipeline/install-houdini-gui-windows.py `
             --version 22.0.368 --directory "$env:RUNNER_TEMP/houdini-gui-runtime" --github-env $env:GITHUB_ENV
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Start developer license tunnel on an isolated local port
+      - name: Keep developer license tunnel alive through the real GUI baseline
         shell: pwsh
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           LICENSE_ROLE_ARN: ${{ secrets.LICENSE_ROLE_ARN }}
           BASTION_INSTANCE_TAG: ${{ secrets.BASTION_INSTANCE_TAG }}
-        run: ./pipeline/windows-license-tunnel.ps1
-      - name: Diagnose SideFX HTTP transport and protocol before checkout
-        shell: pwsh
         run: |
-          & "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" pipeline/diagnose-sidefx-tunnel.py
+          # Keep the launcher and its tunnel children in the same step as
+          # their consumers, following the working C4D lifecycle.
+          ./pipeline/windows-license-tunnel.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Verify SideFX service, license checkout and real GUI baseline
-        shell: pwsh
-        run: |
-          ./pipeline/run-houdini-gui-windows.ps1 `
-            -Python "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" `
-            -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts"
+          $testExit = 1
+          try {
+            $owned = Get-Content "$env:RUNNER_TEMP/houdini-windows-license/process.json" -Raw | ConvertFrom-Json
+            $process = Get-Process -Id $owned.pid -ErrorAction SilentlyContinue
+            @{
+              owned_process_alive = [bool]$process
+              owned_start_matches = [bool]($process -and $process.StartTime.ToUniversalTime().Ticks -eq $owned.start_ticks)
+              session_manager_plugin_version = (& session-manager-plugin --version | Out-String).Trim()
+            } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/houdini-gui-artifacts/ssm-process-before-tests.json"
+            & "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" pipeline/diagnose-sidefx-tunnel.py
+            if ($LASTEXITCODE -ne 0) { throw 'SideFX transport diagnostic failed.' }
+            ./pipeline/run-houdini-gui-windows.ps1 `
+              -Python "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" `
+              -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts"
+            $testExit = $LASTEXITCODE
+          } finally {
+            ./pipeline/windows-license-tunnel.ps1 -Cleanup
+          }
+          exit $testExit
       - name: Restore runner license route
         if: always()
         shell: pwsh
