@@ -41,6 +41,14 @@ def open_submitter():
         }
         # Record graphics from the actual licensed GUI, not a separate probe.
         startup["graphics_mode"] = os.environ.get("HOUDINI_GUI_GRAPHICS_MODE", "native")
+        shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+        shell32.IsUserAnAdmin.argtypes = []
+        shell32.IsUserAnAdmin.restype = ctypes.c_int
+        startup["administrator_token"] = bool(shell32.IsUserAnAdmin())
+        startup["vulkan_environment"] = {
+            name: os.environ.get(name)
+            for name in ("VK_DRIVER_FILES", "VK_ICD_FILENAMES", "VK_LOADER_DEBUG")
+        }
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
         kernel32.GetModuleHandleW.restype = ctypes.c_void_p

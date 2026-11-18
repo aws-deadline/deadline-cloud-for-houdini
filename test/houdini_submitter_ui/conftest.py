@@ -83,6 +83,7 @@ def gui_session(mock_server, tmp_path):
         HOUDINI_USER_PREF_DIR=str(tmp_path / "prefs-__HVER__"),
         HOUDINI_NO_ENV_FILE="1",
         HOUDINI_NO_SPLASH="1",
+        HOUDINI_NO_START_PAGE_SPLASH="1",
         HOUDINI_GUI_REPO=str(REPO),
         HOUDINI_GUI_DEPENDENCIES=str(dependencies),
         HOUDINI_GUI_OUTPUT=str(tmp_path / "scene"),

@@ -40,7 +40,7 @@ if (-not (Test-Path $icd) -or -not (Test-Path "$directory/x64/vulkan_lvp.dll")) 
 }
 foreach ($entry in @('GALLIUM_DRIVER=llvmpipe', 'LIBGL_ALWAYS_SOFTWARE=true',
     'HOUDINI_GUI_GRAPHICS_MODE=mesa-software', "VK_DRIVER_FILES=$icd",
-    "VK_ICD_FILENAMES=$icd", "HOUDINI_GUI_VULKAN_ICD=$icd",
+    "VK_ICD_FILENAMES=$icd", 'VK_LOADER_DEBUG=all', "HOUDINI_GUI_VULKAN_ICD=$icd",
     "PATH=$directory/x64;$env:PATH")) {
     $name, $value = $entry.Split('=', 2)
     [Environment]::SetEnvironmentVariable($name, $value, 'Process')
