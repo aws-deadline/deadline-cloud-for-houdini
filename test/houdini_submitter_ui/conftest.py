@@ -18,7 +18,7 @@ from deadline_test_fixtures.xa11y import find_accessibility_app
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _windows_process import WindowsProcessJob  # noqa: E402
-from _unelevated_process import UnelevatedWindowsProcess  # noqa: E402
+from _unelevated_process import UnelevatedWindowsProcess, allow_test_directory  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -41,6 +41,7 @@ def mock_server():
 def gui_session(mock_server, tmp_path):
     if sys.platform != "win32":
         pytest.fail("This GUI baseline requires Windows.")
+    allow_test_directory(tmp_path)
     exe = Path(os.environ["HOUDINI_EXECUTABLE"])
     dependencies = Path(os.environ["HOUDINI_GUI_DEPENDENCIES"])
     assert exe.is_file(), exe

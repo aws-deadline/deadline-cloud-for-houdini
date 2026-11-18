@@ -56,8 +56,26 @@ function Stop-OwnedTunnel {
                 'SessionId:\s*([A-Za-z0-9._-]+)'
             )
             if ($match.Success) {
-                & aws ssm terminate-session --session-id $match.Groups[1].Value --profile license *> $null
+                $terminationLog = Join-Path $directory 'termination.private.log'
+                & aws ssm terminate-session --session-id $match.Groups[1].Value --profile license *> $terminationLog
                 $terminationFailed = $LASTEXITCODE -ne 0
+                $terminationCategory = if ($terminationFailed) { 'Unclassified' } else { 'Success' }
+                $terminationText = Get-Content -LiteralPath $terminationLog -Raw
+                foreach ($category in 'AccessDenied', 'ExpiredToken', 'InvalidSessionId',
+                    'SessionDoesNotExist', 'Unable to locate credentials') {
+                    if ($terminationText -match [regex]::Escape($category)) {
+                        $terminationCategory = $category
+                        break
+                    }
+                }
+                # Capture only the error category; IDs and private AWS output
+                # stay outside the uploaded artifact directory.
+                @{
+                    attempted = $true
+                    succeeded = -not $terminationFailed
+                    category = $terminationCategory
+                } | ConvertTo-Json |
+                    Set-Content (Join-Path $artifactDirectory 'ssm-cleanup-summary.json')
             }
         }
     } finally {

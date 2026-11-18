@@ -1,7 +1,11 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #
-# Isolated LLVMpipe and Lavapipe trial, following Mesa's Windows deployment docs.
+# Isolated LLVMpipe and CPU Vulkan trial, following Mesa's Windows deployment docs.
 # Never install an ICD, edit the registry, or replace system graphics DLLs.
+param(
+    [ValidateSet('lavapipe', 'dozen-warp')]
+    [string]$VulkanDriver = 'dozen-warp'
+)
 $ErrorActionPreference = 'Stop'
 if (-not $env:RUNNER_TEMP -or -not $env:HOUDINI_EXECUTABLE) {
     throw 'A temporary runner and an isolated Houdini installation are required.'
@@ -34,13 +38,16 @@ foreach ($name in 'opengl32.dll', 'libgallium_wgl.dll') {
 }
 # DLL redirection is local to this temporary executable and its directory.
 New-Item -ItemType File -Path "$runtime.local" | Out-Null
-$icd = Join-Path "$directory/x64" 'lvp_icd.x86_64.json'
-if (-not (Test-Path $icd) -or -not (Test-Path "$directory/x64/vulkan_lvp.dll")) {
+$manifest = if ($VulkanDriver -eq 'lavapipe') { 'lvp_icd.x86_64.json' } else { 'dzn_icd.x86_64.json' }
+$driverDll = if ($VulkanDriver -eq 'lavapipe') { 'vulkan_lvp.dll' } else { 'vulkan_dzn.dll' }
+$icd = Join-Path "$directory/x64" $manifest
+if (-not (Test-Path $icd) -or -not (Test-Path "$directory/x64/$driverDll")) {
     throw 'The verified software graphics package lacks its Vulkan CPU driver.'
 }
 foreach ($entry in @('GALLIUM_DRIVER=llvmpipe', 'LIBGL_ALWAYS_SOFTWARE=true',
     'HOUDINI_GUI_GRAPHICS_MODE=mesa-software', "VK_DRIVER_FILES=$icd",
     "VK_ICD_FILENAMES=$icd", 'VK_LOADER_DEBUG=all', "HOUDINI_GUI_VULKAN_ICD=$icd",
+    "HOUDINI_GUI_VULKAN_DRIVER=$driverDll", 'DZN_DEBUG=warp',
     "PATH=$directory/x64;$env:PATH")) {
     $name, $value = $entry.Split('=', 2)
     [Environment]::SetEnvironmentVariable($name, $value, 'Process')
@@ -52,5 +59,5 @@ foreach ($entry in @('GALLIUM_DRIVER=llvmpipe', 'LIBGL_ALWAYS_SOFTWARE=true',
     archive_sha256 = $checksum
     deployment = 'application-local'
     opengl_driver = 'llvmpipe'
-    vulkan_driver = 'lavapipe'
+    vulkan_driver = $VulkanDriver
 } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/houdini-gui-artifacts/software-graphics.json"

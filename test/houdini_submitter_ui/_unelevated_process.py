@@ -13,6 +13,37 @@ import os
 import subprocess
 
 
+def allow_test_directory(directory):
+    """Grant this same user's medium token access only to its test scratch tree."""
+    from pathlib import Path
+
+    import win32api
+    import win32con
+    import win32security
+
+    directory = Path(directory).resolve()
+    root = Path(os.environ["RUNNER_TEMP"]).resolve()
+    if directory == root or not directory.is_relative_to(root):
+        raise RuntimeError("Only an isolated directory under RUNNER_TEMP may be prepared.")
+    token = win32security.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)
+    try:
+        sid = win32security.ConvertSidToStringSid(
+            win32security.GetTokenInformation(token, win32security.TokenUser)[0]
+        )
+    finally:
+        token.Close()
+    # Administrator-only inherited ACLs cannot authorize a deny-only admin SID.
+    # Add Modify for the SAME user, never Users/Everyone, and label only this
+    # disposable test tree medium. No system directories or profiles are edited.
+    for options in (
+        ["/grant", f"*{sid}:(OI)(CI)M", "/T"],
+        ["/setintegritylevel", "(OI)(CI)M", "/T"],
+    ):
+        subprocess.run(
+            ["icacls", str(directory), *options], capture_output=True, text=True, check=True
+        )
+
+
 class UnelevatedWindowsProcess:
     """The small Popen interface needed by the GUI fixture and its Job Object."""
 
@@ -124,19 +155,24 @@ if __name__ == "__main__":
     from _windows_process import WindowsProcessJob
 
     output = Path(os.environ["RUNNER_TEMP"]) / "houdini-gui-artifacts/launcher-check.log"
+    scratch = output.parent / "launcher-work"
+    scratch.mkdir()
+    allow_test_directory(scratch)
     # This verifies only child launch/privileges. GUI compatibility is proved
     # later by the actual Houdini viewport and submitter integration tests.
     command = (
-        "import ctypes,json; "
+        "import ctypes,json,os,pathlib; "
         "admin=bool(ctypes.windll.shell32.IsUserAnAdmin()); "
         "print(json.dumps({'administrator_token':admin})); "
-        "assert not admin, 'Child must not retain administrator membership'"
+        "assert not admin, 'Child must not retain administrator membership'; "
+        "pathlib.Path(os.environ['LAUNCHER_WRITE_CHECK']).write_text('medium token write passed')"
     )
+    probe_environment = dict(os.environ, LAUNCHER_WRITE_CHECK=str(scratch / "write-check.txt"))
     with output.open("w", encoding="utf-8") as log:
         child = UnelevatedWindowsProcess(
             [sys.executable, "-c", command],
-            cwd=output.parent,
-            env=os.environ,
+            cwd=scratch,
+            env=probe_environment,
             stdout=log,
             stderr=log,
         )

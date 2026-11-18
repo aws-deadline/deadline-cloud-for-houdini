@@ -47,7 +47,7 @@ def open_submitter():
         startup["administrator_token"] = bool(shell32.IsUserAnAdmin())
         startup["vulkan_environment"] = {
             name: os.environ.get(name)
-            for name in ("VK_DRIVER_FILES", "VK_ICD_FILENAMES", "VK_LOADER_DEBUG")
+            for name in ("VK_DRIVER_FILES", "VK_ICD_FILENAMES", "VK_LOADER_DEBUG", "DZN_DEBUG")
         }
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
@@ -55,7 +55,13 @@ def open_submitter():
         kernel32.GetModuleFileNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint]
         kernel32.GetModuleFileNameW.restype = ctypes.c_uint
         graphics_modules = {}
-        for name in ("opengl32.dll", "libgallium_wgl.dll", "vulkan-1.dll", "vulkan_lvp.dll"):
+        for name in (
+            "opengl32.dll",
+            "libgallium_wgl.dll",
+            "vulkan-1.dll",
+            "vulkan_lvp.dll",
+            "vulkan_dzn.dll",
+        ):
             module = kernel32.GetModuleHandleW(name)
             if module:
                 filename = ctypes.create_unicode_buffer(32768)
@@ -73,10 +79,8 @@ def open_submitter():
                     "The actual Houdini GUI did not load the application-local Mesa DLLs."
                 )
             icd_dir = Path(os.environ["HOUDINI_GUI_VULKAN_ICD"]).parent
-            if (
-                "vulkan_lvp.dll" not in graphics_modules
-                or Path(graphics_modules["vulkan_lvp.dll"]).parent != icd_dir
-            ):
+            driver = os.environ["HOUDINI_GUI_VULKAN_DRIVER"]
+            if driver not in graphics_modules or Path(graphics_modules[driver]).parent != icd_dir:
                 raise RuntimeError(
                     "The actual Houdini GUI did not load the isolated Vulkan CPU driver."
                 )
