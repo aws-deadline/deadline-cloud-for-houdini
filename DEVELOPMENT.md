@@ -48,7 +48,7 @@ This workflow creates a "houdini package", a JSON file which tells Houdini where
    git fetch --tags
    ```
 
-2. Create a Houdini package using the provided script, specifying the full houdini version:
+2. Create a Houdini package using the provided script, specifying the full houdini version. The package also registers the experimental PDG scheduler:
 
    ```sh
    hatch run install --houdini-version X.Y

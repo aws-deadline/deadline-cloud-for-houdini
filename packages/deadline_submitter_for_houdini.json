@@ -7,5 +7,6 @@
             "PYTHONPATH": "$DEADLINE_CLOUD_FOR_HOUDINI/python"
         }
     ],
-    "hpath": "$DEADLINE_CLOUD_FOR_HOUDINI"
+    "hpath": "$DEADLINE_CLOUD_FOR_HOUDINI",
+    "package_path": "INSTALL_DIR_PLACEHOLDER/deadline_package/pdg_scheduler"
 }

@@ -276,7 +276,7 @@ class HoudiniPdgHost:
 
     def houdini_version(self) -> str:
         """The running Houdini's version, computed as the ROP computes it."""
-        from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
+        from deadline_cloud_for_houdini.submitter import (
             _get_houdini_version,
         )
 
@@ -284,7 +284,7 @@ class HoudiniPdgHost:
 
     def queue_parameter_values(self) -> List[Dict[str, Any]]:
         """The scheduler node's queue parameter values, read as the ROP reads them."""
-        from deadline.houdini_submitter.python.deadline_cloud_for_houdini.queue_parameters import (
+        from deadline_cloud_for_houdini.queue_parameters import (
             get_queue_parameter_values_as_openjd,
         )
 
@@ -916,7 +916,7 @@ def read_listed_inputs(node: Any) -> List[Tuple[str, str]]:
     ``CookSetupError`` naming the parm of a path that doesn't exist, or that is a
     drive or home directory. Call it on the main thread.
     """
-    from deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets import (
+    from deadline_cloud_for_houdini._assets import (
         _houdini_time_vars_to_glob,
     )
 
@@ -981,7 +981,7 @@ def _scan_scene_assets(node: Any) -> Dict[str, Set[str]]:
     `` `@pdg_input` ``, is left out, because the step that writes it delivers it.
     """
     try:
-        from deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets import (
+        from deadline_cloud_for_houdini._assets import (
             _IGNORE_REF_VALUES,
             _get_scene_asset_references,
             _houdini_time_vars_to_glob,
@@ -1292,7 +1292,7 @@ _QUEUE_PARAMETERS_TAB: str = "Shared Job Settings"
 
 def _find_queue_folders(node: Any) -> List[Any]:
     """The ROP's queue parameter folders in the tab, which are the ones holding its prefixed fields."""
-    from deadline.houdini_submitter.python.deadline_cloud_for_houdini.queue_parameters import (
+    from deadline_cloud_for_houdini.queue_parameters import (
         _QUEUE_ENVIRONMENT_NAME_PREFIX,
     )
 
@@ -1423,7 +1423,7 @@ class FarmAndQueueMenus:
         ``current`` is the parm's value. Until the list loads, the menu lists that value first,
         so Houdini shows its label without drawing the menu again when the list arrives.
         """
-        from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
+        from deadline_cloud_for_houdini.submitter import (
             _NONE_SELECTED_TEXT,
         )
 
@@ -1536,7 +1536,7 @@ class FarmAndQueueMenus:
         Call it right after the ROP's update, which writes the names. Each name is kept for
         its ID, so a menu still names the saved farm or queue before its list loads.
         """
-        from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
+        from deadline_cloud_for_houdini.submitter import (
             _NONE_SELECTED_TEXT,
             _REFRESHING_TEXT,
         )
