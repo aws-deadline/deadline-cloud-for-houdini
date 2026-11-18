@@ -228,10 +228,16 @@ def install_submitter_package(
         [
             str(_get_submitter_src_path() / "python"),
             *[str(dep.resolve() / "src") for dep in local_deps],
+            str(get_git_root() / "src"),
             str(plugin_env_path),
         ]
     )
     submitter_package["env"].append({"PYTHONPATH": python_path})
+    # Add the PDG scheduler's registration module and HDA to hpath, as an install does.
+    submitter_package["hpath"] = [
+        SUBMITTER_PACKAGE_TEMPLATE["hpath"],
+        str(get_git_root() / "src" / "deadline" / "houdini_pdg" / "houdini_plugin"),
+    ]
 
     user_prefs_path = _get_houdini_user_prefs_path(major_minor)
     packages_path = user_prefs_path / "packages"

@@ -131,6 +131,7 @@ addopts = [
     "--numprocesses=auto"
 ]
 testpaths = [ "test" ]
+pythonpath = [ "src/deadline/houdini_submitter/python" ]
 looponfailroots = [
     "src",
     "test",

@@ -32,7 +32,13 @@ from typing import Set, Tuple
 
 from deadline.houdini_pdg.graph import PDG_DIR_TOKEN
 from deadline.houdini_pdg.ports import OutputFile
-from deadline.houdini_pdg.submitter import get_workstation_setting
+
+# The PDG code imports the ROP submitter by its installed name, from this folder.
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[3] / "src/deadline/houdini_submitter/python")
+)
+
+from deadline.houdini_pdg.submitter import get_workstation_setting  # noqa: E402
 
 from .farm import FarmQueue, FarmStep, FarmTask, FarmView, read_farm_view
 

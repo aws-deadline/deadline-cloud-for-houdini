@@ -19,6 +19,29 @@
             </distributionFileList>
         </folder>
         <folder>
+            <description>PDG Scheduler Plugin</description>
+            <destination>${houdini_installdir}/pdg_scheduler</destination>
+            <name>houdinipdgplugin</name>
+            <platforms>all</platforms>
+            <distributionFileList>
+                <distributionDirectory allowWildcards="1">
+                    <origin>../src/deadline/houdini_pdg/houdini_plugin/*</origin>
+                </distributionDirectory>
+            </distributionFileList>
+        </folder>
+        <folder>
+            <description>PDG Scheduler Python Package</description>
+            <destination>${houdini_installdir}/python/deadline/houdini_pdg</destination>
+            <name>houdinipdgpython</name>
+            <platforms>all</platforms>
+            <distributionFileList>
+                <distributionDirectory allowWildcards="1">
+                    <origin>../src/deadline/houdini_pdg/*</origin>
+                    <excludeFiles>*/houdini_plugin;*/houdini_plugin/*</excludeFiles>
+                </distributionDirectory>
+            </distributionFileList>
+        </folder>
+        <folder>
             <description>Package</description>
             <destination>${houdini_packagedir}/</destination>
             <name>houdinipackage</name>
@@ -30,8 +53,9 @@
             </distributionFileList>
             <actionList>
                 <setInstallerVariable name="deadline_package_file_name" value="deadline_submitter_for_houdini.json"/>
+                <setInstallerVariable name="deadline_pdg_package_file_name" value="deadline_cloud_pdg_scheduler.json"/>
                 <substitute>
-                    <files>${houdini_packagedir}/${deadline_package_file_name}</files>
+                    <files>${houdini_packagedir}/${deadline_package_file_name};${houdini_packagedir}/pdg_scheduler/${deadline_pdg_package_file_name}</files>
                     <type>exact</type>
                     <encoding>utf-8</encoding>
                     <substitutionList>
@@ -530,6 +554,7 @@
             <value>Deadline Cloud for Houdini 19.5-22.0
 - Compatible with Houdini 19.5-22.0
 - Install the integrated Houdini submitter files to the installation directory.
+- Install the Deadline Cloud PDG scheduler (experimental, off until you turn it on).
 - Copy the plug-in package file to the Houdini packages directory for each version.
 - Register the plug-in package file with Houdini by setting HOUDINI_PACKAGE_DIR on Windows.</value>
         </stringParameter>

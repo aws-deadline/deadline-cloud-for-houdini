@@ -468,7 +468,7 @@ def test_the_rops_queue_update_after_the_rebuild_keeps_the_menus_and_can_set_the
     scene: FakeHou,
 ) -> None:
     """The ROP's update sets Farm and Queue and rewrites the layout, and must keep the menus."""
-    from deadline.houdini_submitter.python.deadline_cloud_for_houdini.queue_parameters import (
+    from deadline_cloud_for_houdini.queue_parameters import (
         remove_queue_parameters_from_node,
     )
 

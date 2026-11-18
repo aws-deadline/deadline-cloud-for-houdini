@@ -26,7 +26,12 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from deadline.client import api
 
-from deadline.houdini_pdg.submitter import get_workstation_setting
+# The PDG code imports the ROP submitter by its installed name, from this folder.
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[1] / "src/deadline/houdini_submitter/python")
+)
+
+from deadline.houdini_pdg.submitter import get_workstation_setting  # noqa: E402
 
 # The variables naming the farm and queue the tests submit to.
 _FARM_ID_VARIABLE: str = "PDG_INTEG_FARM_ID"
