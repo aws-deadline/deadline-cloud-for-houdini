@@ -157,6 +157,11 @@ jobs:
           & $python pipeline/prepare-houdini-gui-dependencies.py --directory "$env:RUNNER_TEMP/houdini-gui-dcc-deps"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "HOUDINI_GUI_DEPENDENCIES=$env:RUNNER_TEMP/houdini-gui-dcc-deps" | Out-File $env:GITHUB_ENV -Append
+      - name: Verify the GUI launcher drops administrator elevation
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" test/houdini_submitter_ui/_unelevated_process.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}

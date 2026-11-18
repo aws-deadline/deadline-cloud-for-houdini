@@ -92,7 +92,9 @@ class WindowsProcessJob:
             ):
                 raise _last_windows_error()
             # Popen owns this handle for the lifetime of the process object.
-            if not kernel32.AssignProcessToJobObject(self._handle, getattr(process, "_handle")):
+            if not kernel32.AssignProcessToJobObject(
+                self._handle, int(getattr(process, "_handle"))
+            ):
                 raise _last_windows_error()
         except BaseException:
             self.close()

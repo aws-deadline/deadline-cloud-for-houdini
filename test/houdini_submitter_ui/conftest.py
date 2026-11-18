@@ -3,7 +3,6 @@
 
 import json
 import os
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -19,6 +18,7 @@ from deadline_test_fixtures.xa11y import find_accessibility_app
 
 sys.path.insert(0, str(Path(__file__).parent))
 from _windows_process import WindowsProcessJob  # noqa: E402
+from _unelevated_process import UnelevatedWindowsProcess  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -97,11 +97,14 @@ def gui_session(mock_server, tmp_path):
     env.pop("PYTHONPATH", None)
     stdout = (tmp_path / "native.stdout.log").open("w", encoding="utf-8")
     stderr = (tmp_path / "native.stderr.log").open("w", encoding="utf-8")
-    process = subprocess.Popen([str(exe)], cwd=tmp_path, env=env, stdout=stdout, stderr=stderr)
+    process = UnelevatedWindowsProcess(
+        [str(exe)], cwd=tmp_path, env=env, stdout=stdout, stderr=stderr
+    )
     job = None
     app = None
     try:
         job = WindowsProcessJob(process)
+        process.resume()
         deadline = time.monotonic() + 180
         status = tmp_path / "startup.json"
         while not status.is_file():
@@ -114,6 +117,7 @@ def gui_session(mock_server, tmp_path):
         assert startup["houdini_version"] == "22.0.368", startup
         assert startup["ui_available"] and startup["main_window_visible"], startup
         assert startup["scene_viewer"] and startup["viewport"], startup
+        assert not startup["administrator_token"], startup
         from PIL import Image
 
         with Image.open(startup["viewport_capture"]) as viewport:
