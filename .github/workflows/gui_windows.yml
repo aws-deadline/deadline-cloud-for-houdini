@@ -37,6 +37,39 @@ permissions:
   contents: read
 
 jobs:
+  LinuxLicenseTransport:
+    name: Linux SideFX SSM HTTP diagnostic (no GUI or checkout)
+    if: >-
+      github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
+      github.ref == 'refs/heads/fix-publish-python-version'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Inspect custom-document HTTP forwarding and owned cleanup
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          LICENSE_ROLE_ARN: ${{ secrets.LICENSE_ROLE_ARN }}
+          BASTION_INSTANCE_TAG: ${{ secrets.BASTION_INSTANCE_TAG }}
+        run: |
+          session-manager-plugin --version
+          python pipeline/diagnose-ssm-http.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: houdini-linux-license-transport-${{ github.run_id }}
+          path: ${{ runner.temp }}/houdini-license-transport/
+          if-no-files-found: warn
   LinuxRunner:
     name: Standard Linux runner availability (no Houdini tests)
     if: >-
