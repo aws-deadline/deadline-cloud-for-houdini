@@ -1,6 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 """Real Houdini GUI startup hook for the isolated mock-backed test session."""
 
+import ctypes
 import json
 import os
 import runpy
@@ -38,6 +39,39 @@ def open_submitter():
             "scene_viewer": viewer is not None,
             "viewport": viewer.curViewport().name() if viewer else None,
         }
+        # Record graphics from the actual licensed GUI, not a separate probe.
+        startup["graphics_mode"] = os.environ.get("HOUDINI_GUI_GRAPHICS_MODE", "native")
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+        kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+        kernel32.GetModuleFileNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint]
+        kernel32.GetModuleFileNameW.restype = ctypes.c_uint
+        graphics_modules = {}
+        for name in ("opengl32.dll", "libgallium_wgl.dll", "vulkan-1.dll", "vulkan_lvp.dll"):
+            module = kernel32.GetModuleHandleW(name)
+            if module:
+                filename = ctypes.create_unicode_buffer(32768)
+                if not kernel32.GetModuleFileNameW(module, filename, len(filename)):
+                    raise ctypes.WinError(ctypes.get_last_error())
+                graphics_modules[name] = filename.value
+        startup["graphics_modules"] = graphics_modules
+        if startup["graphics_mode"] == "mesa-software":
+            bin_dir = Path(os.environ["HOUDINI_EXECUTABLE"]).parent
+            if not all(
+                name in graphics_modules and Path(graphics_modules[name]).parent == bin_dir
+                for name in ("opengl32.dll", "libgallium_wgl.dll")
+            ):
+                raise RuntimeError(
+                    "The actual Houdini GUI did not load the application-local Mesa DLLs."
+                )
+            icd_dir = Path(os.environ["HOUDINI_GUI_VULKAN_ICD"]).parent
+            if (
+                "vulkan_lvp.dll" not in graphics_modules
+                or Path(graphics_modules["vulkan_lvp.dll"]).parent != icd_dir
+            ):
+                raise RuntimeError(
+                    "The actual Houdini GUI did not load the isolated Vulkan CPU driver."
+                )
         # The mock uses root-level operation paths. Match the existing Nuke
         # test-local endpoint adaptation; do not alter installed client code.
         import botocore.awsrequest

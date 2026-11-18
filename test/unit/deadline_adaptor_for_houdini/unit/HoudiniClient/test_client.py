@@ -49,6 +49,29 @@ class TestHoudiniClient:
         )
         mock_poll.assert_not_called()
 
+    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.os.name", "nt")
+    @patch.dict(
+        os.environ, {"HOUDINI_ADAPTOR_SERVER_PATH": "\\\\.\\pipe\\AdaptorServerNamedPipe_123"}
+    )
+    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.os.path.exists")
+    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.HoudiniClient")
+    def test_main_windows_named_pipe(self, mock_client: Mock, mock_exists: Mock) -> None:
+        """A named pipe must reach the runtime even when stat reports no file."""
+        mock_exists.return_value = False
+        main()
+        mock_exists.assert_not_called()
+        mock_client.assert_called_once_with("\\\\.\\pipe\\AdaptorServerNamedPipe_123")
+        mock_client.return_value.poll.assert_called_once()
+
+    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.os.name", "nt")
+    @patch.dict(os.environ, {"HOUDINI_ADAPTOR_SERVER_PATH": "\\\\.\\pipe\\missing"})
+    @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.HoudiniClient")
+    def test_main_windows_pipe_connection_error(self, mock_client: Mock) -> None:
+        """A missing or inaccessible pipe still fails through the runtime."""
+        mock_client.side_effect = OSError("Pipe connection failed")
+        with pytest.raises(OSError, match="Pipe connection failed"):
+            main()
+
     @patch.dict(os.environ, {"HOUDINI_ADAPTOR_SERVER_PATH": "/a/path/that/does/not/exist"})
     @patch("deadline.houdini_adaptor.HoudiniClient.houdini_client.os.path.exists")
     @patch("deadline.houdini_adaptor.HoudiniClient.HoudiniClient.poll")
