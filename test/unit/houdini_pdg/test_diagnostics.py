@@ -66,6 +66,12 @@ utc_seconds: st.SearchStrategy[datetime] = st.datetimes(
     timezones=st.just(timezone.utc),
 ).map(lambda d: d.replace(microsecond=0))
 
+# Root can write to a read-only directory, so these tests can't force a write failure as root.
+_needs_enforced_permissions = pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0,
+    reason="POSIX permissions, which root ignores",
+)
+
 
 # -- fakes and builders -------------------------------------------------------
 
@@ -1794,7 +1800,7 @@ def test_one_press_with_abandoned_passes_leaves_one_directory(
         assert (only[0] / "bundle").is_dir() is wrote_bundle
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+@_needs_enforced_permissions
 def test_an_unwritable_debug_directory_never_fails_a_call(tmp_path: Path) -> None:
     """Once the directory exists but cannot be written, every method still returns normally,
     because a diagnostics failure must not fail the cook."""
@@ -1820,7 +1826,7 @@ def test_an_unwritable_debug_directory_never_fails_a_call(tmp_path: Path) -> Non
     assert sorted(p.name for p in directory.iterdir()) == ["cook.json", "orchestrator.log"]
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+@_needs_enforced_permissions
 def test_a_swallowed_error_leaves_its_traceback_at_debug_level(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
