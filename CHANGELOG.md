@@ -1,21 +1,15 @@
-## 0.7.15 (2026-11-18)
+## 0.7.15 (2026-11-19)
 
 ### Features
 * The Houdini submitter installer now also installs the experimental Deadline Cloud PDG Scheduler. It is off by default. To turn it on, set "enable" to true in `pdg_scheduler/deadline_cloud_pdg_scheduler.json` in your install folder. You don't need to reinstall. (#428)
-* Experimental: the Deadline Cloud Scheduler TOP node can cook a whole TOP network as a single Deadline Cloud job. Each schedulable TOP node becomes a step and each work item becomes a task. You can start a cook from TOP Cook or from the node's new Submit button, which checks the whole job first. The node has the same job, Job Attachments and Host Requirements settings as the Deadline Cloud ROP, and shows its errors and warnings on its own tabs. (#423, #422, #419, #418, #414, #407, #406, #405)
-* Experimental: before anything is uploaded, the PDG scheduler refuses a graph that can't run as one Deadline Cloud job, and says why and how to fix it. Refusal reasons include (#409, #410, #412):
-  - an unsupported graph shape
-  - in-process nodes that touch a step's files
-  - service nodes or command servers
-  - nodes that override the cook's scheduler
-  - outputs that already exist on disk (cached)
-  - file paths a worker can't reach, such as workstation paths or a scene outside the working directory
-* Experimental: on the PDG scheduler node you now pick the farm and queue from menus, and your choice is saved as the default. The Login and Logout buttons are hidden, as on the ROP, because the login dialog can crash Houdini on macOS. (#426)
-* Experimental: each PDG cook writes a debug record to `<working dir>/pdg_debug/`. It contains the scheduler's log, the shape of the submitted job, any refusals and the final result, to help you troubleshoot failed cooks. (#417)
-* The Houdini adaptor can now run PDG work items on workers. It downloads each item's payload, maps its paths, runs it in Houdini or a shell, and publishes its outputs. ROP jobs work the same as before. (#420)
+* Experimental: the Deadline Cloud Scheduler TOP node can cook a whole TOP network as one Deadline Cloud job. Each schedulable TOP node becomes a step and each work item becomes a task. You can start a cook from TOP Cook or from the node's new Submit button, which checks the whole job first. The node has the same job, Job Attachments and Host Requirements settings as the Deadline Cloud ROP. (#423, #422, #419, #418, #414, #407, #406, #405)
+* Experimental: before anything is uploaded, the PDG scheduler refuses a graph that can't run as one Deadline Cloud job, and says why and how to fix it. It checks for unsupported graph shapes, in-process, service and command-server nodes, scheduler overrides, outputs already cached on disk, and file paths a worker can't reach. (#409, #410, #412)
+* Experimental: on the Deadline Cloud Scheduler TOP node, you now pick the farm and queue from menus. Login and Logout are hidden, as on the ROP, because the login dialog can crash Houdini on macOS. (#426)
+* Experimental: each PDG cook writes a debug record (log, job shape, scene-read matching and final outcome) to `<working dir>/pdg_debug/`, which helps you troubleshoot failed cooks. (#417)
+* Experimental: the Houdini adaptor can now run PDG work items on workers. It downloads each item's payload, maps its paths, runs it, and publishes its outputs. ROP jobs don't change. (#420)
 
 ### Bug Fixes
-* Fixed the `SyntaxWarning: invalid escape sequence` messages printed when the submitter loads on Python 3.12 and later. (#415)
+* Fixed `SyntaxWarning: invalid escape sequence` messages printed when the submitter loads on Python 3.12 and later. A future Python version would have turned these into errors that stop the submitter from loading. (#415)
 ## 0.7.14 (2026-09-23)
 
 ### Bug Fixes
