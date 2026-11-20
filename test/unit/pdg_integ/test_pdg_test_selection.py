@@ -5,22 +5,20 @@
 Each test runs pytest on test/integ/pdg in a new process, as ``hatch run integ:test`` or
 ``scripts/run_pdg_integ_tests.py`` would. GitHub runs the integ tests only after a merge,
 so these are what catch a change that makes the cook and refusal tests run without a
-farm, or collects the wrong scenes. The test that needs hython uses a stand-in script,
-which needs a POSIX shell.
+farm, or collects the wrong scenes. The test that needs hython uses a stand-in script.
 """
 
 from __future__ import annotations
 
 import os
 import re
-import stat
 import subprocess
 import sys
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Set
 
-import pytest
+from .hython_stand_in import hython_stand_in
 
 _REPO_ROOT: Path = Path(__file__).resolve().parents[3]
 
@@ -138,7 +136,6 @@ def test_without_the_farm_variables_every_cook_test_skips_and_says_why(tmp_path:
         assert "scripts/run_pdg_integ_tests.py" in reason, scene_id
 
 
-@pytest.mark.skipif(os.name == "nt", reason="the hython stand-in is a POSIX script")
 def test_with_a_farm_but_a_hython_that_cannot_start_houdini_every_scene_test_skips(
     tmp_path: Path,
 ) -> None:
@@ -148,11 +145,10 @@ def test_with_a_farm_but_a_hython_that_cannot_start_houdini_every_scene_test_ski
     The stand-in hython exits 1, as hython does when it can't get a license.
     """
     # The stand-in prints what hython prints without a license.
-    hython: Path = tmp_path / "hython"
-    hython.write_text(
-        "#!/bin/sh\necho 'No licenses could be found to run this application.'\nexit 1\n"
+    hython: Path = hython_stand_in(
+        tmp_path,
+        "import sys\nprint('No licenses could be found to run this application.')\nsys.exit(1)\n",
     )
-    hython.chmod(hython.stat().st_mode | stat.S_IXUSR)
 
     skips: Dict[str, str] = _skips_of_pdg_tests(
         _clean_env(**_FAKE_FARM, HYTHON_EXECUTABLE=str(hython)), tmp_path
