@@ -1631,7 +1631,9 @@ class FarmAndQueueMenus:
             elif key == _FARMS:
                 farms: List[Dict[str, Any]] = self._api.list_farms()["farms"]
                 entries, regions, landed = (
-                    [(farm["farmId"], farm["displayName"]) for farm in farms],
+                    # Farms reached only through a queue or fleet membership have no
+                    # displayName, so label them with their farm ID.
+                    [(farm["farmId"], farm.get("displayName") or farm["farmId"]) for farm in farms],
                     {farm["farmId"]: farm["region"] for farm in farms},
                     "",
                 )
