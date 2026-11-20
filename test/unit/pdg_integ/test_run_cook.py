@@ -3,15 +3,15 @@
 """Tests for starting a cook's hython process, reading back what it recorded, and describing
 it in a failure message, with no Houdini.
 
-The tests that start a process use a stand-in for hython: a small executable script that
-writes a result file, fails, or hangs. They need a POSIX shell to run it.
+The tests that start a process use a stand-in for hython: a small Python script that
+writes a result file, fails, or hangs.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import stat
+import subprocess
 import sys
 import time
 from dataclasses import replace
@@ -27,9 +27,7 @@ from test.integ.pdg.run_cook import CookResult, LoggedRefusal, describe_cook, re
 from test.integ.pdg.run_cook import run_cook
 from test.integ.pdg.scenes import ExpectedStep, SceneKind, SceneSet, TestScene
 
-_POSIX_ONLY: pytest.MarkDecorator = pytest.mark.skipif(
-    os.name == "nt", reason="the hython stand-in is a POSIX script"
-)
+from .hython_stand_in import hython_stand_in
 
 # What a cook script writes for a cook that ran: one work item with one tagged output.
 _RESULT: Dict[str, Any] = {
@@ -82,16 +80,13 @@ def _fake_hython(tmp_path: Path, body: str) -> Path:
     The arguments it gets are saved to ``arguments.json`` next to it.
     """
     # It records its arguments first, so a test can check them even when ``body`` fails.
-    script: Path = tmp_path / "hython"
-    script.write_text(
-        f"#!{sys.executable}\n"
+    return hython_stand_in(
+        tmp_path,
         "import json, os, sys\n"
         "here = os.path.dirname(os.path.abspath(sys.argv[0]))\n"
         "json.dump(sys.argv[1:], open(os.path.join(here, 'arguments.json'), 'w'))\n"
-        f"{body}\n"
+        f"{body}\n",
     )
-    script.chmod(script.stat().st_mode | stat.S_IXUSR)
-    return script
 
 
 # Writes the canned result, with the job name the cook was given.
@@ -202,7 +197,6 @@ def _write_result(folder: Path, content: Dict[str, Any]) -> Path:
     return path
 
 
-@_POSIX_ONLY
 def test_a_cook_runs_in_the_scene_folder_and_returns_what_hython_wrote(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -252,7 +246,6 @@ def test_a_cook_runs_in_the_scene_folder_and_returns_what_hython_wrote(
     assert arguments[0].endswith("cook_scene_in_hython.py")
 
 
-@_POSIX_ONLY
 def test_an_unsaved_scene_is_built_by_the_cook_script(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -277,7 +270,6 @@ def test_an_unsaved_scene_is_built_by_the_cook_script(
     assert "--wheels" not in arguments and "--cook-node" not in arguments
 
 
-@_POSIX_ONLY
 def test_hython_that_exits_without_a_result_fails_with_its_output(tmp_path: Path) -> None:
     """A crash in hython fails the test with the end of hython's output, not a missing file."""
     # A hython that prints its error and exits, as one that can't load a scene does.
@@ -295,7 +287,6 @@ def test_hython_that_exits_without_a_result_fails_with_its_output(tmp_path: Path
     assert "cannot load the scene" in str(raised.value)
 
 
-@_POSIX_ONLY
 def test_a_cook_past_its_time_is_killed_with_every_process_it_started(tmp_path: Path) -> None:
     """A cook that runs too long is stopped, children too, and the result names its debug directory.
 
@@ -339,15 +330,29 @@ def test_a_cook_past_its_time_is_killed_with_every_process_it_started(tmp_path: 
 def _is_running(pid: int) -> bool:
     """Whether a process is still alive, after giving a killed one a moment to be reaped."""
     for _ in range(50):
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        # A killed child of an exited parent is a zombie until init reaps it.
-        if _is_zombie(pid):
+        if not _is_alive(pid):
             return False
         time.sleep(0.1)
     return True
+
+
+def _is_alive(pid: int) -> bool:
+    """Whether the process exists and hasn't exited."""
+    # On Windows os.kill ends the process instead of checking it, so ask tasklist.
+    if sys.platform == "win32":
+        tasks: str = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        return f'"{pid}"' in tasks
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # A killed child of an exited parent is a zombie until init reaps it.
+    return not _is_zombie(pid)
 
 
 def _is_zombie(pid: int) -> bool:
@@ -363,7 +368,6 @@ def _is_zombie(pid: int) -> bool:
         return False
 
 
-@_POSIX_ONLY
 def test_hython_that_exits_cleanly_without_a_result_still_fails(tmp_path: Path) -> None:
     """A cook script that returns without writing its file is a failure, not an empty result."""
     hython: Path = _fake_hython(tmp_path, "print('wrote nothing')")
