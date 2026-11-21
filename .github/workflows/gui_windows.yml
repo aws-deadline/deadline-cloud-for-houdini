@@ -89,7 +89,7 @@ jobs:
     if: >-
       github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
       (github.ref == 'refs/heads/mainline' || github.ref == 'refs/heads/fix-publish-python-version')
-    runs-on: windows-2025
+    runs-on: aws-deadline_windows-2025_gpu-t4-4-core
     timeout-minutes: 60
     concurrency:
       group: houdini-integration-tests
@@ -176,9 +176,6 @@ jobs:
           & "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" pipeline/install-houdini-gui-windows.py `
             --version 22.0.368 --directory "$env:RUNNER_TEMP/houdini-gui-runtime" --github-env $env:GITHUB_ENV
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Stage isolated LLVMpipe and Dozen WARP CPU graphics
-        shell: pwsh
-        run: ./pipeline/prepare-houdini-software-graphics.ps1
       - name: Keep developer license tunnel alive through the real GUI baseline
         shell: pwsh
         env:
