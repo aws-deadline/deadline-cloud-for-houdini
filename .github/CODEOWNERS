@@ -1,1 +1,7 @@
 * @aws-deadline/sync-team-aws-deadline-cloud-github-developers
+
+# Allow automated approvals for dependency requirement updates.
+/requirements-integ-dcc-env.txt
+/requirements-integ-testing.txt
+/requirements-release.txt
+/requirements-testing.txt
