@@ -1,0 +1,82 @@
+name: Houdini Windows GPU runner diagnostic
+
+on:
+  push:
+    branches:
+      - fix-publish-python-version
+    paths:
+      - .github/workflows/gui_gpu_diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  GraphicsInventory:
+    if: >-
+      github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
+      github.ref == 'refs/heads/fix-publish-python-version'
+    runs-on: aws-deadline_windows-2025_gpu-t4-4-core
+    timeout-minutes: 5
+    steps:
+      - name: Inspect GPU hardware and drivers without modifying the runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:RUNNER_TEMP 'houdini-gpu-diagnostic'
+          New-Item -ItemType Directory -Path $output | Out-Null
+          $inventory = @{
+            source = $env:GITHUB_SHA
+            runner = $env:RUNNER_NAME
+            os = @(Get-CimInstance Win32_OperatingSystem |
+              Select-Object Caption, Version, BuildNumber)
+            video = @(Get-CimInstance Win32_VideoController |
+              Select-Object Name, DriverVersion, CurrentHorizontalResolution, CurrentVerticalResolution)
+            nvidia_pnp = @(Get-CimInstance Win32_PnPEntity |
+              Where-Object { $_.PNPDeviceID -like 'PCI\VEN_10DE*' -or $_.Name -match 'NVIDIA|3D Video' } |
+              Select-Object Name, Status, ConfigManagerErrorCode, PNPDeviceID)
+            nvidia_drivers = @(Get-CimInstance Win32_PnPSignedDriver |
+              Where-Object { $_.DriverProviderName -match 'NVIDIA' } |
+              Select-Object DeviceName, DriverVersion, DriverProviderName, IsSigned)
+            vulkan_registry = @()
+          }
+          foreach ($key in @(
+            'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers',
+            'HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers'
+          )) {
+            if (Test-Path $key) {
+              $properties = Get-ItemProperty $key
+              $inventory.vulkan_registry += @{
+                key = $key
+                entries = @($properties.PSObject.Properties |
+                  Where-Object { $_.Name -notlike 'PS*' } |
+                  Select-Object Name, Value)
+              }
+            }
+          }
+          $inventory | ConvertTo-Json -Depth 8 |
+            Tee-Object -FilePath "$output/inventory.json"
+          $smi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
+          $executable = if ($smi) { $smi.Source } else { $null }
+          if (-not $executable) {
+            foreach ($candidate in @(
+              "$env:WINDIR/System32/nvidia-smi.exe",
+              "$env:ProgramFiles/NVIDIA Corporation/NVSMI/nvidia-smi.exe"
+            )) {
+              if (Test-Path $candidate) { $executable = $candidate; break }
+            }
+          }
+          if ($executable) {
+            & $executable --query-gpu=name,driver_version,driver_model.current,driver_model.pending --format=csv |
+              Tee-Object -FilePath "$output/nvidia-smi.txt"
+            if ($LASTEXITCODE -ne 0) { throw 'NVIDIA driver query failed.' }
+          } else {
+            'nvidia-smi is not installed or discoverable.' |
+              Tee-Object -FilePath "$output/nvidia-smi.txt"
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: houdini-gpu-diagnostic-${{ github.run_id }}
+          path: ${{ runner.temp }}/houdini-gpu-diagnostic/
+          if-no-files-found: error
