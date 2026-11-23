@@ -656,3 +656,21 @@ def test_each_menu_call_logs_one_line_naming_its_entries_and_the_shown_label(
     assert _logged_menu(menus, "farm", "farm-a", caplog) == [
         f"the farm menu shows \"{_LOG_IN}\", and its value 'farm-a' shows as 'alpha'."
     ]
+
+
+def test_a_farm_reached_only_through_a_membership_is_labelled_with_its_id(scene: FakeHou) -> None:
+    """deadline-cloud lists farms a user reaches only through a queue or fleet membership.
+
+    Those farms come back without a displayName, so the menu labels them with their farm ID
+    instead of failing the whole list.
+    """
+    menus: Menus = Menus({"defaults.farm_id": "farm-m", "defaults.queue_id": ""})
+    menus.api.farms.append({"farmId": "farm-m", "region": "us-west-2"})
+    # Reading a menu starts the fetch, which a thread would run.
+    menus.menus.list_menu_items("farm", "farm-m")
+    menus.run_jobs()
+    menus.run_deferred()
+    items: List[str] = menus.menus.list_menu_items("farm", "farm-m")
+    pairs: List[Tuple[str, str]] = list(zip(items[2::2], items[3::2]))
+    assert ("farm-m", "farm-m") in pairs
+    assert ("farm-a", "alpha") in pairs
