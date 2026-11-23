@@ -11,7 +11,7 @@ One cook becomes one job:
 
 The job is created suspended. The scheduler releases each task once its work item's data is stored and every step it depends on has succeeded on the farm. Your Houdini session must stay open until the cook ends.
 
-Before anything is uploaded, the scheduler checks the network and refuses what it can't cook, for example a node that cooks in your Houdini session between two steps, a step set to cook In-Process, or a step whose results PDG would take from files already on your workstation. Each refusal names the node and says what to change. The node's **Validate Graph** toggle turns the refusals into warnings, except the one for an unsaved scene.
+Before anything is uploaded, the scheduler checks the network and refuses what it can't cook. Each refusal names the node and says what to change. [Why a cook is refused](#why-a-cook-is-refused) lists every case.
 
 ## Installing
 
@@ -45,6 +45,54 @@ A few more things to know:
    * click **Submit** on the node. It saves unsaved changes first, or asks you to, then runs the checks and shows one confirmation with the farm, queue, job name, priority, and working directory. Submit there starts the cook. The job uses the settings stored on the node.
 
 Both ways run the same checks, and the cook runs them again once PDG has generated the work items.
+
+## Why a cook is refused
+
+Before the scheduler uploads anything, it checks your network. If it finds something it can't run on the farm, it stops the cook and tells you why. Nothing is uploaded and no job is created, so a refused cook costs you nothing but a fix.
+
+The node's error tab lists each problem with the node at fault and what to change. The log has a matching line, for example `Refused, write_batched (rop_batch): ...`. The name in brackets matches the Reason column below.
+
+The scheduler checks your network at three moments:
+
+* When you click **Cook** or **Submit**, it looks at the nodes, how they're wired, and whether the scene is saved. **Submit** also generates the work items and checks them.
+* Once PDG has generated the work items, it checks them all again before it creates the job. If a step goes over a task limit while PDG is still generating, it stops the cook right away.
+* If PDG ends the cook without sending it a single work item, it tells you why, for example that the items came from cache.
+
+| Reason | Example | Why it's refused | How to fix it |
+|---|---|---|---|
+| `unsaved_scene` | You cook a scene that has never been saved, or that has unsaved changes. | The farm's workers load the saved `.hip`, so they'd find no file, or cook the scene as it was last saved instead of the one you see. | Save the scene and cook again. **Submit** offers to save it for you. |
+| `dynamic_node` | A step's **Generate When** is set to **Each Upstream Item is Cooked**. | The node makes its work items while the cook runs, so the job can't describe its tasks before it is submitted. The nodes below it are dynamic for the same reason, and only the node that causes it is reported. We only support cooks whose tasks are known upfront. | Set **Generate When** to **All Upstream Items are Generated**, or cook the network with another scheduler. |
+| `in_process_step` | A step that runs a command has its **Cook Type** (`pdg_cooktype`) set to **In-Process**. | PDG cooks its work items in your Houdini session and never sends them to the farm, so its tasks would never run. | Set **Cook Type** to **Out-of-Process**. |
+| `in_process_node` | A Python Script set to **Cook (In-Process)** sits between two steps and writes a file the step below reads. | The node runs in your Houdini session, not on a worker. Your workstation doesn't have the files a step writes on the farm, and the farm never gets the files your workstation writes. A node above every step, or one that only passes work items along, is fine. | Move the file work into a node that runs on a worker, such as a ROP Fetch or a Python Script set to **Out-of-Process**. |
+| `runtime_file_unproduced` | A step reads a file that no step in the cook writes, and that isn't on disk yet. | Something in your Houdini session would have to write it during the cook, and nothing can carry it to a worker. | Make the node that writes it run on a worker, or create the file before you cook so the job takes it along. |
+| `rop_batch` | A ROP node has **Frames per Batch** (`framesperbatch`) above 1, or **All Frames in One Batch** (`batchall`) turned on. | We don't support batch items for Houdini PDG yet, so the cook is refused. | Turn off **All Frames in One Batch** and set **Frames per Batch** to 1. You need both, because `batchall` ignores `framesperbatch`. Each frame then loads the scene on its own, so if the work per frame is short, another scheduler may be faster. |
+| `multiple_schedulers` | A node's `topscheduler` parm sends its work items to a Local Scheduler. | One cook is one job, so that node's work would run outside the job. | Clear the node's `topscheduler` parm so it uses the network's scheduler. |
+| `service_node` | A step's **Cook Type** is **Service**, or the network uses a command server, such as a Houdini, Maya or Nuke server. | Each task runs in its own session on its own worker, and this scheduler doesn't start long-running services. Nothing could connect to a command server, and its task would hold a worker until it timed out. | For a Service step, set `pdg_cooktype` to **Out-of-Process**. For a command server, cook the network with another scheduler. Switching a command server to Out-of-Process only hides the problem. |
+| `quota_exceeded` | A step has more than 10,000 work items. | The job would exceed a Deadline Cloud limit. The defaults are 10,000 tasks per job and per step, 200 steps per job, 128 dependencies per step, and 32 steps that depend on one step. | Make the cook smaller, or request a quota increase for AWS Deadline Cloud in AWS Service Quotas. |
+| `output_outside_cook` | A step writes to your system's temp folder, and the step below reads from there. | The step writes its files to a folder the worker doesn't upload, so the step below can't find them. Workers upload only what a step writes in the **Working Directory** or in a folder under **Output Directories** on the **Job Attachments** tab. | Write under the working directory, usually `$HIP`, or add the folder to **Output Directories**. Write the path with `$HIP`, `$PDG_DIR` or `$PDG_TEMP` rather than typing out your workstation's folder, because that folder doesn't exist on the worker. |
+| `local_file_unreachable` | A File node reads a path outside the working directory that doesn't exist. | No step writes the file, so the job has nothing to bring, and the task would open a missing file. | Point the path under `$HIP` or the working directory, or create the file before you cook so the job takes it along. |
+| `attribute_as_variable` | An output path uses `$wedgeindex` for the `wedgeindex` work item attribute. | `$wedgeindex` is a Houdini variable, not the attribute. If the attribute is exported, it's set only on the worker, so the worker writes a different path than the one PDG expects. If it isn't exported, it's empty everywhere, and every work item writes the same file. | Use `` `@wedgeindex` `` instead, so the value is filled in when the work items are generated. |
+| `step_without_items` | You cook before PDG has finished generating a step's work items, or a step depends on a node that has no work items in this cook. | The job would be missing most of its tasks, or nothing would produce the step's input files. | Press **Generate** before **Cook**, or cook again. If the step depends on nodes outside the cook, cook those too, or dirty them so they cook again. |
+| `cached_outputs` | A step's output files are already next to the scene from an earlier cook. | With **Cache Mode** set to **Automatic** or **Read Files**, PDG treats those work items as done and never sends them to the scheduler. Their tasks would never run, and the steps below would read your local files instead. | Set the node's **Cache Mode** (`pdg_cachemode`) to **Write Files**, or delete its old results first with **Delete Selected Node Results From Disk**. |
+| `no_farm_work` | You cook only a Wedge node, or only nodes that run in your Houdini session. | Nothing would run on a worker, so the job would have no steps, and Deadline Cloud would reject it. | Cook a node that runs on a worker, such as a ROP Fetch or a Python Script set to **Cook (Out-of-Process)**. If the whole network runs in your session, cook it with another scheduler. |
+
+Deadline Cloud can also turn the job down with a quota error when the scheduler creates it. The cook then ends as refused, and nothing is left on the farm.
+
+### Warnings that don't stop the cook
+
+Some things are worth knowing about but don't stop the cook. The scheduler puts these on the node's warning tab and in the log:
+
+* Your scene isn't inside the working directory or an output folder. Any node that writes a path relative to `$HIP` then writes somewhere the worker doesn't upload.
+* A step at the end of the network writes outside the working directory and the output folders. Nothing below needs the files, so the cook succeeds, but that step's files are lost.
+* A node reads a file using a typed-out path to your workstation's working directory. It works only while PDG hands it the file from the step above.
+* A step reads files from outside the working directory. They're uploaded with every cook, so a large one costs time.
+* A node in your Houdini session, below a step, has Python code that opens files. The scheduler can't tell what the code does, so it warns you instead of refusing.
+* A step has no work items and wasn't part of what you cooked, so the job leaves it out.
+* A check couldn't run, or the scene's file references couldn't be read. The cook went ahead without that check, and the Houdini console has the reason.
+
+### The Validate Graph toggle
+
+Turning off the node's **Validate Graph** toggle turns every refusal above into a warning, and the cook goes ahead, except `unsaved_scene`, which always stops the cook. A quota error from Deadline Cloud itself still stops it too. Use the toggle only when you know a refusal doesn't apply to your network.
 
 ## When a cook fails
 
