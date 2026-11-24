@@ -52,7 +52,15 @@ Commercial license checkout and owned-process/tunnel cleanup passed.
 
 That fresh Azure `Standard_NC4as_T4_v3` VM initially had no NVIDIA driver.
 The workflow installs the hash-pinned, NVIDIA-signed Microsoft Azure GRID
-596.86 package and selects the NVIDIA display as primary using Windows'
+596.86 package only when no NVIDIA driver is installed. It reuses an existing
+driver only after verifying the signed Tesla T4 driver version 32.0.15.9686
+and NVIDIA's reported version 596.86 with current and pending WDDM mode.
+Unexpected or unhealthy drivers fail validation without being replaced.
+`prepare-houdini-azure-graphics.ps1 -ValidateOnly` performs this preflight
+without permitting installation; image owners can use it once the driver
+is included in the runner image.
+
+The workflow then selects the NVIDIA display as primary using Windows'
 display configuration API. Driver installation alone left Hyper-V primary
 and Houdini still reported an OpenGL 3.3 error. Both preparation steps are
 needed for this tested image. They are restricted to the disposable GPU

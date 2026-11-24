@@ -144,11 +144,17 @@ jobs:
         run: |
           New-Item -ItemType Directory "$env:RUNNER_TEMP/houdini-gui-artifacts" -Force | Out-Null
           ./pipeline/check-windows-gui-desktop.ps1 *> "$env:RUNNER_TEMP/houdini-gui-artifacts/desktop.txt"
-      - name: Trial Microsoft Azure GRID driver on this fresh GPU runner
+      - name: Prepare or validate the approved NVIDIA graphics driver
         shell: pwsh
         run: |
           ./pipeline/prepare-houdini-azure-graphics.ps1 `
             -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts/azure-graphics"
+      - name: Verify driver preparation reuses the installed driver
+        if: github.ref == 'refs/heads/fix-publish-python-version'
+        shell: pwsh
+        run: |
+          ./pipeline/prepare-houdini-azure-graphics.ps1 -ValidateOnly `
+            -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts/azure-graphics/reuse-check"
       - name: Select the NVIDIA display for this temporary GUI session
         shell: pwsh
         run: |
