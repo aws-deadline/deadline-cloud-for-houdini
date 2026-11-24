@@ -41,8 +41,32 @@ The hook supplies temporary `HOUDINI_PATH` and preferences containing
 viewport image, desktop screenshot, accessibility trees, mock traffic,
 local-render logs and JUnit are retained under the artifact directory.
 
+The complete baseline passed on GitHub's
+`aws-deadline_windows-2025_gpu-t4-4-core` runner with Houdini 22.0.368,
+Windows Server 2025 build 26100 and image `20261116.315.1`:
+[run 45299821789](https://github.com/aws-deadline/deadline-cloud-for-houdini/actions/runs/45299821789)
+at source `bef4a9854c3ed31dcf994e8025e8f03704dfed33`.
+Both GUI cases and all nine non-GUI cases passed, with no failures, errors or
+skips. Actual viewport capture, bundle export, local render comparisons,
+Commercial license checkout and owned-process/tunnel cleanup passed.
+
+That fresh Azure `Standard_NC4as_T4_v3` VM initially had no NVIDIA driver.
+The workflow installs the hash-pinned, NVIDIA-signed Microsoft Azure GRID
+596.86 package and selects the NVIDIA display as primary using Windows'
+display configuration API. Driver installation alone left Hyper-V primary
+and Houdini still reported an OpenGL 3.3 error. Both preparation steps are
+needed for this tested image. They are restricted to the disposable GPU
+trial runner; do not run them on a shared workstation. No reboot or persistent
+runner-image change was needed. Standard Windows runner trials and the
+isolated software graphics alternatives did not pass the actual GUI baseline.
+
+SideFX's [Houdini 22 system requirements](https://www.sidefx.com/Support/system-requirements/)
+exclude all Windows Server versions. This successful Server 2025 run establishes
+compatibility for this baseline, not vendor OS support. An older Server 2019
+image would not resolve that support gap.
+
 This initial baseline does not claim complete GUI coverage. Python-panel
 frame/take controls, the adaptor-wheel picker, attachment/host controls,
 mocked submission and error recovery still need cases. Other repository-pinned
 Houdini versions need their own embedded-Python/Qt bootstrap. Mainline/release
-gating awaits the first standard Windows CI result.
+gating remains outside this GUI trial.
