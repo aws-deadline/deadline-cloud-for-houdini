@@ -152,6 +152,7 @@ jobs:
       - name: Select the NVIDIA display for this temporary GUI session
         shell: pwsh
         run: |
+          # Stage the new primary before translating the former primary.
           ./pipeline/select-houdini-gpu-display.ps1 `
             -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts/azure-graphics"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

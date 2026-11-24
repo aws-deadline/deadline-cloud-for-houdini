@@ -93,28 +93,32 @@ public static class HoudiniGpuDisplay {
             throw new InvalidOperationException("Expected one active NVIDIA display.");
         var target = targets[0];
         if (target.Primary) return;
-        foreach (var display in displays) {
+        // A primary display must remain at (0, 0). Testing the old primary's
+        // translated position independently is invalid until the primary
+        // changes. Validate the new primary, then stage the combined layout.
+        var primaryMode = target.Configuration;
+        primaryMode.X = 0;
+        primaryMode.Y = 0;
+        primaryMode.Fields = 0x20; // DM_POSITION only; preserve resolution.
+        int test = ChangeDisplaySettingsExW(
+            target.Name, ref primaryMode, IntPtr.Zero, 2u | 0x10u, IntPtr.Zero);
+        if (test != 0)
+            throw new InvalidOperationException(
+                "New primary mode test for " + target.Name + " returned " + test);
+        var ordered = new List<Display> { target };
+        ordered.AddRange(Array.FindAll(displays, d => d.Name != target.Name));
+        foreach (var display in ordered) {
             var mode = display.Configuration;
             mode.X -= target.X;
             mode.Y -= target.Y;
-            mode.Fields |= 0x20; // DM_POSITION
-            var primary = display.Name == target.Name ? 0x10u : 0u; // CDS_SET_PRIMARY
-            int test = ChangeDisplaySettingsExW(
-                display.Name, ref mode, IntPtr.Zero, 2u | primary, IntPtr.Zero);
-            if (test != 0)
-                throw new InvalidOperationException("Display mode test returned " + test);
-        }
-        foreach (var display in displays) {
-            var mode = display.Configuration;
-            mode.X -= target.X;
-            mode.Y -= target.Y;
-            mode.Fields |= 0x20;
+            mode.Fields = 0x20;
             var primary = display.Name == target.Name ? 0x10u : 0u;
             // CDS_UPDATEREGISTRY | CDS_NORESET. No CDS_GLOBAL.
             int stage = ChangeDisplaySettingsExW(
                 display.Name, ref mode, IntPtr.Zero, 0x10000001u | primary, IntPtr.Zero);
             if (stage != 0)
-                throw new InvalidOperationException("Display staging returned " + stage);
+                throw new InvalidOperationException(
+                    "Display staging for " + display.Name + " returned " + stage);
         }
         int apply = Apply(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
         if (apply != 0)
