@@ -61,6 +61,7 @@ def open_submitter():
             "vulkan-1.dll",
             "vulkan_lvp.dll",
             "vulkan_dzn.dll",
+            "nvoglv64.dll",
         ):
             module = kernel32.GetModuleHandleW(name)
             if module:

@@ -1,3 +1,4 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 param(
     [Parameter(Mandatory = $true)]
     [string]$Artifacts

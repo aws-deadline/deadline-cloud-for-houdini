@@ -122,7 +122,7 @@ jobs:
             'install-houdini-gui-windows.py', 'prepare-houdini-gui-dependencies.py',
             'run-houdini-gui-windows.ps1', 'run-houdini-gui-baseline.py',
             'diagnose-sidefx-tunnel.py', 'prepare-houdini-software-graphics.ps1',
-            'prepare-houdini-azure-graphics.ps1') {
+            'prepare-houdini-azure-graphics.ps1', 'select-houdini-gpu-display.ps1') {
             Copy-Item "pipeline/$file" "$harness/pipeline/"
           }
           Copy-Item requirements-gui-testing.txt $harness
@@ -148,6 +148,11 @@ jobs:
         shell: pwsh
         run: |
           ./pipeline/prepare-houdini-azure-graphics.ps1 `
+            -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts/azure-graphics"
+      - name: Select the NVIDIA display for this temporary GUI session
+        shell: pwsh
+        run: |
+          ./pipeline/select-houdini-gpu-display.ps1 `
             -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts/azure-graphics"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
