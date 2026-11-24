@@ -28,6 +28,7 @@ jobs:
           $inventory = @{
             source = $env:GITHUB_SHA
             runner = $env:RUNNER_NAME
+            azure_vm_size = $null
             os = @(Get-CimInstance Win32_OperatingSystem |
               Select-Object Caption, Version, BuildNumber)
             video = @(Get-CimInstance Win32_VideoController |
@@ -39,6 +40,15 @@ jobs:
               Where-Object { $_.DriverProviderName -match 'NVIDIA' } |
               Select-Object DeviceName, DriverVersion, DriverProviderName, IsSigned)
             vulkan_registry = @()
+          }
+          # Query only the VM size, never identities or the complete metadata document.
+          try {
+            $inventory.azure_vm_size = Invoke-RestMethod `
+              -Uri 'http://169.254.169.254/metadata/instance/compute/vmSize?api-version=2021-02-01&format=text' `
+              -Headers @{ Metadata = 'true' } -NoProxy -TimeoutSec 10
+          } catch {
+            'Azure VM size metadata is unavailable; driver eligibility is unverified.' |
+              Tee-Object -FilePath "$output/metadata-status.txt"
           }
           foreach ($key in @(
             'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers',
