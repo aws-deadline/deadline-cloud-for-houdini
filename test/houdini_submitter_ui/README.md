@@ -11,6 +11,16 @@ execute every step of the exact exported bundle with local OpenJD, and compare
 its images with the repository's Git LFS reference images. They create no
 Deadline jobs. `test/integ` remains the separate nine-case non-GUI baseline.
 
+Four additional GUI cases cover default and edited Submit/CreateJob requests,
+unsaved-scene cancellation followed by retry, and a missing input ROP.
+Submission uses the loopback mock's queue without S3 job attachments and its
+OpenJD template/parameter validation. Tests inspect the accepted mock job,
+history bundle and asset references, then verify the success UI shows its
+returned job ID. The unsaved case changes the dialog's save checkbox after
+starting with automatic saving enabled on the ROP, exercising the current-UI
+pre-submission gate. Cancellation and missing-input cases assert no job or
+history bundle was created. These cases do not submit real AWS jobs.
+
 Dependencies:
 
 ```powershell
@@ -33,7 +43,7 @@ After preparing the licensed desktop, use the complete mock-only launcher:
 `RUNNER_TEMP` must point to private temporary storage. The launcher changes
 the hserver route to `http://127.0.0.1:1715` and restores the observed original
 route. This needs explicit authorization on a shared workstation. It is designed
-for disposable CI runners. `-GuiOnly` selects the two GUI cases for diagnosis;
+for disposable CI runners. `-GuiOnly` selects the GUI cases for diagnosis;
 the CI workflow always runs both suites.
 
 The hook supplies temporary `HOUDINI_PATH` and preferences containing
@@ -75,6 +85,6 @@ image would not resolve that support gap.
 
 This initial baseline does not claim complete GUI coverage. Python-panel
 frame/take controls, the adaptor-wheel picker, attachment/host controls,
-mocked submission and error recovery still need cases. Other repository-pinned
+API error recovery still need cases. Other repository-pinned
 Houdini versions need their own embedded-Python/Qt bootstrap. Mainline/release
 gating remains outside this GUI trial.

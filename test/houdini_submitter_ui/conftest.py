@@ -38,7 +38,12 @@ def mock_server():
 
 
 @pytest.fixture
-def gui_session(mock_server, tmp_path):
+def gui_session(request, tmp_path):
+    scenario = getattr(request, "param", "export")
+    assert scenario in ("export", "submit", "unsaved", "missing-input")
+    mock_server = request.getfixturevalue(
+        "mock_server" if scenario == "export" else "submission_mock_server"
+    )
     if sys.platform != "win32":
         pytest.fail("This GUI baseline requires Windows.")
     allow_test_directory(tmp_path)
@@ -90,6 +95,7 @@ def gui_session(mock_server, tmp_path):
         HOUDINI_GUI_OUTPUT=str(tmp_path / "scene"),
         HOUDINI_GUI_STATUS=str(tmp_path / "startup.json"),
         HOUDINI_GUI_MOCK_ENDPOINT=mock_server.base_url,
+        HOUDINI_GUI_SCENARIO=scenario,
         HYTHON_EXECUTABLE=str(exe.parent / "hython.exe"),
         HOUDINI_GUI_PYTHON_VERSION="3.13",
         QT_ACCESSIBILITY="1",
@@ -150,3 +156,15 @@ def gui_session(mock_server, tmp_path):
         process.wait(timeout=30)
         stdout.close()
         stderr.close()
+
+
+@pytest.fixture(scope="session")
+def submission_mock_server():
+    # Exercise CreateJob without S3: all files represent shared storage.
+    server = MockDeadlineServerProcess(
+        MockDeadlineScenario.without_job_attachments(response_delay_s=0.3)
+    ).start()
+    try:
+        yield server
+    finally:
+        server.stop()

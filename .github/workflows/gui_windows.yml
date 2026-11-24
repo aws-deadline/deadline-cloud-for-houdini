@@ -10,6 +10,7 @@ on:
       - .github/workflows/gui_windows.yml
       - pipeline/prepare-houdini-azure-graphics.ps1
       - pipeline/select-houdini-gpu-display.ps1
+      - test/houdini_submitter_ui/**
   workflow_dispatch:
     inputs:
       source_sha:

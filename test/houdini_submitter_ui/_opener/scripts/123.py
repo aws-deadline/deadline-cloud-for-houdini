@@ -114,6 +114,17 @@ def open_submitter():
         rop.setFirstInput(render)
         scene["_set_parameters"](rop)
         hou.hipFile.save(str(output / "test.hip"))
+        scenario = os.environ["HOUDINI_GUI_SCENARIO"]
+        if scenario != "export":
+            from deadline_cloud_for_houdini._assets import _parse_files
+
+            _parse_files(rop)
+            # Start with automatic saving enabled on the node. The unsaved
+            # case disables it in the dialog to exercise the current-UI gate.
+            rop.parm("auto_save_hip").set(1)
+            if scenario == "missing-input":
+                rop.setInput(0, None)
+            hou.hipFile.save()
         # Capture the native viewport in this actual licensed GUI session.
         # This establishes viewport rendering, unlike an independent GL probe.
         viewport = viewer.curViewport()
@@ -126,6 +137,11 @@ def open_submitter():
         settings.output(str(output / "viewport.$F4.png").replace("\\", "/"))
         viewer.flipbook(viewport, settings)
         startup["viewport_capture"] = str(output / "viewport.0001.png")
+        if scenario == "unsaved":
+            hou.node("/obj").createNode("null", "unsaved_gui_test")
+            assert hou.hipFile.hasUnsavedChanges()
+        startup["scenario"] = scenario
+        startup["unsaved_changes"] = hou.hipFile.hasUnsavedChanges()
         status.write_text(
             json.dumps(startup, indent=2),
             encoding="utf-8",
