@@ -8,6 +8,8 @@ on:
       - fix-publish-python-version
     paths:
       - .github/workflows/gui_windows.yml
+      - pipeline/prepare-houdini-azure-graphics.ps1
+      - pipeline/select-houdini-gpu-display.ps1
   workflow_dispatch:
     inputs:
       source_sha:

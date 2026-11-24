@@ -34,7 +34,17 @@ try {
             throw 'No NVIDIA driver is installed. Validation-only mode does not install software.'
         }
         $installer = Join-Path $env:RUNNER_TEMP 'houdini-azure-grid-596.86.exe'
-        Invoke-WebRequest -Uri $uri -OutFile $installer
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+                Invoke-WebRequest -Uri $uri -OutFile $installer
+                break
+            } catch {
+                Remove-Item $installer -Force -ErrorAction SilentlyContinue
+                if ($attempt -eq 3) { throw }
+                Write-Warning "GRID download attempt $attempt failed; retrying the same pinned URL."
+                Start-Sleep -Seconds 5
+            }
+        }
         $actualHash = (Get-FileHash -Path $installer -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($actualHash -ne $expectedHash) { throw 'Azure GRID installer checksum mismatch.' }
         $signature = Get-AuthenticodeSignature -FilePath $installer
