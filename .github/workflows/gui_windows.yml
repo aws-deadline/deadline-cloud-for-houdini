@@ -121,7 +121,8 @@ jobs:
           foreach ($file in 'check-windows-gui-desktop.ps1', 'windows-license-tunnel.ps1',
             'install-houdini-gui-windows.py', 'prepare-houdini-gui-dependencies.py',
             'run-houdini-gui-windows.ps1', 'run-houdini-gui-baseline.py',
-            'diagnose-sidefx-tunnel.py', 'prepare-houdini-software-graphics.ps1') {
+            'diagnose-sidefx-tunnel.py', 'prepare-houdini-software-graphics.ps1',
+            'prepare-houdini-azure-graphics.ps1') {
             Copy-Item "pipeline/$file" "$harness/pipeline/"
           }
           Copy-Item requirements-gui-testing.txt $harness
@@ -143,6 +144,11 @@ jobs:
         run: |
           New-Item -ItemType Directory "$env:RUNNER_TEMP/houdini-gui-artifacts" -Force | Out-Null
           ./pipeline/check-windows-gui-desktop.ps1 *> "$env:RUNNER_TEMP/houdini-gui-artifacts/desktop.txt"
+      - name: Trial Microsoft Azure GRID driver on this fresh GPU runner
+        shell: pwsh
+        run: |
+          ./pipeline/prepare-houdini-azure-graphics.ps1 `
+            -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts/azure-graphics"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
