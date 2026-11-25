@@ -40,7 +40,7 @@ def mock_server():
 @pytest.fixture
 def gui_session(request, tmp_path):
     scenario = getattr(request, "param", "export")
-    assert scenario in ("export", "submit", "unsaved", "missing-input")
+    assert scenario in ("export", "submit", "unsaved", "missing-input", "lifecycle", "login")
     mock_server = request.getfixturevalue(
         "mock_server" if scenario == "export" else "submission_mock_server"
     )
@@ -129,7 +129,10 @@ def gui_session(request, tmp_path):
 
         with Image.open(startup["viewport_capture"]) as viewport:
             assert viewport.size == (256, 256), startup
-            assert any(high > low for low, high in viewport.convert("RGB").getextrema()), startup
+            assert any(
+                isinstance(band, tuple) and band[1] > band[0]
+                for band in viewport.convert("RGB").getextrema()
+            ), startup
         print(f"Real GUI startup: {startup}")
         app = find_accessibility_app(process.pid, timeout=60)
         env["PYTHONPATH"] = str(Path(__file__).parent / "_python")

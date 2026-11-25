@@ -156,6 +156,97 @@ def open_submitter():
         from deadline_cloud_for_houdini.submitter import submit_callback
 
         submit_callback({"node": rop})
+        if scenario in ("lifecycle", "login"):
+            from deadline_cloud_for_houdini.submitter import _ROP_SUBMITTER_DIALOGS
+
+            dialog = _ROP_SUBMITTER_DIALOGS[rop.sessionId()]
+            request = status.with_name("gui-action.json")
+            result_file = status.with_name("gui-action-result.json")
+
+            def run_test_action():
+                if not request.is_file():
+                    return
+                action = json.loads(request.read_text())["action"]
+                request.unlink()
+                result: dict = {}
+                try:
+                    if scenario == "lifecycle" and action == "reuse":
+                        rop.setName("renamed_deadline_gui_test")
+                        submit_callback({"node": rop})
+                        submit_callback({"node": rop})
+                        result = {
+                            "same_dialog": _ROP_SUBMITTER_DIALOGS[rop.sessionId()] is dialog,
+                            "dialog_count": len(_ROP_SUBMITTER_DIALOGS),
+                        }
+                    elif scenario == "lifecycle" and action == "delete":
+                        node_id = rop.sessionId()
+                        rop.destroy()
+                        result = {"dialog_released": node_id not in _ROP_SUBMITTER_DIALOGS}
+                    elif scenario == "login" and action == "login":
+                        import threading
+                        import time
+                        from unittest.mock import patch
+
+                        from deadline.client.ui.dialogs.deadline_login_dialog import (
+                            DeadlineLoginDialog,
+                        )
+
+                        original_refresh = dialog.refresh_deadline_settings
+                        authentication = dialog.deadline_authentication_status
+                        original_auth_refresh = authentication.refresh_status
+                        worker = None
+                        result = {"settings_refresh": 0, "auth_refresh": 0}
+
+                        def refresh_settings():
+                            result["settings_refresh"] += 1
+                            original_refresh()
+
+                        def refresh_authentication():
+                            result["auth_refresh"] += 1
+                            original_auth_refresh()
+
+                        def fake_login_start(login_dialog):
+                            nonlocal worker
+
+                            def finish_login():
+                                deadline = time.monotonic() + 30
+                                completed = status.with_name("complete-mock-login")
+                                while not completed.is_file():
+                                    if time.monotonic() >= deadline:
+                                        login_dialog.login_thread_exception.emit(
+                                            RuntimeError("Mock login completion timed out.")
+                                        )
+                                        return
+                                    time.sleep(0.05)
+                                login_dialog.login_thread_succeeded.emit("Mock login completed.")
+
+                            worker = threading.Thread(target=finish_login)
+                            worker.start()
+
+                        # Keep the actual client dialog and Qt signals. Replace only
+                        # authentication so this test never opens a real AWS login.
+                        with (
+                            patch.object(DeadlineLoginDialog, "_start_login", fake_login_start),
+                            patch.object(dialog, "refresh_deadline_settings", refresh_settings),
+                            patch.object(authentication, "refresh_status", refresh_authentication),
+                        ):
+                            dialog.on_login()
+                            result["login_returned"] = True
+                            if worker is not None:
+                                worker.join(timeout=5)
+                                result["worker_finished"] = not worker.is_alive()
+                    else:
+                        raise RuntimeError("Unexpected GUI regression test action.")
+                except Exception:
+                    result["error"] = traceback.format_exc()
+                temporary = result_file.with_suffix(".tmp")
+                temporary.write_text(json.dumps(result, indent=2), encoding="utf-8")
+                temporary.replace(result_file)
+
+            timer = QTimer(hou.qt.mainWindow())
+            timer.timeout.connect(run_test_action)
+            timer.start(100)
+            dialog._deadline_test_action_timer = timer
     except Exception:
         startup["error"] = traceback.format_exc()
         status.write_text(json.dumps(startup, indent=2), encoding="utf-8")

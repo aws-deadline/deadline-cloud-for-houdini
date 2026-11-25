@@ -12,7 +12,15 @@ from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter impo
 )
 
 
-def test_rop_tool_is_modeless_and_retained_until_destroyed():
+@pytest.fixture
+def rop_lifetime_node(monkeypatch):
+    monkeypatch.setattr(hou, "nodeEventType", mock.Mock(), raising=False)
+    node = mock.Mock()
+    node.sessionId.return_value = 42
+    return node
+
+
+def test_rop_tool_is_modeless_and_retained_until_destroyed(rop_lifetime_node):
     """A floating ROP tool must survive callback return and release on close."""
     from importlib import import_module
 
@@ -21,15 +29,48 @@ def test_rop_tool_is_modeless_and_retained_until_destroyed():
     qt = getattr(import_module("qtpy.QtCore"), "Qt")
 
     dialog = mock.Mock()
-    submitter._show_rop_submitter(dialog)
+    submitter._show_rop_submitter(dialog, rop_lifetime_node)
     try:
         dialog.show.assert_called_once_with()
         dialog.exec_.assert_not_called()
         dialog.setAttribute.assert_called_once_with(qt.WA_DeleteOnClose, True)
-        assert dialog in submitter._ROP_SUBMITTER_DIALOGS
+        assert submitter._ROP_SUBMITTER_DIALOGS[42] is dialog
     finally:
         dialog.destroyed.connect.call_args.args[0]()
-    assert dialog not in submitter._ROP_SUBMITTER_DIALOGS
+    assert 42 not in submitter._ROP_SUBMITTER_DIALOGS
+    rop_lifetime_node.removeEventCallback.assert_called_once_with(
+        (hou.nodeEventType.BeingDeleted,),
+        rop_lifetime_node.addEventCallback.call_args.args[1],
+    )
+
+
+def test_reopening_rop_reuses_dialog_even_after_node_rename(rop_lifetime_node):
+    from deadline.houdini_submitter.python.deadline_cloud_for_houdini import submitter
+
+    dialog = mock.Mock()
+    submitter._show_rop_submitter(dialog, rop_lifetime_node)
+    try:
+        rop_lifetime_node.path.return_value = "/out/renamed_deadline"
+        submit_callback({"node": rop_lifetime_node})
+        assert submitter._ROP_SUBMITTER_DIALOGS[42] is dialog
+        dialog.raise_.assert_called_once_with()
+        dialog.activateWindow.assert_called_once_with()
+        rop_lifetime_node.inputAncestors.assert_not_called()
+    finally:
+        dialog.destroyed.connect.call_args.args[0]()
+
+
+def test_deleted_rop_closes_dialog_without_accessing_deleted_node(rop_lifetime_node):
+    from deadline.houdini_submitter.python.deadline_cloud_for_houdini import submitter
+
+    dialog = mock.Mock()
+    submitter._show_rop_submitter(dialog, rop_lifetime_node)
+    deleted = rop_lifetime_node.addEventCallback.call_args.args[1]
+    deleted(node=rop_lifetime_node, event_type=hou.nodeEventType.BeingDeleted)
+    assert 42 not in submitter._ROP_SUBMITTER_DIALOGS
+    dialog.close.assert_called_once_with()
+    dialog.destroyed.connect.call_args.args[0]()
+    rop_lifetime_node.removeEventCallback.assert_not_called()
 
 
 @pytest.fixture(scope="function")
