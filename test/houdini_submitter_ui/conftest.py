@@ -135,6 +135,12 @@ def gui_session(request, tmp_path):
         env["PYTHONPATH"] = str(Path(__file__).parent / "_python")
         yield app, export, mock_server.backend, tmp_path, env
     finally:
+        try:
+            (tmp_path / "mock-final.json").write_text(
+                json.dumps(mock_server.backend.snapshot(), indent=2), encoding="utf-8"
+            )
+        except Exception as exc:
+            print(f"Final mock capture failed: {exc}")
         if app is not None:
             try:
                 (tmp_path / "accessibility.txt").write_text(

@@ -20,6 +20,11 @@ returned job ID. The unsaved case changes the dialog's save checkbox after
 starting with automatic saving enabled on the ROP, exercising the current-UI
 pre-submission gate. Cancellation and missing-input cases assert no job or
 history bundle was created. These cases do not submit real AWS jobs.
+Houdini-native warning bodies and buttons are absent from Windows UIA.
+The test hook records the actual `hou.ui.displayMessage` arguments and return
+value without changing the prompt. Cancellation clicks the screenshot-verified
+Cancel position relative to the owned warning window and requires return value
+3; screenshots and prompt records retain evidence of the interaction.
 
 Dependencies:
 

@@ -108,6 +108,27 @@ def open_submitter():
         repo = Path(os.environ["HOUDINI_GUI_REPO"])
         output = Path(os.environ["HOUDINI_GUI_OUTPUT"])
         output.mkdir(parents=True, exist_ok=True)
+        # Houdini's native message bodies/buttons are not exposed through UIA.
+        # Observe the real prompt and response without changing its behavior.
+        prompts = []
+        original_display_message = hou.ui.displayMessage
+        prompt_log = status.with_name("native-prompts.json")
+
+        def record_prompts():
+            temporary = prompt_log.with_suffix(".tmp")
+            temporary.write_text(json.dumps(prompts, indent=2), encoding="utf-8")
+            temporary.replace(prompt_log)
+
+        def observed_display_message(text, *args, **kwargs):
+            prompt = {"text": text, "title": kwargs.get("title"), "buttons": kwargs.get("buttons")}
+            prompts.append(prompt)
+            record_prompts()
+            choice = original_display_message(text, *args, **kwargs)
+            prompt["choice"] = choice
+            record_prompts()
+            return choice
+
+        hou.ui.displayMessage = observed_display_message
         scene = runpy.run_path(str(repo / "test/integ/test_scripts/minimal_test/_test_hip.py"))
         rop = hou.node("/out").createNode("deadline_cloud")
         render = scene["_create_scene_and_rop"](output.as_posix())
