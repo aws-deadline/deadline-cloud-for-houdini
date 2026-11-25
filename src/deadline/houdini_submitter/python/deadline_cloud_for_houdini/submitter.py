@@ -54,6 +54,7 @@ import hou
 
 _NONE_SELECTED_TEXT = "<none selected>"
 _REFRESHING_TEXT = "<refreshing>"
+_ROP_SUBMITTER_DIALOGS: list[Any] = []
 
 
 class RenderStrategy(Enum):
@@ -1064,6 +1065,20 @@ def _install_pre_submission_gate(dialog, node) -> None:
     dialog._deadline_guarded_submit = _guarded_submit  # type: ignore[attr-defined]
 
 
+def _show_rop_submitter(dialog) -> None:
+    """Keep the tool window alive without blocking Houdini-native safety prompts."""
+    from qtpy.QtCore import Qt  # type: ignore
+
+    dialog.setAttribute(Qt.WA_DeleteOnClose, True)
+    _ROP_SUBMITTER_DIALOGS.append(dialog)
+
+    def release_dialog(*_args) -> None:
+        _ROP_SUBMITTER_DIALOGS.remove(dialog)
+
+    dialog.destroyed.connect(release_dialog)
+    dialog.show()
+
+
 def submit_callback(kwargs):
     node = kwargs["node"]
 
@@ -1141,7 +1156,11 @@ def submit_callback(kwargs):
         # Run the pre-submission checks when Submit is clicked, before the dialog opens its modal
         # progress dialog (which would otherwise hide the hou.ui.displayMessage prompts).
         _install_pre_submission_gate(dialog, node)
-        dialog.exec_()
+        # exec_() makes this tool application-modal. Qt then rejects input to
+        # hou.ui.displayMessage windows and returns focus to the submitter,
+        # leaving pre-submission warnings visible but impossible to answer.
+        # The submission-progress dialog retains its own modal behavior.
+        _show_rop_submitter(dialog)
     except Exception as exc:
         api.get_deadline_cloud_library_telemetry_client().record_error(
             event_details={"exception_scope": "caught", "error_operation": "submit_callback"},

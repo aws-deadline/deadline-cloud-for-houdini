@@ -25,6 +25,12 @@ The test hook records the actual `hou.ui.displayMessage` arguments and return
 value without changing the prompt. Cancellation clicks the screenshot-verified
 Cancel position relative to the owned warning window and requires return value
 3; screenshots and prompt records retain evidence of the interaction.
+The cancellation case caught an application-modal ROP submitter rejecting
+input to Houdini's native warning and taking foreground focus back. The ROP
+submitter now opens as a modeless tool, retained until destruction; the shared
+submission-progress dialog remains modal. The test also requires no active
+Qt modal widget when the native warning is requested and verifies foreground
+ownership before clicking Cancel.
 
 Dependencies:
 

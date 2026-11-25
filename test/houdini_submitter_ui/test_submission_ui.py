@@ -105,6 +105,7 @@ def test_unsaved_scene_cancel_then_retry(gui_session):
     prompts = json.loads((work / "native-prompts.json").read_text())
     assert prompts[-1]["text"] == "Hip file has unsaved changes", prompts
     assert prompts[-1]["buttons"] == ["Save", "Always save", "Ignore", "Cancel"], prompts
+    assert prompts[-1]["active_qt_modal_title"] is None, prompts
     (work / "accessibility-unsaved-warning.txt").write_text(
         app.dump(max_depth=15), encoding="utf-8"
     )
@@ -157,6 +158,7 @@ def test_unsaved_scene_cancel_then_retry(gui_session):
     )
     assert cursor == point, (cursor, point)
     assert target == hwnd, "Cursor did not reach the owned warning window"
+    assert win32gui.GetForegroundWindow() == hwnd, "Qt stole focus from the native warning"
     win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
     try:
         # Allow the native event loop to observe the held button. Back-to-back

@@ -120,7 +120,15 @@ def open_submitter():
             temporary.replace(prompt_log)
 
         def observed_display_message(text, *args, **kwargs):
-            prompt = {"text": text, "title": kwargs.get("title"), "buttons": kwargs.get("buttons")}
+            from PySide6.QtWidgets import QApplication
+
+            modal = QApplication.activeModalWidget()
+            prompt = {
+                "text": text,
+                "title": kwargs.get("title"),
+                "buttons": kwargs.get("buttons"),
+                "active_qt_modal_title": modal.windowTitle() if modal else None,
+            }
             prompts.append(prompt)
             record_prompts()
             choice = original_display_message(text, *args, **kwargs)
