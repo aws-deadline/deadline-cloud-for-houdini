@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os as os
+import re
 from typing import TYPE_CHECKING, Any, Callable, Dict, List
 
 try:
@@ -12,6 +13,25 @@ except ImportError:  # pragma: no cover
 
 if TYPE_CHECKING:  # pragma: no cover
     from hou import Node, Parm, ParmTemplate
+
+# A Windows path: a drive letter and separator, as in P:\ or P:/, or a UNC \\server prefix.
+_WINDOWS_PATH: re.Pattern[str] = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
+
+
+def _forward_slash_windows_path(path: str) -> str:
+    """
+    Returns a Windows path with each backslash replaced by a forward slash, and any
+    other path unchanged.
+
+    The adaptor writes every HOUDINI_PATHMAP rule with forward slashes
+    (HoudiniAdaptor._set_houdini_pathmap), and Houdini's pathmap command does not
+    match a path typed with backslashes against them. This is the same replacement
+    the adaptor makes on the rules. A non-Windows path keeps any backslash, which
+    there is part of a file or folder name.
+    """
+    if _WINDOWS_PATH.match(path):
+        return path.replace("\\", "/")
+    return path
 
 
 class HoudiniHandler:
@@ -78,7 +98,67 @@ class HoudiniHandler:
             return
 
         lop_nodes: list[Node] = hou.node("/").recursiveGlob("*", filter=hou.nodeTypeFilter.Lop)
-        for node in lop_nodes:
+        self._remap_file_parms(lop_nodes, "LOP")
+
+    def _remap_sop_file_paths(self) -> None:
+        """
+        Applies HOUDINI_PATHMAP to SOP node file path parameters.
+
+        Some SOPs hand their file path to USD instead of Houdini's file I/O layer, for
+        example the USD Import SOP (filepath1). As with LOP nodes, HOUDINI_PATHMAP never
+        reaches those paths, so the scene fails to cook on a worker whose paths differ.
+        This uses the same parm rules as _remap_lop_file_paths. For SOPs that Houdini's
+        file I/O reads, such as the File SOP, the parm gets the same path HOUDINI_PATHMAP
+        would give it at read time. For a SOP inside a locked HDA, it remaps the file parms
+        of the outermost locked HDA that holds it instead, for example an OBJ-level HDA
+        that wraps a USD Import SOP and promotes its File parm.
+        """
+        if not os.environ.get("HOUDINI_PATHMAP"):
+            return
+
+        sop_nodes: list[Node] = hou.node("/").recursiveGlob("*", filter=hou.nodeTypeFilter.Sop)
+        editable_sop_nodes: list[Node] = []
+        hda_nodes_by_path: dict[str, Node] = {}
+        for node in sop_nodes:
+            if not node.isInsideLockedHDA() or node.isEditableInsideLockedHDA():
+                editable_sop_nodes.append(node)
+                continue
+            # A parm inside a locked HDA can't be set, and a path the artist can change there
+            # comes from a parm promoted to the HDA node. So remap the outermost locked HDA
+            # instead, once, whatever its context. A SOP or LOP HDA needs no extra pass: it
+            # is remapped as a SOP here or by the LOP pass.
+            hda_node: Node = self._outermost_locked_hda(node)
+            if hda_node.type().category().name() not in ("Sop", "Lop"):
+                hda_nodes_by_path[hda_node.path()] = hda_node
+        self._remap_file_parms(editable_sop_nodes, "SOP")
+        self._remap_file_parms(list(hda_nodes_by_path.values()), "HDA")
+
+    @staticmethod
+    def _outermost_locked_hda(node: Node) -> Node:
+        """
+        Returns the outermost locked HDA instance that holds the given node, which must
+        be inside a locked HDA. That HDA node is the first ancestor not itself inside a
+        locked HDA.
+        """
+        # Climb while the parent is itself inside a locked HDA
+        parent: Node = node.parent()
+        if parent.isInsideLockedHDA():
+            return HoudiniHandler._outermost_locked_hda(parent)
+        return parent
+
+    def _remap_file_parms(self, nodes: list[Node], context: str) -> None:
+        """
+        Applies HOUDINI_PATHMAP to the file path string parms of the given nodes.
+
+        A Windows path typed with backslashes is looked up with forward slashes, the
+        form the adaptor gives every rule, so it maps like the same path typed with
+        forward slashes.
+
+        Args:
+            nodes (list[Node]): The nodes whose parms to remap.
+            context (str): The node context named in each log line, e.g. "LOP".
+        """
+        for node in nodes:
             parms: list[Parm] = node.parms()
             for parm in parms:
                 try:
@@ -92,13 +172,17 @@ class HoudiniHandler:
                         original: str = parm.unexpandedString()
                         if not original or original.startswith("$") or original.startswith("`"):
                             continue
-                        mapped, err = hou.hscript(f"pathmap -t '{original}' -c")
+                        # Look the path up in the slash form the rules use
+                        lookup: str = _forward_slash_windows_path(original)
+                        mapped, err = hou.hscript(f"pathmap -t '{lookup}' -c")
                         mapped = mapped.strip()
                         if err:
                             print(f"Error remapping {parm.path()}: {err}")
-                        elif mapped and mapped != original:
+                        # Set only a path a rule changed, not one that only lost its
+                        # backslashes
+                        elif mapped and mapped not in (original, lookup):
                             parm.set(mapped)
-                            print(f"Remapped LOP parm {parm.path()}: " f"{original} -> {mapped}")
+                            print(f"Remapped {context} parm {parm.path()}: {original} -> {mapped}")
                 except hou.OperationFailed:
                     # Keyframed/animated parms have no single unexpanded string value, and
                     # calling parm.set() on them would clobber the animation channel, so skip.
@@ -108,13 +192,13 @@ class HoudiniHandler:
                     except hou.Error:
                         resolved = "<unresolved>"
                     print(
-                        f"Skipping LOP parm {parm.path()} (keyframed): "
+                        f"Skipping {context} parm {parm.path()} (keyframed): "
                         f"{resolved} will not be path-mapped"
                     )
                 except hou.Error as exc:
                     # e.g. hou.PermissionError from parm.set() on a locked HDA parm. Skip this
                     # parm rather than aborting path mapping for the rest of the scene.
-                    print(f"Skipping LOP parm {parm.path()}: {exc}")
+                    print(f"Skipping {context} parm {parm.path()}: {exc}")
 
     def set_node_settings(self, node):
         # this is a place holder function
@@ -287,3 +371,4 @@ class HoudiniHandler:
 
         self._path_map_envs()
         self._remap_lop_file_paths()
+        self._remap_sop_file_paths()

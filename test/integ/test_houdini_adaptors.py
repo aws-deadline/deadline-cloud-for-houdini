@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import subprocess
 
 import pytest
 
@@ -293,3 +294,90 @@ class TestAdaptors:
             f"Adaptor exited with non-zero return code.\n"
             f"Combined output:\n{combined_output[-2000:]}"
         )
+
+    def test_usd_import_sop_path_is_remapped(
+        self,
+        hython_location: Path,
+        script_location: Path,
+        tmp_path: Path,
+    ) -> None:
+        """
+        A USD Import SOP whose File parm is an absolute path under a path mapping rule's
+        source cooks on the worker. USD opens that path itself, so HOUDINI_PATHMAP does
+        not reach it, and without remapping the SOP parm the Geometry ROP fails with
+        "Invalid source .../usdimport1/lopimport1".
+
+        The scene's path is under <tmp_path>/submitter_assets, which is never created
+        (Houdini deactivates a rule whose source exists); the file is in
+        <tmp_path>/worker_assets, where the rule maps it.
+        """
+        houdini_version: str = _get_houdini_version(hython_location)
+
+        # Create a HIP file with a USD Import SOP that reads a mapped source path
+        hip_output: subprocess.CompletedProcess[bytes] = run_command(
+            [
+                str(hython_location),
+                str(script_location / "usd_import_sop_pathmap_test" / "_test_hip.py"),
+                "--",
+                str(tmp_path),
+            ]
+        )
+        assert hip_output.returncode == 0, "Failed to create test HIP file"
+
+        job_template_location: Path = (
+            script_location / "usd_import_sop_pathmap_test" / "template.yaml"
+        )
+        job_params: dict = {
+            "HipFile": str(tmp_path / "test_usd_import_sop.hip"),
+            "HoudiniVersion": houdini_version,
+        }
+
+        # One rule from the scene's source folder to the folder that holds the file,
+        # in the same form as test_lop_keyframe_pathmap_does_not_crash.
+        source_dir: str = (tmp_path / "submitter_assets").as_posix()
+        dest_dir: str = (tmp_path / "worker_assets").as_posix()
+        source_format: str = "WINDOWS" if os.name == "nt" else "POSIX"
+        path_mapping_rules: str = json.dumps(
+            {
+                "version": "pathmapping-1.0",
+                "path_mapping_rules": [
+                    {
+                        "source_path_format": source_format,
+                        "source_path": source_dir,
+                        "destination_path": dest_dir,
+                    }
+                ],
+            }
+        )
+
+        output: subprocess.CompletedProcess[bytes] = run_command(
+            [
+                "openjd",
+                "run",
+                str(job_template_location),
+                "--step",
+                "GeoRender",
+                "--job-param",
+                json.dumps(job_params),
+                "--path-mapping-rules",
+                path_mapping_rules,
+            ]
+        )
+
+        combined_output: str = output.stdout.decode(
+            "utf-8", errors="replace"
+        ) + output.stderr.decode("utf-8", errors="replace")
+
+        # The adaptor must log the remapped SOP parm, naming the mapped destination
+        assert (
+            f"Remapped SOP parm /obj/test_geo/usdimport1/filepath1: "
+            f"{source_dir}/cables.usda -> {dest_dir}/cables.usda" in combined_output
+        ), "Expected the adaptor to remap the USD Import SOP's filepath1"
+
+        # The import must cook, so the render succeeds and writes the geometry
+        assert "Invalid source" not in combined_output
+        assert output.returncode == 0, (
+            f"Adaptor exited with non-zero return code.\n"
+            f"Combined output:\n{combined_output[-2000:]}"
+        )
+        assert (tmp_path / "output.0001.bgeo.sc").is_file()
