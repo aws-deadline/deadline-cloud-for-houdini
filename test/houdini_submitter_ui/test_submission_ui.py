@@ -5,7 +5,6 @@ import json
 import time
 
 import pytest
-import xa11y
 import yaml
 from deadline_test_fixtures.xa11y.controls import (
     TAB_JOB_SPECIFIC,
@@ -116,11 +115,36 @@ def test_unsaved_scene_cancel_then_retry(gui_session):
     from PIL import ImageGrab
 
     ImageGrab.grab(all_screens=True).save(work / "unsaved-warning.png")
-    bounds = warning.element().bounds
-    assert bounds is not None
-    xa11y.input_sim().click(
-        (int(bounds.x + bounds.width * 0.85), int(bounds.y + bounds.height * 0.84))
+    import win32api
+    import win32con
+    import win32gui
+    import win32process
+
+    windows = []
+
+    def owned_warning(hwnd, _):
+        if (
+            win32gui.IsWindowVisible(hwnd)
+            and win32gui.GetWindowText(hwnd) == "Warning"
+            and win32process.GetWindowThreadProcessId(hwnd)[1] == app.pid
+        ):
+            windows.append(hwnd)
+
+    win32gui.EnumWindows(owned_warning, None)
+    assert len(windows) == 1, windows
+    hwnd = windows[0]
+    win32gui.SetForegroundWindow(hwnd)
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    point = (int(left + (right - left) * 0.85), int(top + (bottom - top) * 0.84))
+    (work / "native-warning-click.json").write_text(
+        json.dumps({"bounds": [left, top, right, bottom], "point": point}, indent=2),
+        encoding="utf-8",
     )
+    # Use native virtual-desktop coordinates for the NVIDIA/Hyper-V display
+    # arrangement; the accessibility input bridge missed this native window.
+    win32api.SetCursorPos(point)
+    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
+    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
     warning.wait_hidden(timeout=30)
     deadline = time.monotonic() + 10
     while "choice" not in (prompts := json.loads((work / "native-prompts.json").read_text()))[-1]:
