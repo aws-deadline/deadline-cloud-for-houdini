@@ -728,6 +728,14 @@
             parmtag { "script_callback_language" "python" }
             help    "Discover and attach the job's input and output file names and directories based on the current ROP graph."
         }
+        parm {
+            name    "filter_auto_inputs"
+            label   "Filter Auto-Detected Inputs"
+            type    toggle
+            default { "0" }
+            parmtag { "script_callback_language" "python" }
+            help    "Leave out each auto-detected input directory that is, contains, or is inside a detected output directory, attach the files that loading File Cache nodes read, and leave out each input in the Excluded Inputs list. An auto-detected input deleted from the Input Filenames or Input Directories list is added to the Excluded Inputs list."
+        }
         multiscroll {
             name    "input_filenames"
             label    "Input Filenames"
@@ -767,6 +775,21 @@
                 default { "" }
                 parmtag { "script_callback_language" "python" }
                 help    "Directories that will contain output files when the job is run. This controls what the worker will upload after rendering."
+            }
+        }
+
+        multiscroll {
+            name    "excluded_inputs"
+            label    "Excluded Inputs"
+
+            parm {
+                name    "excluded_input#"
+                label   "Excluded Input"
+                type    string
+                default { "" }
+                disablewhen "{ filter_auto_inputs == 0 }"
+                parmtag { "script_callback_language" "python" }
+                help    "Auto-detected input files and directories to leave out of the job when Filter Auto-Detected Inputs is on. Delete an entry to detect that input again."
             }
         }
 

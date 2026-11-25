@@ -30,6 +30,7 @@ from ._assets import (
     _get_hip_file,
     _get_evaluated_asset_references,
     _get_scene_asset_references,
+    _is_filter_auto_inputs_enabled,
     _parse_files,
 )
 
@@ -802,6 +803,10 @@ def parse_files_callback(kwargs):
 def save_bundle_callback(kwargs):
     node = kwargs["node"]
     name = node.parm("name").evalAsString()
+    if _is_filter_auto_inputs_enabled(node):
+        # Re-scan the scene first, the way an automatic parse before submission does, so the
+        # bundle honors exclusions and outputs changed since the last parse.
+        _parse_files(node)
     asset_references = _get_evaluated_asset_references(node)
     try:
         job_bundle_dir = create_job_history_bundle_dir("houdini", name)
