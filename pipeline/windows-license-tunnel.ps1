@@ -1,7 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #
-# Adapted from the Nuke Windows CI tunnel lifecycle pattern. SideFX uses port
-# 1715; Foundry's port and licensing configuration do not apply to Houdini.
+# Connection settings are supplied by the workflow's private configuration.
 param([switch]$Cleanup)
 
 $ErrorActionPreference = 'Stop'
@@ -14,7 +13,6 @@ $state = Join-Path $directory 'process.json'
 $status = Join-Path $env:RUNNER_TEMP 'houdini-windows-license-status.txt'
 $env:AWS_CONFIG_FILE = $config
 $env:AWS_PAGER = ''
-$licensePort = 1715
 
 function Write-TunnelFailureCategory {
     # SSM output contains private connection details. Upload only this summary.
@@ -105,10 +103,20 @@ if ($Cleanup) {
     exit 0
 }
 
-foreach ($name in 'AWS_REGION', 'LICENSE_ROLE_ARN', 'BASTION_INSTANCE_TAG') {
+foreach ($name in 'AWS_REGION', 'LICENSE_ROLE_ARN', 'BASTION_INSTANCE_TAG',
+    'LICENSE_PORT', 'LICENSE_SESSION_DOCUMENT') {
     $value = [Environment]::GetEnvironmentVariable($name, 'Process')
     if (-not $value) { throw "Missing license configuration: $name" }
     if ($value -match '[\r\n]') { throw "License configuration must be single-line: $name" }
+}
+$licensePort = 0
+if (-not [int]::TryParse($env:LICENSE_PORT, [ref]$licensePort) -or
+    $licensePort -lt 1 -or $licensePort -gt 65535) {
+    throw 'Invalid license connection configuration.'
+}
+$sessionDocument = $env:LICENSE_SESSION_DOCUMENT
+if ($sessionDocument -notmatch '^[A-Za-z0-9_.-]{3,128}$') {
+    throw 'Invalid license session configuration.'
 }
 Get-Command aws -ErrorAction Stop | Out-Null
 Get-Command session-manager-plugin -ErrorAction Stop | Out-Null
@@ -116,7 +124,7 @@ if (Test-Path -LiteralPath $directory) {
     throw 'License tunnel state already exists; clean up the previous session first.'
 }
 # Allocate a separate loopback port without replacing an existing listener
-# on 1715 or stopping the process that owns it.
+# or stopping the process that owns it.
 $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
 try {
     $listener.Start()
@@ -145,7 +153,7 @@ region = $env:AWS_REGION
     }
     $process = Start-Process aws -ArgumentList @(
         'ssm', 'start-session', '--target', $bastions[0],
-        '--document-name', 'DccInteg-PortForwardToLicenseServer',
+        '--document-name', $sessionDocument,
         '--parameters', "portNumber=$licensePort,localPortNumber=$localPort",
         '--profile', 'license'
     ) -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError $errorLog -PassThru

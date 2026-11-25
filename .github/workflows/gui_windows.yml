@@ -36,6 +36,10 @@ on:
         required: true
       BASTION_INSTANCE_TAG:
         required: true
+      LICENSE_PORT:
+        required: true
+      LICENSE_SESSION_DOCUMENT:
+        required: true
 
 permissions:
   contents: read
@@ -154,6 +158,8 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           LICENSE_ROLE_ARN: ${{ secrets.LICENSE_ROLE_ARN }}
           BASTION_INSTANCE_TAG: ${{ secrets.BASTION_INSTANCE_TAG }}
+          LICENSE_PORT: ${{ secrets.LICENSE_PORT }}
+          LICENSE_SESSION_DOCUMENT: ${{ secrets.LICENSE_SESSION_DOCUMENT }}
         run: |
           # Keep the launcher and its tunnel children in the same step as
           # their consumers, following the working C4D lifecycle.

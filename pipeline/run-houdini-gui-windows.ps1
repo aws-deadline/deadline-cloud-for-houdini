@@ -33,12 +33,10 @@ $original = $match.Groups[1].Value.Trim()
 $credentials = @{}
 $testExit = 1
 try {
-    $licensePort = 1715
-    if ($env:HOUDINI_GUI_LICENSE_PORT) {
-        if (-not [int]::TryParse($env:HOUDINI_GUI_LICENSE_PORT, [ref]$licensePort) -or
-            $licensePort -lt 1 -or $licensePort -gt 65535) {
-            throw 'The local SideFX tunnel port is invalid.'
-        }
+    $licensePort = 0
+    if (-not [int]::TryParse($env:HOUDINI_GUI_LICENSE_PORT, [ref]$licensePort) -or
+        $licensePort -lt 1 -or $licensePort -gt 65535) {
+        throw 'The local SideFX tunnel configuration is missing or invalid.'
     }
     $expectedRoute = "http://127.0.0.1:$licensePort"
     $env:HOUDINI_GUI_LICENSE_SERVER = $expectedRoute
