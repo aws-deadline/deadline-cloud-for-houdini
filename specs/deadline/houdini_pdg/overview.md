@@ -80,11 +80,11 @@ sequenceDiagram
   participant F as Deadline Cloud
   participant W as Worker
   P->>S: start cook
-  loop while PDG generates
-    P->>S: offer work item
-    S-->>P: deferred
+  loop while PDG is still generating
+    P->>S: offer a work item early
+    S-->>P: deferred, so PDG offers it again later
   end
-  P->>S: offer first work item
+  P->>S: offer a work item, once every node has generated
   S->>P: inspect the graph, read the scene
   S->>S: build the job shape and validate it
   alt graph refused
@@ -111,7 +111,7 @@ sequenceDiagram
     W-->>F: succeeded or failed
   end
   P->>S: stop cook
-  opt you stopped the cook
+  opt the artist stopped the cook
     S->>F: cancel the job
   end
 ```
