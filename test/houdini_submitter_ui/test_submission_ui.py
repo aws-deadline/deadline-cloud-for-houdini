@@ -136,15 +136,34 @@ def test_unsaved_scene_cancel_then_retry(gui_session):
     win32gui.SetForegroundWindow(hwnd)
     left, top, right, bottom = win32gui.GetWindowRect(hwnd)
     point = (int(left + (right - left) * 0.85), int(top + (bottom - top) * 0.84))
-    (work / "native-warning-click.json").write_text(
-        json.dumps({"bounds": [left, top, right, bottom], "point": point}, indent=2),
-        encoding="utf-8",
-    )
     # Use native virtual-desktop coordinates for the NVIDIA/Hyper-V display
     # arrangement; the accessibility input bridge missed this native window.
     win32api.SetCursorPos(point)
+    time.sleep(0.25)
+    cursor = win32gui.GetCursorPos()
+    target = win32gui.GetAncestor(win32gui.WindowFromPoint(cursor), win32con.GA_ROOT)
+    (work / "native-warning-click.json").write_text(
+        json.dumps(
+            {
+                "bounds": [left, top, right, bottom],
+                "point": point,
+                "cursor": cursor,
+                "target_is_owned_warning": target == hwnd,
+                "foreground_is_owned_warning": win32gui.GetForegroundWindow() == hwnd,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    assert cursor == point, (cursor, point)
+    assert target == hwnd, "Cursor did not reach the owned warning window"
     win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
-    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+    try:
+        # Allow the native event loop to observe the held button. Back-to-back
+        # down/up did not select the visible button in the live runner trial.
+        time.sleep(0.5)
+    finally:
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
     warning.wait_hidden(timeout=30)
     deadline = time.monotonic() + 10
     while "choice" not in (prompts := json.loads((work / "native-prompts.json").read_text()))[-1]:
