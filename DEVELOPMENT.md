@@ -168,9 +168,10 @@ $ python scripts/run_integ_tests.py "{\"19.5.805\": \"C:\\Program Files\\Side Ef
 
 The xa11y suite launches real Houdini, drives the legacy ROP submitter dialog
 against a local mock Deadline Cloud service, validates exported job bundles, and
-renders the bundles locally for image comparison. Six cases cover default and
+renders the bundles locally for image comparison. Eight cases cover default and
 edited exports, default and edited submissions, unsaved-scene cancellation and
-retry, and missing-input validation. They do not submit real AWS jobs.
+retry, missing-input validation, dialog reuse and node deletion, and background
+login completion with mocked authentication. They do not submit real AWS jobs.
 
 The suite currently requires Windows and Houdini FX 22.0.368. Houdini licensing,
 an unlocked interactive desktop, and a GPU with a working OpenGL driver must be

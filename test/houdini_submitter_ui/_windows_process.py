@@ -9,9 +9,8 @@ terminate its remaining workers. Adapted from the Nuke Windows GUI harness. This
 
 from __future__ import annotations
 
-import ctypes
+import ctypes.wintypes
 import subprocess
-from ctypes import wintypes
 
 
 def _last_windows_error() -> OSError:
@@ -23,13 +22,13 @@ class _BasicLimits(ctypes.Structure):
     _fields_ = [
         ("PerProcessUserTimeLimit", ctypes.c_longlong),
         ("PerJobUserTimeLimit", ctypes.c_longlong),
-        ("LimitFlags", wintypes.DWORD),
+        ("LimitFlags", ctypes.wintypes.DWORD),
         ("MinimumWorkingSetSize", ctypes.c_size_t),
         ("MaximumWorkingSetSize", ctypes.c_size_t),
-        ("ActiveProcessLimit", wintypes.DWORD),
+        ("ActiveProcessLimit", ctypes.wintypes.DWORD),
         ("Affinity", ctypes.c_size_t),
-        ("PriorityClass", wintypes.DWORD),
-        ("SchedulingClass", wintypes.DWORD),
+        ("PriorityClass", ctypes.wintypes.DWORD),
+        ("SchedulingClass", ctypes.wintypes.DWORD),
     ]
 
 
@@ -67,19 +66,22 @@ class WindowsProcessJob:
 
     def __init__(self, process: subprocess.Popen) -> None:
         kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
-        kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
-        kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+        kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, ctypes.wintypes.LPCWSTR]
+        kernel32.CreateJobObjectW.restype = ctypes.wintypes.HANDLE
         kernel32.SetInformationJobObject.argtypes = [
-            wintypes.HANDLE,
+            ctypes.wintypes.HANDLE,
             ctypes.c_int,
             ctypes.c_void_p,
-            wintypes.DWORD,
+            ctypes.wintypes.DWORD,
         ]
-        kernel32.SetInformationJobObject.restype = wintypes.BOOL
-        kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
-        kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
-        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-        kernel32.CloseHandle.restype = wintypes.BOOL
+        kernel32.SetInformationJobObject.restype = ctypes.wintypes.BOOL
+        kernel32.AssignProcessToJobObject.argtypes = [
+            ctypes.wintypes.HANDLE,
+            ctypes.wintypes.HANDLE,
+        ]
+        kernel32.AssignProcessToJobObject.restype = ctypes.wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
+        kernel32.CloseHandle.restype = ctypes.wintypes.BOOL
         self._kernel32 = kernel32
         self._handle = kernel32.CreateJobObjectW(None, None)
         if not self._handle:

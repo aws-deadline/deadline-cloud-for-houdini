@@ -40,7 +40,7 @@ def mock_server():
 @pytest.fixture
 def gui_session(request, tmp_path):
     scenario = getattr(request, "param", "export")
-    assert scenario in ("export", "submit", "unsaved", "missing-input")
+    assert scenario in ("export", "submit", "unsaved", "missing-input", "lifecycle", "login")
     mock_server = request.getfixturevalue(
         "mock_server" if scenario == "export" else "submission_mock_server"
     )

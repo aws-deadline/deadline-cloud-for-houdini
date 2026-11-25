@@ -30,6 +30,56 @@ def _submit(root):
     button.press()
 
 
+def _request_gui_action(work, action):
+    result = work / "gui-action-result.json"
+    result.unlink(missing_ok=True)
+    temporary = work / "gui-action.tmp"
+    temporary.write_text(json.dumps({"action": action}), encoding="utf-8")
+    temporary.replace(work / "gui-action.json")
+    return result
+
+
+def _wait_gui_action(result):
+    deadline = time.monotonic() + 45
+    while not result.is_file():
+        assert time.monotonic() < deadline, f"GUI action timed out: {result}"
+        time.sleep(0.1)
+    response = json.loads(result.read_text())
+    assert "error" not in response, response
+    return response
+
+
+@pytest.mark.parametrize("gui_session", ["lifecycle"], indirect=True)
+def test_reopening_and_deleting_rop_releases_dialog(gui_session):
+    app, _, backend, work, _ = gui_session
+    root = _submitter(app)
+    reused = _wait_gui_action(_request_gui_action(work, "reuse"))
+    assert reused == {"same_dialog": True, "dialog_count": 1}, reused
+    root.wait_visible(timeout=30)
+    deleted = _wait_gui_action(_request_gui_action(work, "delete"))
+    assert deleted["dialog_released"], deleted
+    root.wait_hidden(timeout=30)
+    assert backend.call_counts.get("CreateJob", 0) == 0
+
+
+@pytest.mark.parametrize("gui_session", ["login"], indirect=True)
+def test_modeless_rop_login_delivers_background_success(gui_session):
+    app, _, backend, work, _ = gui_session
+    root = _submitter(app)
+    result = _request_gui_action(work, "login")
+    login = app.locator(
+        'dialog[name="Log in to AWS Deadline Cloud"], window[name="Log in to AWS Deadline Cloud"]'
+    )
+    login.wait_visible(timeout=30)
+    (work / "complete-mock-login").touch()
+    completed = _wait_gui_action(result)
+    assert completed["login_returned"] and completed["worker_finished"], completed
+    assert completed["settings_refresh"] >= 1 and completed["auth_refresh"] >= 1, completed
+    login.wait_hidden(timeout=30)
+    root.wait_visible(timeout=30)
+    assert backend.call_counts.get("CreateJob", 0) == 0
+
+
 def _finish_and_verify(gui_session, root, *, custom=False):
     app, _, backend, work, _ = gui_session
     progress = app.locator('dialog[name="AWS Deadline Cloud submission"]')
