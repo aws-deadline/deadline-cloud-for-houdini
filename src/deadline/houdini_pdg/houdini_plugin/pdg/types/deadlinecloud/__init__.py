@@ -3,7 +3,8 @@
 """Registers the Deadline Cloud scheduler with PDG. Experimental.
 
 PDG loads this module from ``$HOUDINI_PATH/pdg/types/deadlinecloud/``. The
-installer does not put it there; the PDG README explains how to add it by hand.
+submitter installer adds it there once the user turns the scheduler on, as the
+PDG README explains. ``hatch run install`` adds it for a checkout.
 
 The node's icon, parameters, help, and Tab menu entry come from the HDA in
 ``otls/deadline_cloud_scheduler.hda``, which binds to this type by name, the same
@@ -464,8 +465,8 @@ def _queue_error(
     # Match the error by its class name and its service code, from the most specific cause.
     names: Set[str] = {type(error).__name__, _error_code(error)}
     login: CookSetupError = CookSetupError(
-        "Your AWS Deadline Cloud login is missing or has expired. Log in with the node's "
-        f"Login button or Deadline Cloud Monitor, then cook again. Detail: {error}"
+        "Your AWS Deadline Cloud login is missing or has expired. Log in with Deadline Cloud "
+        f"Monitor or `deadline auth login`, then cook again. Detail: {error}"
     )
     if names & set(_LOGIN_ERRORS):
         return login
@@ -477,7 +478,10 @@ def _queue_error(
     if "ResourceNotFound" in _error_code(error):
         return CookSetupError(
             f"Queue {queue_id} on farm {farm_id} was not found. Choose a farm and queue in the "
-            "node's Deadline Cloud settings."
+            "scheduler node's Farm and Queue menus, or with `deadline config set defaults.farm_id "
+            "<farm-id>` and `deadline config set defaults.queue_id <queue-id>`. If the farm is "
+            "in another AWS Region, also run `deadline config set defaults.farm_region <region>` "
+            "after setting the farm. Then click Update Queue Parameters and cook again."
         )
     # Some credential providers raise their own errors, so ask the library.
     if clients.needs_login():

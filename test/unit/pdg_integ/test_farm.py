@@ -1,18 +1,38 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
-"""Tests for ``read_farm_view``, which reads a job and its tasks' uploads for the comparison.
+"""Tests for the farm module: the test farm and queue, reading a job for the comparison,
+and finding the jobs a cook made.
 
-The Deadline Cloud and S3 clients are fakes that answer from reads recorded on a real
-job (``recorded_farm``). Nothing else is faked.
+``read_farm_view``'s Deadline Cloud and S3 clients are fakes that answer from reads
+recorded on a real job (``recorded_farm``). ``cancel_job``'s client records its calls.
+``jobs_created_since``'s client is ``SearchableQueue``, which answers SearchJobs from a
+list of jobs, filtered as the service filters them. Nothing else is faked.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+from configparser import ConfigParser
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import pytest
+from deadline.client.config import config_file
 
 from deadline.houdini_pdg.ports import OutputFile
-from test.integ.pdg.farm import FarmStep, FarmTask, FarmView, read_farm_view
+from test.integ.pdg.farm import (
+    FarmQueue,
+    FarmStep,
+    FarmTask,
+    FarmView,
+    cancel_job,
+    cancel_job_of_cook,
+    farm_queue_from_env,
+    jobs_created_since,
+    read_farm_view,
+    write_deadline_config,
+)
 
 from .recorded_farm import (
     FakeDeadline,
@@ -22,6 +42,7 @@ from .recorded_farm import (
     read_recorded_farm_view,
     recorded_reads,
 )
+from .searchable_queue import FARM_ID, QUEUE_ID, SearchableQueue, searchable_job
 
 ROOT: str = "/projects/fx/shots/bonfire"
 
@@ -209,3 +230,226 @@ def test_a_steps_host_requirements_come_from_get_step() -> None:
     view: FarmView = read_recorded_farm_view(reads)
     assert view.steps["mosaic_bonfire"].required_capabilities == required
     assert view.steps["ropfetch_karma"].required_capabilities is None
+
+
+def test_the_farm_and_queue_come_from_the_two_variables() -> None:
+    """The tests submit only where PDG_INTEG_FARM_ID and PDG_INTEG_QUEUE_ID say."""
+    env: Dict[str, str] = {"PDG_INTEG_FARM_ID": "farm-a", "PDG_INTEG_QUEUE_ID": "queue-b"}
+    assert farm_queue_from_env(env) == FarmQueue(farm_id="farm-a", queue_id="queue-b")
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        pytest.param({}, id="neither"),
+        pytest.param({"PDG_INTEG_FARM_ID": "farm-a"}, id="no_queue"),
+        pytest.param({"PDG_INTEG_QUEUE_ID": "queue-b"}, id="no_farm"),
+        pytest.param({"PDG_INTEG_FARM_ID": "", "PDG_INTEG_QUEUE_ID": "queue-b"}, id="empty_farm"),
+        pytest.param({"PDG_INTEG_FARM_ID": "farm-a", "PDG_INTEG_QUEUE_ID": ""}, id="empty_queue"),
+    ],
+)
+def test_without_both_variables_there_is_no_farm(env: Dict[str, str]) -> None:
+    """Either one missing or empty means no farm, so the tests skip instead of guessing one."""
+    assert farm_queue_from_env(env) is None
+
+
+# A user's Deadline config, with a profile, its own default farm and queue, and other settings.
+_USER_CONFIG: str = """\
+[defaults]
+aws_profile_name = studio
+
+[profile-studio defaults]
+farm_id = farm-users
+
+[profile-studio farm-users defaults]
+queue_id = queue-users
+
+[settings]
+auto_accept = true
+"""
+
+
+def test_the_copied_deadline_config_points_at_the_test_farm_and_queue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """hython reads the copy, so the cook submits to the test queue with the user's login.
+
+    The user's file is left as it was, so their own default queue doesn't change.
+    """
+    user_config: Path = tmp_path / "user_config"
+    user_config.write_text(_USER_CONFIG, encoding="utf-8")
+    monkeypatch.setenv("DEADLINE_CONFIG_FILE_PATH", str(user_config))
+    into: Path = tmp_path / "copy"
+    into.mkdir()
+
+    copy: Path = write_deadline_config(FarmQueue("farm-tests", "queue-tests"), into)
+
+    # The copy as the client library reads it in hython.
+    copied: ConfigParser = ConfigParser()
+    copied.read_string(copy.read_text(encoding="utf-8"))
+    assert config_file.get_setting("defaults.farm_id", config=copied) == "farm-tests"
+    assert config_file.get_setting("defaults.queue_id", config=copied) == "queue-tests"
+    assert config_file.get_setting("defaults.aws_profile_name", config=copied) == "studio"
+    assert config_file.get_setting("settings.auto_accept", config=copied) == "true"
+    assert user_config.read_text(encoding="utf-8") == _USER_CONFIG
+
+
+def test_a_user_with_no_deadline_config_gets_one_with_only_the_test_farm_and_queue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A workstation that never ran the Deadline config still gets a config for the test queue."""
+    # The user's config path names no file.
+    monkeypatch.setenv("DEADLINE_CONFIG_FILE_PATH", str(tmp_path / "missing"))
+    copy: Path = write_deadline_config(FarmQueue("farm-tests", "queue-tests"), tmp_path)
+
+    # The copy holds the test farm and queue, and no file was made at the user's path.
+    copied: ConfigParser = ConfigParser()
+    copied.read_string(copy.read_text(encoding="utf-8"))
+    assert config_file.get_setting("defaults.farm_id", config=copied) == "farm-tests"
+    assert config_file.get_setting("defaults.queue_id", config=copied) == "queue-tests"
+    assert not (tmp_path / "missing").exists()
+
+
+class _RecordingDeadline:
+    """A Deadline Cloud client that records UpdateJob calls."""
+
+    def __init__(self) -> None:
+        self.updates: List[Dict[str, str]] = []
+
+    def update_job(self, **kwargs: str) -> Dict[str, Any]:
+        """Record the update."""
+        self.updates.append(kwargs)
+        return {}
+
+
+def test_canceling_a_job_cancels_only_that_job_on_the_test_queue() -> None:
+    """A timed-out cook's job is canceled, so it doesn't keep running on the farm."""
+    deadline: _RecordingDeadline = _RecordingDeadline()
+    cancel_job(FarmQueue("farm-tests", "queue-tests"), "job-hung", deadline_client=deadline)
+    assert deadline.updates == [
+        {
+            "farmId": "farm-tests",
+            "queueId": "queue-tests",
+            "jobId": "job-hung",
+            "targetTaskRunStatus": "CANCELED",
+        }
+    ]
+
+
+def test_a_cooks_job_is_canceled_by_the_id_in_its_cook_json(tmp_path: Path) -> None:
+    """A timed-out cook that submitted a job has that job canceled, and no other.
+
+    Without this, a hung cook's job would keep using the farm after the test failed.
+    """
+    # The debug directory of a cook that submitted job-hung.
+    (tmp_path / "cook.json").write_text(
+        json.dumps({"outcome": None, "job_id": "job-hung"}), encoding="utf-8"
+    )
+    deadline: _RecordingDeadline = _RecordingDeadline()
+
+    cancel_job_of_cook(FarmQueue("farm-tests", "queue-tests"), tmp_path, deadline_client=deadline)
+
+    assert deadline.updates == [
+        {
+            "farmId": "farm-tests",
+            "queueId": "queue-tests",
+            "jobId": "job-hung",
+            "targetTaskRunStatus": "CANCELED",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "cook_json",
+    [
+        pytest.param(None, id="no_debug_directory"),
+        pytest.param("", id="no_cook_json"),
+        pytest.param(json.dumps({"outcome": None}), id="no_job_id"),
+        pytest.param(json.dumps({"outcome": None, "job_id": None}), id="null_job_id"),
+    ],
+)
+def test_a_cook_that_submitted_no_job_cancels_nothing(
+    tmp_path: Path, cook_json: Optional[str]
+) -> None:
+    """A cook that hung before it submitted a job has nothing to cancel, and doesn't fail on it.
+
+    ``None`` stands for no debug directory, and ``""`` for a debug directory without cook.json.
+    """
+    # The cook's debug directory, as far as the cook got.
+    debug_dir: Optional[Path] = None if cook_json is None else tmp_path
+    if cook_json:
+        (tmp_path / "cook.json").write_text(cook_json, encoding="utf-8")
+    deadline: _RecordingDeadline = _RecordingDeadline()
+
+    cancel_job_of_cook(FarmQueue("farm-tests", "queue-tests"), debug_dir, deadline_client=deadline)
+
+    assert deadline.updates == []
+
+
+_TEST_START: datetime = datetime(2026, 11, 13, 17, 0, tzinfo=timezone.utc)
+_THIS_NAME: str = "pdg-integ-rop_batch-0a1b2c3d"
+_THIS_COOK: str = "1ad65a5137e24009abd5a68f86e94763"
+
+
+def _search(jobs: List[Dict[str, Any]], cook_id: Optional[str]) -> List[str]:
+    """The jobs ``jobs_created_since`` finds for this cook since the test started."""
+    return jobs_created_since(
+        FarmQueue(FARM_ID, QUEUE_ID),
+        _TEST_START,
+        cook_id=cook_id,
+        job_name=_THIS_NAME,
+        deadline_client=SearchableQueue(jobs),
+    )
+
+
+def test_a_job_with_the_cooks_name_or_id_made_since_the_start_is_found() -> None:
+    """A refused cook that still submitted shows up by its name, or by its ID.
+
+    The job made at the exact start counts, and another cook's job on the queue doesn't.
+    """
+    jobs: List[Dict[str, Any]] = [
+        searchable_job("job-by-name", _TEST_START, name=_THIS_NAME, cook_id="another-cook"),
+        searchable_job(
+            "job-by-id", _TEST_START + timedelta(minutes=1), name="renamed", cook_id=_THIS_COOK
+        ),
+        searchable_job(
+            "job-other", _TEST_START, name="pdg-integ-rop_batch-ffffffff", cook_id="other"
+        ),
+    ]
+    assert _search(jobs, cook_id=_THIS_COOK) == ["job-by-name", "job-by-id"]
+
+
+def test_a_job_made_before_the_start_is_not_found() -> None:
+    """A job from before the test isn't this cook's, even with the same name."""
+    early: datetime = _TEST_START - timedelta(seconds=1)
+    jobs: List[Dict[str, Any]] = [
+        searchable_job("job-early", early, name=_THIS_NAME, cook_id=_THIS_COOK)
+    ]
+    assert _search(jobs, cook_id=_THIS_COOK) == []
+
+
+def test_without_a_cook_id_only_the_name_finds_a_job() -> None:
+    """A refusal at the cook's start leaves no cook ID, so a job is found by name alone."""
+    jobs: List[Dict[str, Any]] = [
+        searchable_job("job-by-name", _TEST_START, name=_THIS_NAME, cook_id="another-cook"),
+        searchable_job("job-other", _TEST_START, name="other", cook_id=_THIS_COOK),
+    ]
+    assert _search(jobs, cook_id=None) == ["job-by-name"]
+
+
+def test_every_page_of_the_search_is_read() -> None:
+    """Jobs past the first page are found too, in the order the pages give them."""
+    # Five jobs of this cook, two to a page.
+    jobs: List[Dict[str, Any]] = [
+        searchable_job(f"job-{n}", _TEST_START, name=_THIS_NAME, cook_id=_THIS_COOK)
+        for n in range(5)
+    ]
+    deadline: SearchableQueue = SearchableQueue(jobs, page_size=2)
+    found: List[str] = jobs_created_since(
+        FarmQueue(FARM_ID, QUEUE_ID),
+        _TEST_START,
+        cook_id=_THIS_COOK,
+        job_name=_THIS_NAME,
+        deadline_client=deadline,
+    )
+    assert (found, deadline.searches) == ([f"job-{n}" for n in range(5)], 3)

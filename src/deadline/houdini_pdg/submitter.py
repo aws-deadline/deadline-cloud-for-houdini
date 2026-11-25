@@ -26,7 +26,7 @@ from deadline.client.api import (
 )
 from deadline.client import config as _client_config
 from deadline.client.job_bundle.submission import AssetReferences
-from deadline.houdini_submitter.python.deadline_cloud_for_houdini._job_bundle import (
+from deadline_cloud_for_houdini._job_bundle import (
     _ADAPTOR_OVERRIDE_PARAM_NAMES,
     _apply_adaptor_wheels_override,
     common_job_parameter_values,

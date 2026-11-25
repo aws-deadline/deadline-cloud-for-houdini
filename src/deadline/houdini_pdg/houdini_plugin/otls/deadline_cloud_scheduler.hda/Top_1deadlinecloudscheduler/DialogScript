@@ -82,19 +82,36 @@
             parm {
                 name    "farm"
                 label   "Farm"
-                type    label
-                default { "<unknown>" }
+                type    string
+                default { "" }
+                menu {
+                    [ "from deadline.houdini_pdg.houdini.host import farm_and_queue_menus" ]
+                    [ "return farm_and_queue_menus.list_menu_items('farm', kwargs['parm'].evalAsString())" ]
+                    language python
+                }
+                parmtag { "script_callback" "hou.phm().callback(kwargs)" }
+                parmtag { "script_callback_language" "python" }
+                help    "The default farm of the AWS Deadline Cloud workstation configuration. A pick is saved there."
             }
             parm {
                 name    "queue"
                 label   "Queue"
-                type    label
-                default { "<unknown>" }
+                type    string
+                default { "" }
+                menu {
+                    [ "from deadline.houdini_pdg.houdini.host import farm_and_queue_menus" ]
+                    [ "return farm_and_queue_menus.list_menu_items('queue', kwargs['parm'].evalAsString())" ]
+                    language python
+                }
+                parmtag { "script_callback" "hou.phm().callback(kwargs)" }
+                parmtag { "script_callback_language" "python" }
+                help    "The default queue of the AWS Deadline Cloud workstation configuration. A pick is saved there."
             }
             parm {
                 name    "login"
                 label   "Login"
                 type    button
+                invisible
                 joinnext
                 default { "0" }
                 parmtag { "script_callback" "hou.phm().callback(kwargs)" }
@@ -105,6 +122,7 @@
                 name    "logout"
                 label   "Logout"
                 type    button
+                invisible
                 joinnext
                 default { "0" }
                 parmtag { "script_callback" "hou.phm().callback(kwargs)" }
@@ -128,7 +146,7 @@
                 default { "0" }
                 parmtag { "script_callback" "hou.phm().callback(kwargs)" }
                 parmtag { "script_callback_language" "python" }
-                help    "Show the default farm and queue, and refresh the queue's parameters below."
+                help    "Read the default farm and queue again, and refresh the queue's parameters, such as its Conda packages."
             }
         }
         parm {

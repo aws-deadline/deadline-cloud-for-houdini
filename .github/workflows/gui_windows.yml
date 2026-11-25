@@ -1,16 +1,18 @@
 name: Houdini GUI Integration Tests - Windows
 
 on:
-  # Allows the initial trial before this new dispatch workflow is registered
-  # on mainline. Only the approved CI branch can trigger private execution.
   push:
     branches:
+      - mainline
       - fix-publish-python-version
     paths:
       - .github/workflows/gui_windows.yml
-      - pipeline/prepare-houdini-azure-graphics.ps1
-      - pipeline/select-houdini-gpu-display.ps1
-      - test/houdini_submitter_ui/**
+      - pipeline/**
+      - src/**
+      - test/**
+      - requirements*.txt
+      - pyproject.toml
+      - hatch.toml
   workflow_dispatch:
     inputs:
       source_sha:
@@ -40,54 +42,6 @@ permissions:
   contents: read
 
 jobs:
-  LinuxLicenseTransport:
-    name: Linux SideFX SSM HTTP diagnostic (no GUI or checkout)
-    if: >-
-      github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
-      github.ref == 'refs/heads/fix-publish-python-version'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-          mask-aws-account-id: true
-      - name: Inspect custom-document HTTP forwarding and owned cleanup
-        env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          LICENSE_ROLE_ARN: ${{ secrets.LICENSE_ROLE_ARN }}
-          BASTION_INSTANCE_TAG: ${{ secrets.BASTION_INSTANCE_TAG }}
-        run: |
-          session-manager-plugin --version
-          python pipeline/diagnose-ssm-http.py
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always()
-        with:
-          name: houdini-linux-license-transport-${{ github.run_id }}
-          path: ${{ runner.temp }}/houdini-license-transport/
-          if-no-files-found: warn
-  LinuxRunner:
-    name: Standard Linux runner availability (no Houdini tests)
-    if: >-
-      github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
-      github.ref == 'refs/heads/fix-publish-python-version'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Record Linux runner and source
-        env:
-          SOURCE_SHA: ${{ github.sha }}
-        run: |
-          cat /etc/os-release >> "$GITHUB_STEP_SUMMARY"
-          uname -a >> "$GITHUB_STEP_SUMMARY"
-          printf '\nSource: %s\nNo Houdini test cases ran in this job.\n' "$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
   GUI:
     if: >-
       github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
@@ -124,7 +78,7 @@ jobs:
           foreach ($file in 'check-windows-gui-desktop.ps1', 'windows-license-tunnel.ps1',
             'install-houdini-gui-windows.py', 'prepare-houdini-gui-dependencies.py',
             'run-houdini-gui-windows.ps1', 'run-houdini-gui-baseline.py',
-            'diagnose-sidefx-tunnel.py', 'prepare-houdini-software-graphics.ps1',
+            'diagnose-sidefx-tunnel.py',
             'prepare-houdini-azure-graphics.ps1', 'select-houdini-gpu-display.ps1') {
             Copy-Item "pipeline/$file" "$harness/pipeline/"
           }
@@ -153,7 +107,6 @@ jobs:
           ./pipeline/prepare-houdini-azure-graphics.ps1 `
             -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts/azure-graphics"
       - name: Verify driver preparation reuses the installed driver
-        if: github.ref == 'refs/heads/fix-publish-python-version'
         shell: pwsh
         run: |
           ./pipeline/prepare-houdini-azure-graphics.ps1 -ValidateOnly `

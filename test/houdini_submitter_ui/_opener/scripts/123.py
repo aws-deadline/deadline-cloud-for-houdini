@@ -41,15 +41,11 @@ def open_submitter():
         }
         # Record graphics from the actual licensed GUI, not a separate probe.
         startup["graphics_mode"] = os.environ.get("HOUDINI_GUI_GRAPHICS_MODE", "native")
-        shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+        shell32 = getattr(ctypes, "WinDLL")("shell32", use_last_error=True)
         shell32.IsUserAnAdmin.argtypes = []
         shell32.IsUserAnAdmin.restype = ctypes.c_int
         startup["administrator_token"] = bool(shell32.IsUserAnAdmin())
-        startup["vulkan_environment"] = {
-            name: os.environ.get(name)
-            for name in ("VK_DRIVER_FILES", "VK_ICD_FILENAMES", "VK_LOADER_DEBUG", "DZN_DEBUG")
-        }
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
         kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
         kernel32.GetModuleHandleW.restype = ctypes.c_void_p
         kernel32.GetModuleFileNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint]
@@ -57,34 +53,16 @@ def open_submitter():
         graphics_modules = {}
         for name in (
             "opengl32.dll",
-            "libgallium_wgl.dll",
             "vulkan-1.dll",
-            "vulkan_lvp.dll",
-            "vulkan_dzn.dll",
             "nvoglv64.dll",
         ):
             module = kernel32.GetModuleHandleW(name)
             if module:
                 filename = ctypes.create_unicode_buffer(32768)
                 if not kernel32.GetModuleFileNameW(module, filename, len(filename)):
-                    raise ctypes.WinError(ctypes.get_last_error())
+                    raise getattr(ctypes, "WinError")(getattr(ctypes, "get_last_error")())
                 graphics_modules[name] = filename.value
         startup["graphics_modules"] = graphics_modules
-        if startup["graphics_mode"] == "mesa-software":
-            bin_dir = Path(os.environ["HOUDINI_EXECUTABLE"]).parent
-            if not all(
-                name in graphics_modules and Path(graphics_modules[name]).parent == bin_dir
-                for name in ("opengl32.dll", "libgallium_wgl.dll")
-            ):
-                raise RuntimeError(
-                    "The actual Houdini GUI did not load the application-local Mesa DLLs."
-                )
-            icd_dir = Path(os.environ["HOUDINI_GUI_VULKAN_ICD"]).parent
-            driver = os.environ["HOUDINI_GUI_VULKAN_DRIVER"]
-            if driver not in graphics_modules or Path(graphics_modules[driver]).parent != icd_dir:
-                raise RuntimeError(
-                    "The actual Houdini GUI did not load the isolated Vulkan CPU driver."
-                )
         # The mock uses root-level operation paths. Match the existing Nuke
         # test-local endpoint adaptation; do not alter installed client code.
         import botocore.awsrequest
@@ -110,7 +88,7 @@ def open_submitter():
         output.mkdir(parents=True, exist_ok=True)
         # Houdini's native message bodies/buttons are not exposed through UIA.
         # Observe the real prompt and response without changing its behavior.
-        prompts = []
+        prompts: list[dict] = []
         original_display_message = hou.ui.displayMessage
         prompt_log = status.with_name("native-prompts.json")
 

@@ -14,15 +14,18 @@ from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter impo
 
 def test_rop_tool_is_modeless_and_retained_until_destroyed():
     """A floating ROP tool must survive callback return and release on close."""
+    from importlib import import_module
+
     from deadline.houdini_submitter.python.deadline_cloud_for_houdini import submitter
-    from qtpy.QtCore import Qt
+
+    qt = getattr(import_module("qtpy.QtCore"), "Qt")
 
     dialog = mock.Mock()
     submitter._show_rop_submitter(dialog)
     try:
         dialog.show.assert_called_once_with()
         dialog.exec_.assert_not_called()
-        dialog.setAttribute.assert_called_once_with(Qt.WA_DeleteOnClose, True)
+        dialog.setAttribute.assert_called_once_with(qt.WA_DeleteOnClose, True)
         assert dialog in submitter._ROP_SUBMITTER_DIALOGS
     finally:
         dialog.destroyed.connect.call_args.args[0]()

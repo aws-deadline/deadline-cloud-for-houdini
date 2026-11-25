@@ -1,6 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 import getpass
 import glob
+import json
 import os
 import platform
 import re
@@ -109,6 +110,25 @@ def _validate_files(installation_path: Path) -> None:
     # Check the Houdini module is here and there's a version file
     submitter_module_dir = [f.name for f in (python_dir / "deadline_cloud_for_houdini").iterdir()]
     assert "_version.py" in submitter_module_dir
+
+    # Check the PDG scheduler's files are installed, and its package file ships turned off.
+    pdg_dir = installation_path / "pdg_scheduler"
+    assert (pdg_dir / "pdg" / "types" / "deadlinecloud" / "__init__.py").is_file()
+    assert (pdg_dir / "otls" / "deadline_cloud_scheduler.hda" / "INDEX__SECTION").is_file()
+    assert (python_dir / "deadline" / "houdini_pdg" / "_version.py").is_file()
+    package_dir = installation_path / "deadline_package"
+    pdg_package = package_dir / "pdg_scheduler" / "deadline_cloud_pdg_scheduler.json"
+    assert json.loads(pdg_package.read_text()) == {
+        "enable": False,
+        "hpath": f"{installation_path.as_posix()}/pdg_scheduler",
+    }
+    submitter_package = json.loads(
+        (package_dir / "deadline_submitter_for_houdini.json").read_text()
+    )
+    assert (
+        submitter_package["package_path"]
+        == f"{installation_path.as_posix()}/deadline_package/pdg_scheduler"
+    )
 
 
 # TODO: Add a similar test to above for valiating the HOUDINI_PACKAGE_DIR env variable is set by the installer

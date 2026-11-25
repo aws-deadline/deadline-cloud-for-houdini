@@ -26,7 +26,7 @@ def main() -> None:
             "3.13",
             "--only-binary",
             ":all:",
-            "deadline>=0.60.4,<0.61",
+            "deadline>=0.60.12,<0.61",
             "qtpy>=2.4,<3",
             "pywin32>=307,<311",
         ],

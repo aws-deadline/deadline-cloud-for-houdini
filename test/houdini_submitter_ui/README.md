@@ -65,11 +65,12 @@ local-render logs and JUnit are retained under the artifact directory.
 The complete baseline passed on GitHub's
 `aws-deadline_windows-2025_gpu-t4-4-core` runner with Houdini 22.0.368,
 Windows Server 2025 build 26100 and image `20261116.315.1`:
-[run 45299821789](https://github.com/aws-deadline/deadline-cloud-for-houdini/actions/runs/45299821789)
-at source `bef4a9854c3ed31dcf994e8025e8f03704dfed33`.
-Both GUI cases and all nine non-GUI cases passed, with no failures, errors or
+[run 45525692974](https://github.com/aws-deadline/deadline-cloud-for-houdini/actions/runs/45525692974)
+at source `81011443877f4ec0f65e33e0410bcc0bb97c714a`.
+All six GUI cases and nine non-GUI cases passed, with no failures, errors or
 skips. Actual viewport capture, bundle export, local render comparisons,
-Commercial license checkout and owned-process/tunnel cleanup passed.
+three mock submissions, native cancellation/retry, Commercial license checkout
+and owned-process/tunnel cleanup passed. No real AWS jobs were submitted.
 
 That fresh Azure `Standard_NC4as_T4_v3` VM initially had no NVIDIA driver.
 The workflow installs the hash-pinned, NVIDIA-signed Microsoft Azure GRID
@@ -97,5 +98,4 @@ image would not resolve that support gap.
 This initial baseline does not claim complete GUI coverage. Python-panel
 frame/take controls, the adaptor-wheel picker, attachment/host controls,
 API error recovery still need cases. Other repository-pinned
-Houdini versions need their own embedded-Python/Qt bootstrap. Mainline/release
-gating remains outside this GUI trial.
+Houdini versions need their own embedded-Python/Qt bootstrap. Release gating remains outside this GUI workflow.

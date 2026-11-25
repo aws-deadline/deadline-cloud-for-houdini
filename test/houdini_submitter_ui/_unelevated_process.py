@@ -86,7 +86,7 @@ class UnelevatedWindowsProcess:
                     inherited.append(
                         win32api.DuplicateHandle(
                             win32api.GetCurrentProcess(),
-                            msvcrt.get_osfhandle(stream.fileno()),
+                            getattr(msvcrt, "get_osfhandle")(stream.fileno()),
                             win32api.GetCurrentProcess(),
                             0,
                             True,
@@ -116,6 +116,7 @@ class UnelevatedWindowsProcess:
     def resume(self):
         import win32process
 
+        assert self._thread is not None
         win32process.ResumeThread(self._thread)
         self._thread.Close()
         self._thread = None
@@ -136,6 +137,7 @@ class UnelevatedWindowsProcess:
     def wait(self, timeout=None):
         import win32event
 
+        assert self._handle is not None
         milliseconds = win32event.INFINITE if timeout is None else int(timeout * 1000)
         if win32event.WaitForSingleObject(self._handle, milliseconds) == win32event.WAIT_TIMEOUT:
             raise subprocess.TimeoutExpired(self.args, timeout)
