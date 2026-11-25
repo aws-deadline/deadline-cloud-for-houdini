@@ -78,7 +78,6 @@ jobs:
           foreach ($file in 'check-windows-gui-desktop.ps1', 'windows-license-tunnel.ps1',
             'install-houdini-gui-windows.py', 'prepare-houdini-gui-dependencies.py',
             'run-houdini-gui-windows.ps1', 'run-houdini-gui-baseline.py',
-            'diagnose-sidefx-tunnel.py',
             'prepare-houdini-azure-graphics.ps1', 'select-houdini-gpu-display.ps1') {
             Copy-Item "pipeline/$file" "$harness/pipeline/"
           }
@@ -170,8 +169,6 @@ jobs:
               owned_start_matches = [bool]($process -and $process.StartTime.ToUniversalTime().Ticks -eq $owned.start_ticks)
               session_manager_plugin_version = (& session-manager-plugin --version | Out-String).Trim()
             } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/houdini-gui-artifacts/ssm-process-before-tests.json"
-            & "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" pipeline/diagnose-sidefx-tunnel.py
-            if ($LASTEXITCODE -ne 0) { throw 'SideFX transport diagnostic failed.' }
             ./pipeline/run-houdini-gui-windows.ps1 `
               -Python "$env:RUNNER_TEMP/houdini-gui-env/Scripts/python.exe" `
               -Artifacts "$env:RUNNER_TEMP/houdini-gui-artifacts"

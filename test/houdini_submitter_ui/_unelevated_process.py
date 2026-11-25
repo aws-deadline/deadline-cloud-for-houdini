@@ -1,9 +1,9 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 """Launch a test child with the runner's identity and reduced privileges.
 
-The Vulkan loader intentionally ignores app-local driver environment variables
-in elevated processes. CreateRestrictedToken and medium integrity let this
-test's GUI use those variables without changing users, UAC, or the registry.
+CreateRestrictedToken and medium integrity keep the test GUI from inheriting
+the runner's administrator privileges, without changing users, UAC, or the
+registry.
 The child starts suspended so its Job Object owns it before it can spawn workers.
 """
 

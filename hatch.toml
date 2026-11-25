@@ -45,14 +45,6 @@ test_pdg_full = "python {root}/scripts/run_pdg_integ_tests.py --full {args}"
 [envs.e2e.scripts]
 test = "pytest --no-cov {args:test/*/e2e}"
 
-[envs.gui]
-pre-install-commands = [
-  "pip install -r requirements-testing.txt -r requirements-integ-testing.txt -r requirements-gui-testing.txt",
-]
-
-[envs.gui.scripts]
-test = "pytest --no-cov --numprocesses=0 -vv {args:test/houdini_submitter_ui}"
-
 [envs.integ-ci]
 pre-install-commands = [
   "pip install -r requirements-integ-testing.txt -r requirements-testing.txt",

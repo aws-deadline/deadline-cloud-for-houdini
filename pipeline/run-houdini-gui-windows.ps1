@@ -26,7 +26,7 @@ New-Item -ItemType Directory -Force -Path $Artifacts | Out-Null
 $hserver = Join-Path (Split-Path $env:HOUDINI_EXECUTABLE) 'hserver.exe'
 $before = & $hserver -l 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the original hserver route.' }
-$match = [regex]::Match($before, 'License Server:\s+([^\r\n]+)')
+$match = [regex]::Match($before, 'License Server:[ \t]*(\S[^\r\n]*)')
 if (-not $match.Success) { throw 'Cannot determine the original hserver route.' }
 $original = $match.Groups[1].Value.Trim()
 @{hserver = $hserver; original = $original} | ConvertTo-Json | Set-Content -LiteralPath $state
@@ -46,7 +46,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Cannot configure this runner for the SideFX tunnel.' }
     $configured = & $hserver -l 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw 'Cannot verify the configured hserver route.' }
-    $configuredMatch = [regex]::Match($configured, 'License Server:\s+([^\r\n]+)')
+    $configuredMatch = [regex]::Match($configured, 'License Server:[ \t]*(\S[^\r\n]*)')
     $routeVerified = $configuredMatch.Success -and
         $configuredMatch.Groups[1].Value.Trim() -eq $expectedRoute
     @{loopback_port = $licensePort; route_verified = $routeVerified} |

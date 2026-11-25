@@ -3,7 +3,9 @@
 The initial Windows baseline targets Houdini FX 22.0.368 with its embedded
 Python 3.13 and PySide6. It launches the actual application on an unlocked
 interactive desktop, captures a native viewport flipbook, and drives the
-production ROP submitter through Windows accessibility.
+legacy ROP submitter dialog through Windows accessibility. The current
+Python Panel entry point is not exercised by this suite; its interactions,
+login event pump and pre-GUI hooks need separate coverage.
 
 Two cases export the existing minimal integration scene: defaults and edited
 job/scene settings. They assert bundle parameters, assets and mock API traffic,
@@ -26,7 +28,7 @@ value without changing the prompt. Cancellation clicks the screenshot-verified
 Cancel position relative to the owned warning window and requires return value
 3; screenshots and prompt records retain evidence of the interaction.
 The cancellation case caught an application-modal ROP submitter rejecting
-input to Houdini's native warning and taking foreground focus back. The ROP
+input to Houdini's native warning and taking foreground focus back. The legacy ROP
 submitter now opens as a modeless tool, retained until destruction; the shared
 submission-progress dialog remains modal. The test also requires no active
 Qt modal widget when the native warning is requested and verifies foreground

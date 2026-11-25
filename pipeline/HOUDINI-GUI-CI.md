@@ -2,9 +2,8 @@
 
 `gui_windows.yml` runs the actual Houdini FX 22.0.368 GUI and the existing
 non-GUI baseline on `aws-deadline_windows-2025_gpu-t4-4-core`. It runs on
-relevant mainline pushes, the approved trial branch `fix-publish-python-version`,
-manual dispatch, or a reusable workflow call. Private execution is limited to
-the canonical repository on those two trusted branches, never pull-request or
+relevant mainline pushes, manual dispatch, or a reusable workflow call. Private
+execution is limited to the canonical repository on mainline, never pull-request or
 fork code. An optional full source SHA must be an ancestor of the triggering
 trusted commit. The triggering commit supplies the test harness; artifacts
 record production and harness SHAs separately.
@@ -17,7 +16,8 @@ at source/harness `81011443877f4ec0f65e33e0410bcc0bb97c714a`, passed 6 GUI and
 22.0.368 (Commercial), embedded Python 3.13.10, Qt 6.8.3, Windows Server 2025
 Datacenter 10.0.26100 build 26100, and image `20261116.315.1`.
 
-The GUI cases verify actual viewport rendering, two exported bundles with local
+The GUI cases drive the legacy ROP dialog, rather than the current Python Panel
+entry point. They verify actual viewport rendering, two exported bundles with local
 OpenJD render/image comparisons, default and edited mock submissions, native
 unsaved-scene cancellation and retry, and missing-input rejection. Three mock
 jobs were created; no real AWS jobs were submitted. See the
@@ -92,8 +92,8 @@ Windows Job Objects own descendant processes; the GUI starts with a medium
 integrity token. Preferences, history, dependency and OpenJD session storage are
 isolated. Processes close before owned session storage is removed. Cleanup
 restores the license route and terminates the owned SSM session/process tree.
-Licensed runs are serialized with the existing Houdini integration concurrency
-group.
+GUI runs are serialized with the `houdini-integration-tests` concurrency group.
+The existing CodeBuild integration workflow is not serialized by this group.
 
 Artifacts retain desktop/display evidence, driver provenance, sanitized license
 status, native logs, accessibility trees, screenshots, viewport captures, mock
@@ -111,6 +111,12 @@ changes require infrastructure-owner authorization.
 
 Only Houdini 22.0.368 was GUI-validated. The repository also pins 19.5.805,
 20.0.896, 20.5.613 and 21.0.440; each needs its own Python/Qt/licensing validation.
-Linux GUI validation is separate work. Python-panel frame/take controls, wheel
+Linux GUI validation is separate work. The modeless legacy ROP login/event-pump
+behavior and node deletion while the dialog is open are not covered. Python-panel
+entry points, login/pre-GUI hooks, frame/take controls, wheel
 selection, attachments/host requirements and API error recovery remain coverage
 gaps.
+
+The temporary trial branch is excluded from this production workflow. Removing
+its existing infrastructure OIDC opt-in remains an infrastructure-owner task;
+this change does not modify IAM or repository access.
