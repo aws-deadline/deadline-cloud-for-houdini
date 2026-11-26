@@ -67,7 +67,11 @@ def main():
             "HOUDINI_ADAPTOR_SERVER_PATH does not exist"
         )
 
-    if not os.path.exists(server_path):
+    # Windows named pipes are not filesystem entries. Let the runtime's pipe
+    # client validate and connect to them; a filesystem check rejects valid
+    # pipes on newer Python versions.
+    named_pipe = os.name == "nt" and server_path.startswith("\\\\.\\pipe\\")
+    if not named_pipe and not os.path.exists(server_path):
         raise OSError(
             "HoudiniClient cannot connect to the Adaptor because the socket at the path defined by "
             "the environment variable HOUDINI_ADAPTOR_SERVER_PATH does not exist. Got: "

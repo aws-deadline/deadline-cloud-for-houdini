@@ -7,6 +7,7 @@ Table of Contents:
 * [The Development Loop](#the-development-loop)
 * [Submitter Development Workflow](#submitter-development-workflow)
 * [Application Interface Adaptor Development Workflow](#application-interface-adaptor-development-workflow)
+* [Testing](#testing)
 
 This package has two active branches:
 
@@ -130,7 +131,7 @@ hatch run all:test
 ```
 
 ### Integration Tests
-Integration tests are located in the `test/unit` directory. Individual test cases are subdirectories in `test/integ/test_scripts`; each one has a scene script (`.py`) and an expected job bundle corresponding to that scene.
+Integration tests are located in the `test/integ` directory. Individual test cases are subdirectories in `test/integ/test_scripts`; each one has a scene script (`.py`) and an expected job bundle corresponding to that scene.
 
 To run integration tests:
 1. Log out of any Deadline Cloud Monitor profiles with `deadline auth logout`.
@@ -162,6 +163,58 @@ We provide a Python script that can set up and run integration tests for multipl
 ```sh
 $ python scripts/run_integ_tests.py "{\"19.5.805\": \"C:\\Program Files\\Side Effects Software\\Houdini 19.5.805\\bin\\hython.exe\", \"20.0.896\": \"C:\\Program Files\\Side Effects Software\\Houdini 20.0.896\\bin\\hython.exe\"}"
 ```
+
+#### Submitter GUI Tests
+
+The xa11y suite launches real Houdini, drives the legacy ROP submitter dialog
+against a local mock Deadline Cloud service, validates exported job bundles, and
+renders the bundles locally for image comparison. Eight cases cover default and
+edited exports, default and edited submissions, unsaved-scene cancellation and
+retry, missing-input validation, dialog reuse and node deletion, and background
+login completion with mocked authentication. They do not submit real AWS jobs.
+
+The suite currently requires Windows and Houdini FX 22.0.368. Houdini licensing,
+an unlocked interactive desktop, and a GPU with a working OpenGL driver must be
+configured before running the tests. The current Python Panel entry point and
+other Houdini versions are not covered.
+
+##### Test Structure
+
+```text
+test/houdini_submitter_ui/
+├── conftest.py                   # Houdini and mock Deadline fixtures
+├── test_submitter_ui.py          # Bundle export and local render comparisons
+├── test_submission_ui.py         # Mock submissions and validation dialogs
+├── _opener/scripts/123.py        # Test-only scene and dialog setup
+└── _python/sitecustomize.py      # Test-only runtime dependency setup
+```
+
+From a separate Windows Python environment, install the test dependencies and
+retrieve the reference images:
+
+```powershell
+python -m pip install -e . -r requirements-testing.txt -r requirements-integ-testing.txt -r requirements-gui-testing.txt
+git lfs pull --include="test/integ/**"
+python pipeline/prepare-houdini-gui-dependencies.py --directory C:/temporary/houdini-dependencies
+```
+
+Use a new dependency directory and set `HOUDINI_GUI_DEPENDENCIES` to that path.
+Set `HOUDINI_EXECUTABLE` to the installed `houdini.exe` and `HOUDINI_VERSION` to
+`22.0.368`. Run from a Houdini command-line environment with its `HFS` and `SHFS`
+resource paths configured. Keep Houdini's bundled Qt runtime unchanged.
+
+Run the GUI suite with a fresh temporary results directory outside the repository:
+
+```powershell
+python -m pytest test/houdini_submitter_ui --no-cov --numprocesses=0 -vv --basetemp C:/temporary/houdini-gui-results
+```
+
+Each case uses isolated preferences and mock client configuration. The results
+directory retains application logs, accessibility trees, screenshots, viewport
+captures, job bundles, mock request records, and local render logs for diagnosis.
+The [Windows GUI workflow](.github/workflows/gui_windows.yml) runs this suite
+alongside the existing non-GUI integration tests. Its runner provisioning is
+separate from local test setup.
 
 #### CI Integration Tests (integ-ci environment)
 
