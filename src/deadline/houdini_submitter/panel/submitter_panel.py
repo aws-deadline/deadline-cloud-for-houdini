@@ -1,6 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
-from typing import Optional
+from typing import Callable, List, NamedTuple, Optional
 
 import hou
 
@@ -22,6 +22,7 @@ from deadline.client.ui.pre_gui_hooks import (
     run_pre_gui_hooks,
 )
 from deadline.client.dataclasses import SubmitterInfo
+from deadline.client.job_bundle.hooks import HookManager
 from deadline_cloud_for_houdini._version import version as houdini_submitter_version
 from deadline_cloud_for_houdini._assets import _get_scene_asset_references
 from deadline_cloud_for_houdini.constants import FrameRange
@@ -267,11 +268,14 @@ def _install_login_event_pump(dialog) -> None:
     login_signal.connect(_login_with_loop_callback)
 
 
-def _build_panel_for(n: hou.Node) -> SubmitterPanel:
+def _build_panel_for(
+    n: hou.Node, confirm_hooks: Callable[[List[HookManager]], bool]
+) -> SubmitterPanel:
     """Build the Deadline Cloud panel for one ROP.
 
     Every part of the panel reads and writes this ROP: the job settings, the attachments list,
-    Submit, Save bundle and the frame range and take controls.
+    Submit, Save bundle and the frame range and take controls. The studio's pre-GUI hooks run
+    first if confirm_hooks returns True for them.
     """
     ui_settings = read_ui_settings_from_node(n)
     # Seed the shared queue-parameter values with Conda/Rez packages pinned to the running
@@ -284,8 +288,7 @@ def _build_panel_for(n: hou.Node) -> SubmitterPanel:
 
     # Run pre-GUI hooks so studios can pre-populate dialog fields before it opens. Houdini has no
     # on-disk job bundle at this point, so hooks are sourced from DEADLINE_HOOKS_DIR only
-    # (bundle_dir=None), gated by settings.allow_environment_hooks. The confirmation prompt is
-    # skipped when auto_accept is set; otherwise the standard dialog is shown.
+    # (bundle_dir=None), gated by settings.allow_environment_hooks.
     try:
         pre_gui_output = run_pre_gui_hooks(
             PreGuiHookContext(
@@ -294,7 +297,7 @@ def _build_panel_for(n: hou.Node) -> SubmitterPanel:
                 submitter_name="houdini",
                 parameters=dict(shared_parameter_values),
             ),
-            confirm_callback=_pre_gui_hook_confirm_callback(hou.qt.mainWindow()),
+            confirm_callback=confirm_hooks,
         )
     except DeadlineOperationCanceled:
         # The user declined the hook confirmation prompt. That is a deliberate cancellation, not
@@ -368,6 +371,7 @@ class _PanelHost(QWidget):
         self._no_rop_label = QLabel(self._NO_ROP_MESSAGE)
         self._layout.addWidget(self._no_rop_label)
         self._panel: Optional[SubmitterPanel] = None
+        self._hook_answer: Optional[_HookAnswer] = None
 
     def show_rop(self, node: Optional[hou.Node]) -> None:
         """Show the panel for node, building it unless the current panel was built for node."""
@@ -377,11 +381,27 @@ class _PanelHost(QWidget):
         # Save before replacing: replacing deletes the panel and any edits not yet on its ROP.
         if self._panel is not None and _node_exists(self._panel.node):
             self._panel.save_edits_to_node()
-        self._set_panel(_build_panel_for(node))
+        self._set_panel(_build_panel_for(node, self._confirm_hooks))
 
     def clear(self) -> None:
         """Let go of the shown ROP, for when its scene closes and the ROP is deleted."""
         self._set_panel(None)
+
+    def _confirm_hooks(self, sources: List[HookManager]) -> bool:
+        """Whether to run these pre-GUI hooks. The artist is asked once per pane for the same hooks.
+
+        Each switch to another ROP runs the hooks again, so the prompt would otherwise appear on
+        every switch.
+        """
+        ask_artist = _pre_gui_hook_confirm_callback(hou.qt.mainWindow())
+        if ask_artist is None:  # settings.auto_accept is on
+            return True
+
+        # The hooks folder and its whole hooks file, which is what the prompt lists.
+        hooks = [(source.job_bundle_dir, source.hooks) for source in sources]
+        if self._hook_answer is None or self._hook_answer.hooks != hooks:
+            self._hook_answer = _HookAnswer(hooks, ask_artist(sources))
+        return self._hook_answer.run
 
     def _has_panel_built_for(self, node: hou.Node) -> bool:
         """Whether the current panel was built for node. A deleted ROP never counts."""
@@ -401,6 +421,13 @@ class _PanelHost(QWidget):
         self._no_rop_label.setVisible(panel is None)
         if panel is not None:
             self._layout.addWidget(panel)
+
+
+class _HookAnswer(NamedTuple):
+    """The artist's answer to the pre-GUI hooks prompt, and the hooks it was about."""
+
+    hooks: list
+    run: bool
 
 
 def _is_deadline_cloud_rop_node(node: Optional[hou.Node]) -> bool:
