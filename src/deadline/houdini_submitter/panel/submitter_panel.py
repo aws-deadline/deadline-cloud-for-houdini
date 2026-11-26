@@ -26,6 +26,7 @@ from deadline.client.job_bundle.hooks import HookManager
 from deadline_cloud_for_houdini._version import version as houdini_submitter_version
 from deadline_cloud_for_houdini._assets import _get_scene_asset_references
 from deadline_cloud_for_houdini.constants import FrameRange
+from deadline_cloud_for_houdini.excluded_input_paths_box import add_auto_input_controls
 from deadline_cloud_for_houdini.hip_settings import HoudiniSubmitterUISettings
 from deadline_cloud_for_houdini.houdini_submitter_widget import SceneSettingsWidget
 from deadline_cloud_for_houdini.queue_parameters import (
@@ -119,6 +120,15 @@ class SubmitterPanel(QWidget):
 
         parent_layout.addLayout(frame_info_layout)
         parent_layout.addWidget(self.deadline_cloud_widget)
+
+        # If the Job attachments tab changed shape, show them under Render with Take.
+        add_auto_input_controls(
+            self.deadline_cloud_widget,
+            self.node,
+            lambda widget: frame_info_layout.addWidget(
+                widget, frame_info_layout.rowCount(), 0, 1, -1
+            ),
+        )
 
     def _load_from_node(self):
         """Populate the controls from the node's trange/f/take parms and wire write-back.

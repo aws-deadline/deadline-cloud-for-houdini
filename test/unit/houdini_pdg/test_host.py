@@ -485,7 +485,7 @@ def test_work_item_expressions_and_relative_paths_are_not_globbed(
     _reference(sop, "real", "$HIP/frame.$F4.exr", scene)
     host: HoudiniPdgHost = HoudiniPdgHost(network.scheduler())
 
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.INFO, logger="deadline.houdini_pdg"):
         files: SceneFiles = host.scene_files()
 
     assert files.assets == (os.path.join(folder, "frame.0001.exr"),)
@@ -1319,3 +1319,22 @@ def test_the_host_reads_the_requirements_from_its_scheduler_node(scene: FakeHou)
     assert HoudiniPdgHost(network.scheduler()).host_requirements() == {
         "amounts": [{"name": "amount.worker.gpu", "min": 1}]
     }
+
+
+def test_the_excluded_input_paths_env_var_applies_to_the_scheduler_scan(
+    scene: FakeHou, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The scheduler has no Excluded input paths box, so the env var is how a cook leaves a folder out."""
+    folder: str = str(tmp_path / "scene")
+    _touch(folder, "cache", "v001", "sim.0001.bgeo.sc")
+    rock: str = _touch(folder, "assets", "rock.bgeo.sc")
+    network: FakeNetwork = build_network(PYRO_BONFIRE)
+    sop: FakeNode = network.topnet.add(FakeNode("/obj/geo1/file1", category="Sop"))
+    _reference(sop, "cache_root", "$HIP/cache", scene)
+    _reference(sop, "file", "$HIP/assets/rock.bgeo.sc", scene)
+    monkeypatch.setenv("DEADLINE_HOUDINI_EXCLUDED_INPUT_PATHS", "$HIP/cache")
+
+    files: SceneFiles = HoudiniPdgHost(network.scheduler()).scene_files()
+
+    assert files.assets == (rock,)
+    assert files.directories == ()

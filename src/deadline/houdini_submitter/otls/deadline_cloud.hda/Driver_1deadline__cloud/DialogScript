@@ -728,6 +728,14 @@
             parmtag { "script_callback_language" "python" }
             help    "Discover and attach the job's input and output file names and directories based on the current ROP graph."
         }
+        parm {
+            name    "skip_outputs_keep_caches"
+            label   "Skip output folders, keep loaded caches"
+            type    toggle
+            default { "0" }
+            parmtag { "script_callback_language" "python" }
+            help    "When this is on:\n- output folders aren't uploaded;\n- the cache version a File Cache node loads is still uploaded when you exclude its cache folder.\nIf a job reads files from an output folder, add that folder with Add... so it still uploads.\nLeave it off to upload these folders as before."
+        }
         multiscroll {
             name    "input_filenames"
             label    "Input Filenames"
@@ -753,6 +761,20 @@
                 default { "" }
                 parmtag { "script_callback_language" "python" }
                 help    "Directories from which all files will be uploaded as inputs during job submission."
+            }
+        }
+
+        multiscroll {
+            name    "excluded_input_paths"
+            label    "Excluded input paths"
+
+            parm {
+                name    "excluded_input_path#"
+                label   "Excluded input path"
+                type    string
+                default { "" }
+                parmtag { "script_callback_language" "python" }
+                help    "Auto-detected inputs at or under these paths aren't uploaded. Type one path per line.\n\nExamples:\n  $HIP/cache          the cache folder and everything in it\n  **/cache            a folder named cache anywhere\n  $HIP/geo/*_tmp      anything in $HIP/geo whose name ends in _tmp\n  $HIP/render/sh01?   the shots named sh01 plus one more character, such as sh010 or sh01a\n\nPaths you add with Add... are always uploaded, unless they were already in the\nauto-detected list. The scene file and output folders are never excluded.\n\nWith Skip output folders, keep loaded caches on, the cache version a File Cache node loads\nis still uploaded when you exclude its folder. To leave those files out too, name them:\n  $HIP/cache/*/v3/*.bgeo.sc\nWith it off, that cache is left out with its folder."
             }
         }
 

@@ -1,13 +1,17 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+import fnmatch
 import glob
 import os
 import re
+from typing import Iterable, Optional
 
 from deadline.client.job_bundle.submission import AssetReferences
 from pxr import Usd, UsdUtils
 
 import hou
 
+# A frame number in the one row Parse Files writes for a frame sequence, such as $F4 or ${F4}.
+_FRAME_SEQUENCE_TOKEN: str = r"(\$\{F\d+\}|\$F\d+)"
 _IGNORE_REF_VALUES = ("opdef:", "oplib:", "temp:", "op:")
 _IGNORE_REF_PARMS = (
     "taskgraphfile",
@@ -18,6 +22,21 @@ _IGNORE_REF_PARMS = (
     "SettingsOutput_img_file_path",
     "RS_outputFileNamePrefix",
     "savetodirectory_directory",
+)
+
+# The ROP toggle that skips output folders and keeps loaded caches (see its gate below).
+_SKIP_OUTPUTS_KEEP_CACHES_PARM: str = "skip_outputs_keep_caches"
+# The ROP's excluded input paths, one pattern per excluded_input_path# row.
+_EXCLUDED_INPUT_PATHS_PARM: str = "excluded_input_paths"
+# Patterns in this env var, separated by os.pathsep, are added to the node's excluded input paths.
+EXCLUDED_INPUT_PATHS_ENV_VAR: str = "DEADLINE_HOUDINI_EXCLUDED_INPUT_PATHS"
+# The SOP types with the File Cache's Load from Disk and read path parms, whose loaded cache files
+# are added as inputs when the toggle is on.
+_FILE_CACHE_TYPES: tuple[str, ...] = (
+    "Sop/filecache",
+    "Sop/filecache::2.0",
+    "Sop/rbdio::2.0",
+    "Sop/vellumio::2.0",
 )
 
 
@@ -75,12 +94,28 @@ def _get_evaluated_asset_references(rop_node: hou.Node) -> AssetReferences:
     an AssetReferences object with any Houdini tokens evaluated
     """
     asset_references = AssetReferences()
+    auto_rows: set[str] = {
+        n.unexpandedString() for n in rop_node.parm("auto_input_filenames").multiParmInstances()
+    }
 
     for n in rop_node.parm("input_filenames").multiParmInstances():
         filepath = n.unexpandedString()
         filepath_glob = _houdini_time_vars_to_glob(filepath)
         if filepath == filepath_glob:
             asset_references.input_filenames.add(n.eval())
+            continue
+
+        pieces: list[str] = re.split(_FRAME_SEQUENCE_TOKEN, filepath)
+        text: str = "".join(pieces[::2])
+        # A frame sequence row the scan wrote gets the files the Submit dialog gets. A row an
+        # older version wrote is a ref with a variable such as $HIP, and keeps the glob below.
+        if filepath in auto_rows and "$" not in text:
+            frames: range = range(1, len(pieces), 2)
+            asset_references.input_filenames.update(
+                f
+                for f in _find_frame_files(pieces, list(frames), [0] * len(frames))
+                if os.path.isfile(f)
+            )
             continue
 
         evaluated_glob = _get_evaluated_glob_path(parm=n, globbed_path=filepath_glob)
@@ -152,7 +187,8 @@ def _parse_files(node: hou.Node):
     current values in the UI. Then update the UI with the new lists of paths.
     """
     display_asset_refs = _get_unevaluated_asset_references(node)
-    auto_asset_refs = _get_scene_asset_references(node)
+    # One row per frame sequence, which Save Bundle globs, keeps the node's lists short.
+    auto_asset_refs = _get_scene_asset_references(node, expand_frame_sequences=False)
     prev_auto_asset_refs = _get_saved_auto_detected_asset_references(node)
 
     # Remove all previous and current auto detected assets from the lists currently
@@ -250,12 +286,32 @@ def _get_usd_asset_references(usd_file_paths: set[str]) -> tuple[set[str], set[s
     return input_files, output_directories, all_unresolved
 
 
-def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
-    # collect input filenames
+def _path_key(path: str) -> str:
+    """``path`` spelled one way, for comparing it with another path.
+
+    It is normalized, so ``/`` and ``\\`` are one separator on Windows, and its case is folded
+    where the filesystem ignores case. ``os.path`` is read at call time, so tests can swap it.
+    """
+    return os.path.normcase(os.path.normpath(path))
+
+
+def _get_scene_asset_references(
+    rop_node: hou.Node, keep_refs: bool = False, expand_frame_sequences: bool = True
+) -> AssetReferences:
+    """Return the scene's auto-detected inputs and outputs for the ROP. Each input is the path its
+    parm evaluates to, or with keep_refs the ref as typed, for the PDG scheduler's own scan. A frame
+    sequence is its files, or with expand_frame_sequences off one path with $F, as Parse Files keeps.
+    """
     asset_references: AssetReferences = AssetReferences()
     asset_references.input_filenames.add(_get_hip_file())
 
     usd_files: set[str] = set()
+
+    skip_outputs_keep_caches: bool = _is_skip_outputs_keep_caches_enabled(rop_node)
+    # Each stored input's evaluated paths, so a pattern matches a ref as its parms evaluate it.
+    evaluated: dict[str, set[str]] = {}
+    sources: dict[str, str] = {}
+    file_cache_nodes: dict[str, hou.Node] = {}
 
     for parm, ref in hou.fileReferences():
         if (
@@ -267,21 +323,31 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
             continue
 
         path: str = parm.evalAsString()
-        # Check the evaluated version to ensure _something_ exists, but add
-        # the unexpanded version to evaluate afterwards. Allows us to limit
-        # files with parameters, such as $F, to one entry instead of possibly
-        # hundreds/thousands. hou.fileReferences() already returns the refs as
-        # the equivalent of calling parm.unexpandedString()
-        # https://www.sidefx.com/docs/houdini/hom/hou/fileReferences.html
+        # Each input is the path its own parm evaluates to, not its ref. The Submit dialog
+        # attaches inputs as they are, and deadline-cloud doesn't expand $HIP or expressions.
         if os.path.isdir(path):
-            asset_references.input_directories.add(ref)
+            asset_references.input_directories.add(ref if keep_refs else path)
+            evaluated.setdefault(ref if keep_refs else path, set()).add(path)
+            sources.setdefault(_path_key(path), parm.path())
         if os.path.isfile(path):
-            asset_references.input_filenames.add(ref)
+            sequences: dict[str, set[str]] = {ref if keep_refs else path: {path}}
+            if _houdini_time_vars_to_glob(ref) != ref and not keep_refs:
+                # A time variable reads a frame sequence. Evaluating the parm on two frames finds
+                # it, also where the ref has node-local tokens such as $OS or a channel reference.
+                sequences = _get_frame_sequences(parm)
+            for entry, files in sequences.items():
+                asset_references.input_filenames.add(entry)
+                evaluated.setdefault(entry, set()).update(files)
+                for file in files:
+                    sources.setdefault(_path_key(file), parm.path())
             if os.path.splitext(path)[1].lower() in _USD_EXTENSIONS:
                 # Collect USD files for dependency traversal in the next step.
                 # We use the resolved absolute path because UsdUtils.ComputeAllDependencies
                 # needs a real filesystem path, not a Houdini variable like $HIP/scene.usda.
                 usd_files.add(os.path.realpath(path))
+        if skip_outputs_keep_caches and parm.node().type().nameWithCategory() in _FILE_CACHE_TYPES:
+            # A File Cache's loaded files aren't file references, so collect the node here.
+            file_cache_nodes.setdefault(parm.node().path(), parm.node())
 
     # Traverse USD files to find nested dependencies
     if usd_files:
@@ -300,7 +366,275 @@ def _get_scene_asset_references(rop_node: hou.Node) -> AssetReferences:
     for node in all_inputs:
         asset_references.output_directories.update(_get_output_directories(node))
 
+    file_cache_files: set[str] = set()
+    if skip_outputs_keep_caches:
+        file_cache_files = _add_file_cache_files(
+            file_cache_nodes, asset_references, evaluated, sources
+        )
+        _drop_inputs_in_outputs(asset_references, sources)
+
+    _drop_excluded_inputs(
+        rop_node, asset_references, evaluated, sources, file_cache_files, keep_refs
+    )
+    if expand_frame_sequences and not keep_refs:
+        # deadline-cloud doesn't expand $F, so the Submit dialog and the headless API get files.
+        for entry in sorted(asset_references.input_filenames):
+            if evaluated.get(entry, {entry}) != {entry}:
+                asset_references.input_filenames.discard(entry)
+                asset_references.input_filenames.update(evaluated[entry])
     return asset_references
+
+
+def _add_file_cache_files(
+    file_cache_nodes: dict[str, hou.Node],
+    asset_references: AssetReferences,
+    evaluated: dict[str, set[str]],
+    sources: dict[str, str],
+) -> set[str]:
+    """Attach the files each File Cache with Load from Disk on reads, so its Base Folder, which
+    holds every version, can be left out. Return the files, normalized for comparing."""
+    file_cache_files: set[str] = set()
+    for file_cache_path, file_cache_node in file_cache_nodes.items():
+        load_parm: hou.Parm = file_cache_node.parm("loadfromdisk")
+        # The read path is sopoutput, or file on the first File Cache version.
+        read_parm: hou.Parm = file_cache_node.parm("sopoutput") or file_cache_node.parm("file")
+        if load_parm is None or load_parm.eval() != 1 or read_parm is None:
+            continue
+        for entry, cache_files in _get_frame_sequences(read_parm).items():
+            asset_references.input_filenames.add(entry)
+            evaluated.setdefault(entry, set()).update(cache_files)
+            for cache_file in cache_files:
+                file_cache_files.add(_path_key(cache_file))
+                sources.setdefault(_path_key(cache_file), file_cache_path)
+    return file_cache_files
+
+
+def _is_skip_outputs_keep_caches_enabled(rop_node: hou.Node) -> bool:
+    """Return whether the ROP's Skip output folders, keep loaded caches toggle is on, which turns
+    on the output folder rule and File Cache read files. A node without it is off."""
+    parm: hou.Parm = rop_node.parm(_SKIP_OUTPUTS_KEEP_CACHES_PARM)
+    return parm is not None and parm.eval() == 1
+
+
+def _drop_inputs_in_outputs(asset_references: AssetReferences, sources: dict[str, str]) -> None:
+    """Remove each input folder that is, holds, or is inside an output folder, which would upload
+    earlier outputs, and print it with its source and the reason."""
+    output_directories: list[str] = sorted(
+        _path_key(d) for d in asset_references.output_directories if d
+    )
+    # Default outputs such as $HIP/$OS.$F.bgeo.sc write straight into these, so a folder
+    # inside one isn't left out for being inside an output.
+    scene_roots: set[str] = {
+        _path_key(root)
+        for root in (hou.getenv("HIP", ""), hou.getenv("JOB", ""), os.path.dirname(_get_hip_file()))
+        if root
+    }
+    for directory in sorted(asset_references.input_directories):
+        folder: str = _path_key(directory)
+        reason: str = ""
+        for output_directory in output_directories:
+            # A root such as "/" already ends in a separator.
+            if folder == output_directory:
+                reason = f"it is the output directory {output_directory}"
+            elif output_directory.startswith(folder.rstrip(os.sep) + os.sep):
+                reason = f"it contains the output directory {output_directory}"
+            elif output_directory not in scene_roots and folder.startswith(
+                output_directory.rstrip(os.sep) + os.sep
+            ):
+                reason = f"it is inside the output directory {output_directory}"
+            if reason:
+                break
+        if reason:
+            asset_references.input_directories.discard(directory)
+            source: str = sources.get(folder, "the scene")
+            print(f"Deadline Cloud: left out input directory {directory} (from {source}): {reason}")
+
+
+def _get_excluded_input_path_rows(rop_node: hou.Node) -> list[str]:
+    """Return the node's excluded input path rows as typed, without expanding variables. A node
+    without them, such as the PDG scheduler, has none."""
+    parm: hou.Parm = rop_node.parm(_EXCLUDED_INPUT_PATHS_PARM)
+    return [] if parm is None else [row.unexpandedString() for row in parm.multiParmInstances()]
+
+
+def _set_excluded_input_path_rows(rop_node: hou.Node, patterns: list[str]) -> None:
+    """Replace the node's excluded input path rows, dropping blank ones, as one undo entry that
+    writes only the rows that changed."""
+    rows: list[str] = [p.strip() for p in patterns if p.strip()]
+    parm: hou.Parm = rop_node.parm(_EXCLUDED_INPUT_PATHS_PARM)
+    # The box saves on every keystroke, so an unchanged save must not add an undo entry.
+    if [row.unexpandedString() for row in parm.multiParmInstances()] == rows:
+        return
+    with hou.undos.group("Edit excluded input paths"):
+        # Setting the count keeps the existing rows, so only the changed ones are written.
+        if parm.multiParmInstancesCount() != len(rows):
+            parm.set(len(rows))
+        for row, value in zip(parm.multiParmInstances(), rows):
+            if row.unexpandedString() != value:
+                row.set(value)
+
+
+def _split_path(path: str) -> list[str]:
+    """Return the names in the normalized path. A root such as "/" or "C:\\" is one name."""
+    separators: str = re.escape(os.sep) + (re.escape(os.altsep) if os.altsep else "")
+    names: list[str] = re.split(f"[{separators}]", _path_key(path))
+    # A root ends in a separator, so drop the empty last name.
+    if len(names) > 1 and names[-1] == "":
+        names.pop()
+    return names
+
+
+def _match_names(names: list[str], pattern_names: list[str]) -> bool:
+    """Return whether the names match the pattern's names, with "**" matching any number of
+    folders. Wildcards and "**" don't match a name that starts with a dot."""
+    if not pattern_names:
+        return not names
+    if pattern_names[0] == "**":
+        # Stop at the first dot folder, which "**" can't cross.
+        dot_folder: int = next((i for i, n in enumerate(names) if n.startswith(".")), len(names))
+        return any(_match_names(names[i:], pattern_names[1:]) for i in range(dot_folder + 1))
+    return (
+        bool(names)
+        and (pattern_names[0].startswith(".") or not names[0].startswith("."))
+        and fnmatch.fnmatchcase(names[0], pattern_names[0])
+        and _match_names(names[1:], pattern_names[1:])
+    )
+
+
+def _get_matching_pattern(path: str, patterns: list[str], whole_path: bool) -> Optional[str]:
+    """Return the first pattern the evaluated path is at or under, or None. With whole_path,
+    the pattern must name the path itself, and a trailing "**" names nothing."""
+    names: list[str] = _split_path(path)
+    matching_pattern: Optional[str] = None
+    for pattern in patterns:
+        pattern_names: list[str] = _split_path(pattern)
+        # A leading run of whole names must match, so everything under a match matches too.
+        prefix_lengths: Iterable[int] = range(1, len(names) + 1)
+        if whole_path:
+            while pattern_names and pattern_names[-1] == "**":
+                pattern_names.pop()
+            prefix_lengths = [len(names)]
+        if any(_match_names(names[:length], pattern_names) for length in prefix_lengths):
+            matching_pattern = pattern
+            break
+    return matching_pattern
+
+
+def _drop_excluded_inputs(
+    rop_node: hou.Node,
+    asset_references: AssetReferences,
+    evaluated: dict[str, set[str]],
+    sources: dict[str, str],
+    file_cache_files: set[str],
+    keep_refs: bool,
+) -> None:
+    """Remove the auto-detected inputs at or under an excluded input path, from the node or the
+    env var. The scene file stays, and so does a File Cache's file unless a pattern names it. A
+    frame sequence keeps its other frames as files, and with keep_refs a ref stays whole."""
+    typed: list[str] = _get_excluded_input_path_rows(rop_node)
+    typed += os.environ.get(EXCLUDED_INPUT_PATHS_ENV_VAR, "").split(os.pathsep)
+    # A variable can expand to nothing, so drop empty patterns after expanding too.
+    expanded = (hou.text.expandString(p.strip()) for p in typed if p.strip())
+    patterns: list[str] = [p for p in expanded if p]
+    if not patterns:
+        return
+    hip: str = _path_key(_get_hip_file())
+    for kind, entries in (
+        ("file", asset_references.input_filenames),
+        ("directory", asset_references.input_directories),
+    ):
+        for entry in sorted(entries):
+            # A ref held by several parms is left out only when every path they give matches.
+            paths: list[str] = sorted(evaluated.get(entry) or {entry})
+            pattern_by_path: dict[str, Optional[str]] = {
+                path: _get_matching_pattern(path, patterns, _path_key(path) in file_cache_files)
+                for path in paths
+            }
+            unmatched: list[str] = [p for p, pattern in pattern_by_path.items() if pattern is None]
+            if _path_key(entry) == hip:
+                if not unmatched:
+                    print(f"Deadline Cloud: kept the scene file {entry}, which every job needs")
+            elif unmatched and keep_refs:
+                if len(unmatched) < len(paths):
+                    print(
+                        f"Deadline Cloud: kept input {kind} {entry}, because these paths match "
+                        f"no excluded input path: {', '.join(unmatched)}"
+                    )
+            elif len(unmatched) < len(paths):
+                for path, pattern in pattern_by_path.items():
+                    if pattern is not None:
+                        print(
+                            f"Deadline Cloud: left out input {kind} {path} (from "
+                            f"{sources.get(_path_key(path), 'the scene')}): it is at or under "
+                            f"the excluded input path {pattern}"
+                        )
+                entries.discard(entry)
+                # A frame sequence with some frames left out keeps the others as files.
+                entries.update(unmatched)
+
+
+def _get_frame_sequences(parm: hou.Parm) -> dict[str, set[str]]:
+    """Return the parm's path with $F for each frame number, and the existing files it names on
+    every frame. Every number that changes between two adjacent frames is a frame number."""
+    frame: float = hou.frame()
+    pieces: list[str] = re.split(r"(-?\d+)", parm.evalAtFrame(frame))
+    next_pieces: list[str] = re.split(r"(-?\d+)", parm.evalAtFrame(frame + 1))
+    changed: list[int] = [i for i in range(1, len(pieces), 2) if pieces[i] != next_pieces[i]]
+    # Text that changes, such as an expression, isn't a frame number, so only those two files.
+    sequences: dict[str, set[str]] = {p: {p} for p in ("".join(pieces), "".join(next_pieces))}
+    if len(pieces) == len(next_pieces) and pieces[::2] == next_pieces[::2] and changed:
+        # The frame numbers in one path keep the same offsets, such as v1001/a.1001.bgeo.
+        offsets: list[int] = [int(pieces[i]) - int(pieces[changed[0]]) for i in changed]
+        files: list[str] = _find_frame_files(pieces, changed, offsets)
+        # One $F row can't say v1001/a.1002.bgeo, so a sequence with offsets is its files.
+        sequences = {f: {f} for f in files}
+        if not any(offsets):
+            # The sequence as one row, which Save Bundle expands, such as sim.$F4.bgeo for 1001.
+            # Braces keep Houdini from reading $F4_v2 as one variable name.
+            sequence: str = "".join(
+                (
+                    ("${F%d}" if re.match(r"\w", pieces[i + 1]) else "$F%d") % len(p.lstrip("-"))
+                    if i in changed
+                    else p
+                )
+                for i, p in enumerate(pieces)
+            )
+            sequences = {sequence: set(files)}
+    return {
+        path: existing
+        for path, files in sequences.items()
+        if (existing := {f for f in files if os.path.isfile(f)})
+    }
+
+
+def _find_frame_files(pieces: list[str], frames: list[int], offsets: list[int]) -> list[str]:
+    """Return the paths on disk that are pieces with a frame number at each index in frames, the
+    numbers keeping offsets, such as v1001/a.1001.bgeo. Each keeps the form of pieces."""
+    pattern: str = "".join("*" if i in frames else glob.escape(p) for i, p in enumerate(pieces))
+    # glob joins with os.sep, so on Windows a match mixes forward and back slashes.
+    frame_text: str = "".join(
+        (
+            r"(-?\d+)"
+            if i in frames
+            else r"[\\/]".join(re.escape(name) for name in re.split(r"[\\/]", p))
+        )
+        for i, p in enumerate(pieces)
+    )
+    found_files: list[str] = []
+    for found in glob.glob(pattern):
+        # Read the numbers loosely, then let the path key decide: on Windows a match mixes
+        # slashes and has the file name's case on disk.
+        match = re.fullmatch(frame_text, found, re.IGNORECASE)
+        numbers: list[str] = list(match.groups()) if match else []
+        if not numbers or [int(n) - int(numbers[0]) for n in numbers] != offsets:
+            continue
+        frame_numbers = iter(numbers)
+        candidate: str = "".join(
+            next(frame_numbers) if i in frames else p for i, p in enumerate(pieces)
+        )
+        if _path_key(candidate) == _path_key(found):
+            found_files.append(candidate)
+    return found_files
 
 
 def _get_output_directories(node: hou.Node) -> set[str]:
