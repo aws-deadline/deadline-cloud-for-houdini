@@ -519,21 +519,51 @@ def write_ui_settings_to_node(node: hou.Node, settings: HoudiniSubmitterUISettin
     managed directly by the panel's frame controls, and ``settings`` only carries default values
     for them, so writing them would clobber the user's frame selection.
     """
-    node.parm("name").set(settings.name)
-    node.parm("description").set(settings.description)
+    for field_name in _UI_SETTING_PARMS:
+        _set_ui_setting_parm(node, field_name, getattr(settings, field_name))
 
-    node.parm("priority").set(settings.priority)
-    node.parm("initial_status").set(settings.initial_status)
-    node.parm("failed_tasks_limit").set(settings.max_failed_tasks_count)
-    node.parm("task_retry_limit").set(settings.max_retries_per_task)
 
-    node.parm("separate_steps").set(int(settings.separate_steps))
-    node.parm("auto_unlock_rops").set(int(settings.auto_unlock_rops))
-    node.parm("auto_parse_hip").set(int(settings.auto_parse_hip))
-    node.parm("auto_save_hip").set(int(settings.auto_save_hip))
+def write_changed_ui_settings_to_node(
+    node: hou.Node,
+    settings_before: HoudiniSubmitterUISettings,
+    settings_after: HoudiniSubmitterUISettings,
+) -> None:
+    """Write onto the ROP only the job settings that differ between the two settings objects.
 
-    node.parm("include_adaptor_wheels").set(int(settings.include_adaptor_wheels))
-    node.parm("adaptor_wheels").set(settings.adaptor_wheels_dir or "")
+    Used by the Python panel to save the artist's edits before it switches to another ROP.
+    Settings the artist didn't change are left alone. Writing the job name when it hasn't changed
+    would replace its default, $HIPNAME, with the scene's current name. It would also overwrite a
+    parm that something else changed on the ROP after the panel read it.
+    """
+    for field_name in _UI_SETTING_PARMS:
+        value = getattr(settings_after, field_name)
+        if value != getattr(settings_before, field_name):
+            _set_ui_setting_parm(node, field_name, value)
+
+
+# Each HoudiniSubmitterUISettings field that the job settings dialog edits, and the ROP parm
+# that stores it. Frame range and take are left out: the panel's own frame controls write them.
+_UI_SETTING_PARMS = {
+    "name": "name",
+    "description": "description",
+    "priority": "priority",
+    "initial_status": "initial_status",
+    "max_failed_tasks_count": "failed_tasks_limit",
+    "max_retries_per_task": "task_retry_limit",
+    "separate_steps": "separate_steps",
+    "auto_unlock_rops": "auto_unlock_rops",
+    "auto_parse_hip": "auto_parse_hip",
+    "auto_save_hip": "auto_save_hip",
+    "include_adaptor_wheels": "include_adaptor_wheels",
+    "adaptor_wheels_dir": "adaptor_wheels",
+}
+
+
+def _set_ui_setting_parm(node: hou.Node, field_name: str, value: object) -> None:
+    # Toggle parms take ints. An unset adaptor wheels directory is stored as an empty string.
+    if isinstance(value, bool):
+        value = int(value)
+    node.parm(_UI_SETTING_PARMS[field_name]).set("" if value is None else value)
 
 
 def _follow_fetch_nodes(node: hou.Node) -> hou.Node:

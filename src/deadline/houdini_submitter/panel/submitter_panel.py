@@ -37,7 +37,7 @@ from deadline_cloud_for_houdini.submitter import (
     _make_create_bundle_callback,
     _install_pre_submission_gate,
     read_ui_settings_from_node,
-    write_ui_settings_to_node,
+    write_changed_ui_settings_to_node,
 )
 
 
@@ -62,7 +62,7 @@ class SubmitterPanel(QWidget):
 
         # Kept so save_edits_to_node can tell which values the artist changed.
         self._job_settings_when_built = _job_settings_shown_in(deadline_cloud_widget)
-        self._queue_parameters_edited = False
+        self._edited_queue_parameter_names: set[str] = set()
         deadline_cloud_widget.shared_job_settings.parameter_changed.connect(
             self._on_queue_parameter_edited
         )
@@ -72,21 +72,24 @@ class SubmitterPanel(QWidget):
 
         The frame range and take controls already write each edit straight to the ROP. The other
         settings reach the ROP only when Submit or Save bundle is pressed, so this saves them
-        before the panel is replaced. Values the artist didn't change are left alone. Writing them
-        would replace the job name's default, $HIPNAME, with the scene's current name.
+        before the panel is replaced. Values the artist didn't change are left alone.
         """
-        job_settings = _job_settings_shown_in(self.deadline_cloud_widget)
-        if job_settings != self._job_settings_when_built:
-            write_ui_settings_to_node(self.node, job_settings)
+        write_changed_ui_settings_to_node(
+            self.node,
+            self._job_settings_when_built,
+            _job_settings_shown_in(self.deadline_cloud_widget),
+        )
 
-        if self._queue_parameters_edited:
-            set_queue_parameter_values_from_openjd(
-                self.node, self.deadline_cloud_widget.shared_job_settings.get_parameters()
-            )
+        edited_queue_parameters = [
+            parameter
+            for parameter in self.deadline_cloud_widget.shared_job_settings.get_parameters()
+            if parameter["name"] in self._edited_queue_parameter_names
+        ]
+        set_queue_parameter_values_from_openjd(self.node, edited_queue_parameters)
 
-    def _on_queue_parameter_edited(self, _parameter: dict) -> None:
+    def _on_queue_parameter_edited(self, parameter: dict) -> None:
         # Sent only for the artist's edits, not when the dialog fills in the queue's values.
-        self._queue_parameters_edited = True
+        self._edited_queue_parameter_names.add(parameter["name"])
 
     def _build_ui(self):
         parent_layout = QVBoxLayout(self)

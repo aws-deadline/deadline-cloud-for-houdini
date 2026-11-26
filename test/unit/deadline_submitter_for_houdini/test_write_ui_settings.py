@@ -6,6 +6,7 @@ from deadline.houdini_submitter.python.deadline_cloud_for_houdini.hip_settings i
     HoudiniSubmitterUISettings,
 )
 from deadline.houdini_submitter.python.deadline_cloud_for_houdini.submitter import (
+    write_changed_ui_settings_to_node,
     write_ui_settings_to_node,
     _make_create_bundle_callback,
 )
@@ -80,6 +81,48 @@ def test_write_ui_settings_to_node_defaults_empty_adaptor_wheels_dir():
         node, HoudiniSubmitterUISettings(include_adaptor_wheels=False, adaptor_wheels_dir=None)
     )
 
+    parms["adaptor_wheels"].set.assert_called_once_with("")
+
+
+def test_write_changed_ui_settings_writes_only_the_edited_setting():
+    """Editing only the priority must leave the job name parm, and its $HIPNAME default, alone."""
+    node, parms = _mock_node_with_parms()
+    before = HoudiniSubmitterUISettings(name="shot_v001", priority=50)
+    after = HoudiniSubmitterUISettings(name="shot_v001", priority=80)
+
+    write_changed_ui_settings_to_node(node, before, after)
+
+    assert set(parms) == {"priority"}
+    parms["priority"].set.assert_called_once_with(80)
+
+
+def test_write_changed_ui_settings_writes_nothing_without_edits():
+    node, parms = _mock_node_with_parms()
+
+    write_changed_ui_settings_to_node(
+        node,
+        HoudiniSubmitterUISettings(name="shot_v001"),
+        HoudiniSubmitterUISettings(name="shot_v001"),
+    )
+
+    assert parms == {}
+
+
+def test_write_changed_ui_settings_uses_the_parm_names_and_values_the_rop_stores():
+    """Changed settings are written to the ROP's parm names, in the value types the ROP stores."""
+    node, parms = _mock_node_with_parms()
+    before = HoudiniSubmitterUISettings(
+        max_failed_tasks_count=20, auto_save_hip=True, adaptor_wheels_dir="/wheels"
+    )
+    after = HoudiniSubmitterUISettings(
+        max_failed_tasks_count=3, auto_save_hip=False, adaptor_wheels_dir=None
+    )
+
+    write_changed_ui_settings_to_node(node, before, after)
+
+    assert set(parms) == {"failed_tasks_limit", "auto_save_hip", "adaptor_wheels"}
+    parms["failed_tasks_limit"].set.assert_called_once_with(3)
+    parms["auto_save_hip"].set.assert_called_once_with(0)
     parms["adaptor_wheels"].set.assert_called_once_with("")
 
 
