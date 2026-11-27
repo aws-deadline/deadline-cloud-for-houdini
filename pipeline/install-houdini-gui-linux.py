@@ -59,9 +59,11 @@ def main():
             stderr=subprocess.STDOUT,
             check=True,
         )
-    for name in ("houdini", "hython", "hserver", "sesictrl"):
+    for name in ("houdini", "hython", "hserver"):
         if not os.access(runtime / "bin" / name, os.X_OK):
             raise RuntimeError(f"Installer did not produce {name}.")
+    if not os.access(runtime / "houdini/sbin/sesictrl", os.X_OK):
+        raise RuntimeError("Installer did not produce sesictrl.")
     archive.unlink()
     import shutil
 

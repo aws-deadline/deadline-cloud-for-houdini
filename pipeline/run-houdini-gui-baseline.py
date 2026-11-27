@@ -20,8 +20,11 @@ from deadline_test_fixtures.deadline_mock import (
 
 def verify_license_endpoint(artifacts: Path, process_job_type) -> None:
     """Test the SideFX protocol through the tunnel, not just its local socket."""
-    executable = Path(os.environ["HYTHON_EXECUTABLE"]).with_name(
-        "sesictrl.exe" if sys.platform == "win32" else "sesictrl"
+    hython = Path(os.environ["HYTHON_EXECUTABLE"])
+    executable = (
+        hython.parent.parent / "houdini/sbin/sesictrl"
+        if sys.platform == "linux"
+        else hython.with_name("sesictrl.exe")
     )
     command = [str(executable), "ping", "--host", os.environ["HOUDINI_GUI_LICENSE_SERVER"]]
     result: dict = {"protocol_verified": False}
