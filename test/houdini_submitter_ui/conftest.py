@@ -116,7 +116,9 @@ def gui_session(request, tmp_path):
             [str(exe)], cwd=tmp_path, env=env, stdout=stdout, stderr=stderr
         )
     else:
-        process = launch([str(exe)], cwd=tmp_path, env=env, stdout=stdout, stderr=stderr)
+        process = launch(
+            [str(exe), "-foreground"], cwd=tmp_path, env=env, stdout=stdout, stderr=stderr
+        )
     job = None
     app = None
     try:
