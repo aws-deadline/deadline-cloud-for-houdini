@@ -42,6 +42,7 @@ def main():
             [
                 str(installer / "houdini.install"),
                 "--auto-install",
+                "--make-dir",
                 "--install-houdini",
                 "--no-install-license",
                 "--no-install-menus",
