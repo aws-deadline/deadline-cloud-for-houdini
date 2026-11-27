@@ -27,9 +27,9 @@ directory="$(mktemp -d)"
 trap 'rm -rf "$directory"' EXIT
 installer="$directory/nvidia-grid.run"
 curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
-    https://download.microsoft.com/download/a7cb6d36-3bbc-43d6-9e88-e0842e6f9ab9/NVIDIA-Linux-x86_64-595.91.07-grid-azure.run \
+    https://download.microsoft.com/download/4efc1974-7b6f-431f-ab2d-b8d99bb8a512/NVIDIA-Linux-x86_64-580.178.04-grid-azure.run \
     --output "$installer"
-echo "72056e38ee17d86606ebdb97594d01cd1fe64b1fbd7e1a888634fa959529ca0a  $installer" | sha256sum --check
+echo "100dab7559cfa1cf896fac923681ba93fe75c1b5ac7102f9264396a2585d67af  $installer" | sha256sum --check
 sudo sh "$installer" --silent --no-dkms > "$artifacts/driver-install.txt" 2>&1 || {
     sudo cp /var/log/nvidia-installer.log "$artifacts/nvidia-installer.log"
     sudo chown "$(id -u):$(id -g)" "$artifacts/nvidia-installer.log"
