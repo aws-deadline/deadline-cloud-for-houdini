@@ -85,7 +85,8 @@ jobs:
           mkdir -p "$harness/pipeline" "$harness/test"
           cp -R test/houdini_submitter_ui "$harness/test/"
           for file in check-houdini-linux-graphics.sh install-houdini-gui-linux.py \
-            prepare-houdini-gui-dependencies.py run-houdini-gui-linux.py run-houdini-gui-baseline.py; do
+            prepare-houdini-linux-graphics.sh prepare-houdini-gui-dependencies.py \
+            run-houdini-gui-linux.py run-houdini-gui-baseline.py; do
             cp "pipeline/$file" "$harness/pipeline/"
           done
           cp requirements-gui-testing.txt "$harness/"
@@ -100,6 +101,9 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
+      - name: Prepare or validate the approved NVIDIA graphics driver
+        if: inputs.graphics != 'software'
+        run: bash pipeline/prepare-houdini-linux-graphics.sh "$RUNNER_TEMP/houdini-gui-artifacts"
       - name: Prepare ephemeral runtime and test dependencies
         env:
           GRAPHICS: ${{ inputs.graphics || 'gpu' }}
