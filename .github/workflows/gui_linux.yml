@@ -1,0 +1,117 @@
+name: Houdini GUI Integration Tests - Linux
+
+on:
+  push:
+    branches: [mainline, fix-publish-python-version]
+    paths:
+      - .github/workflows/gui_linux.yml
+      - pipeline/*houdini*linux*
+      - pipeline/run-houdini-gui-linux-baseline.py
+      - test/houdini_submitter_ui/**
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      AWS_OIDC_ROLE_ARN:
+        required: true
+      AWS_REGION:
+        required: true
+      INSTALLER_BUCKET:
+        required: true
+      INSTALLER_BUCKET_EXPECTED_OWNER:
+        required: true
+      LICENSE_ROLE_ARN:
+        required: true
+      BASTION_INSTANCE_TAG:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  Graphics:
+    if: github.repository == 'aws-deadline/deadline-cloud-for-houdini'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            mode: software
+          # Repository access confirmed in GitHub Admin ticket P567422594.
+          - runner: aws-deadline_ubuntu-24.04_gpu-t4-4-core
+            mode: gpu
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Inspect installed graphics stack
+        env:
+          MODE: ${{ matrix.mode }}
+        run: bash pipeline/check-houdini-linux-graphics.sh "$RUNNER_TEMP/graphics" "$MODE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: houdini-linux-graphics-${{ matrix.mode }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/graphics/
+
+  GUI:
+    # The isolated trial branch currently lacks OIDC trust. Keep private
+    # execution disabled there until the infrastructure owner authorizes it.
+    if: >-
+      github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
+      github.ref == 'refs/heads/mainline'
+    runs-on: aws-deadline_ubuntu-24.04_gpu-t4-4-core
+    timeout-minutes: 60
+    concurrency:
+      group: houdini-integration-tests
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Prepare ephemeral runtime and test dependencies
+        run: |
+          bash pipeline/check-houdini-linux-graphics.sh "$RUNNER_TEMP/houdini-gui-artifacts" gpu
+          python -m venv --system-site-packages "$RUNNER_TEMP/houdini-gui-env"
+          "$RUNNER_TEMP/houdini-gui-env/bin/python" -m pip install \
+            -e . -r requirements-testing.txt -r requirements-integ-testing.txt -r requirements-gui-testing.txt
+          "$RUNNER_TEMP/houdini-gui-env/bin/python" pipeline/prepare-houdini-gui-linux-dependencies.py \
+            --directory "$RUNNER_TEMP/houdini-gui-dcc-deps"
+          echo "HOUDINI_GUI_DEPENDENCIES=$RUNNER_TEMP/houdini-gui-dcc-deps" >> "$GITHUB_ENV"
+          git lfs pull --include='test/integ/**'
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Install verified Houdini 22.0.368
+        env:
+          INSTALLER_BUCKET: ${{ secrets.INSTALLER_BUCKET }}
+          INSTALLER_BUCKET_EXPECTED_OWNER: ${{ secrets.INSTALLER_BUCKET_EXPECTED_OWNER }}
+        run: |
+          "$RUNNER_TEMP/houdini-gui-env/bin/python" pipeline/install-houdini-gui-linux.py \
+            --directory "$RUNNER_TEMP/houdini-gui-runtime" --github-env "$GITHUB_ENV"
+      - name: Run licensed GUI and complete local baseline
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          LICENSE_ROLE_ARN: ${{ secrets.LICENSE_ROLE_ARN }}
+          BASTION_INSTANCE_TAG: ${{ secrets.BASTION_INSTANCE_TAG }}
+        run: |
+          dbus-run-session -- "$RUNNER_TEMP/houdini-gui-env/bin/python" \
+            pipeline/run-houdini-gui-linux.py --artifacts "$RUNNER_TEMP/houdini-gui-artifacts"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: houdini-linux-gui-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/houdini-gui-artifacts/
+            ${{ runner.temp }}/houdini-gui-runtime/installer.log
