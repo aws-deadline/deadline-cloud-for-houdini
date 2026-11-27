@@ -18,7 +18,7 @@ free -h > "$artifacts/memory.txt"
 } > "$artifacts/runner.txt"
 sudo apt-get update -qq
 sudo apt-get install -y --no-install-recommends \
-    xvfb xserver-xorg-core xserver-xorg-video-dummy xauth openbox xdotool \
+    xvfb xserver-xorg-core xserver-xorg-video-dummy xauth x11-utils openbox xdotool \
     mesa-utils mesa-vulkan-drivers vulkan-tools dbus-x11 at-spi2-core python3-pyatspi python3-gi \
     bc libatomic1 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 \
     libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 \
