@@ -172,7 +172,6 @@ def desktop(artifacts, environment, graphics):
                 "--output-xconfig",
                 str(config),
                 "--allow-empty-initial-configuration",
-                "--use-display-device=None",
                 "--virtual=1920x1080",
             ],
             check=True,
