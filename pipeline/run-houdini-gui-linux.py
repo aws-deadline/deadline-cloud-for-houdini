@@ -178,7 +178,18 @@ def desktop(artifacts, environment, graphics):
             check=True,
             capture_output=True,
         )
-        command = ["sudo", "Xorg", display, "-config", str(config), "-noreset", "-nolisten", "tcp"]
+        command = [
+            "sudo",
+            "Xorg",
+            display,
+            "-config",
+            str(config),
+            "-logfile",
+            str(artifacts / "xorg-server.log"),
+            "-noreset",
+            "-nolisten",
+            "tcp",
+        ]
     else:
         environment["LIBGL_ALWAYS_SOFTWARE"] = "1"
         command = ["Xvfb", display, "-screen", "0", "1920x1080x24", "-nolisten", "tcp"]
@@ -248,6 +259,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--graphics", choices=("gpu", "software"), default="gpu")
+    parser.add_argument(
+        "--graphics-only",
+        action="store_true",
+        help="Validate the owned desktop without licensing or launching Houdini.",
+    )
     args = parser.parse_args()
 
     def interrupted(signum, frame):
@@ -275,6 +291,10 @@ def main():
             "INSTALLER_BUCKET_EXPECTED_OWNER",
         )
     }
+    if args.graphics_only:
+        with desktop(artifacts, environment, args.graphics):
+            subprocess.run(["xdpyinfo"], env=environment, capture_output=True, check=True)
+        return 0
     environment.update(
         HOUDINI_GUI_REPO=str(REPO),
         HOUDINI_GUI_PYTHON_VERSION="3.13",

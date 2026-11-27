@@ -119,6 +119,13 @@ jobs:
             --directory "$RUNNER_TEMP/houdini-gui-dcc-deps"
           echo "HOUDINI_GUI_DEPENDENCIES=$RUNNER_TEMP/houdini-gui-dcc-deps" >> "$GITHUB_ENV"
           git lfs pull --include='test/integ/**'
+      - name: Validate the owned X11 desktop and graphics context
+        env:
+          GRAPHICS: ${{ inputs.graphics || 'gpu' }}
+        run: |
+          dbus-run-session -- "$RUNNER_TEMP/houdini-gui-env/bin/python" \
+            pipeline/run-houdini-gui-linux.py --graphics-only --graphics "$GRAPHICS" \
+            --artifacts "$RUNNER_TEMP/houdini-gui-artifacts/desktop-preflight"
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
