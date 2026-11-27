@@ -1,5 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
+from typing import Callable, List, NamedTuple, Optional
+
 import hou
 
 from qtpy.QtWidgets import (
@@ -20,19 +22,23 @@ from deadline.client.ui.pre_gui_hooks import (
     run_pre_gui_hooks,
 )
 from deadline.client.dataclasses import SubmitterInfo
+from deadline.client.job_bundle.hooks import HookManager
 from deadline_cloud_for_houdini._version import version as houdini_submitter_version
 from deadline_cloud_for_houdini._assets import _get_scene_asset_references
 from deadline_cloud_for_houdini.constants import FrameRange
+from deadline_cloud_for_houdini.hip_settings import HoudiniSubmitterUISettings
 from deadline_cloud_for_houdini.houdini_submitter_widget import SceneSettingsWidget
 from deadline_cloud_for_houdini.queue_parameters import (
     get_default_conda_packages,
     get_default_rez_packages,
+    set_queue_parameter_values_from_openjd,
 )
 from deadline_cloud_for_houdini.submitter import (
     _pre_gui_hook_confirm_callback,
     _make_create_bundle_callback,
     _install_pre_submission_gate,
     read_ui_settings_from_node,
+    write_changed_ui_settings_to_node,
 )
 
 
@@ -54,6 +60,37 @@ class SubmitterPanel(QWidget):
 
         self._build_ui()
         self._load_from_node()
+
+        # Kept so save_edits_to_node can tell which values the artist changed.
+        self._job_settings_when_built = _job_settings_shown_in(deadline_cloud_widget)
+        self._edited_queue_parameter_names: set[str] = set()
+        deadline_cloud_widget.shared_job_settings.parameter_changed.connect(
+            self._on_queue_parameter_edited
+        )
+
+    def save_edits_to_node(self) -> None:
+        """Write the job settings and queue parameters the artist changed in the panel onto its ROP.
+
+        The frame range and take controls already write each edit straight to the ROP. The other
+        settings reach the ROP only when Submit or Save bundle is pressed, so this saves them
+        before the panel is replaced. Values the artist didn't change are left alone.
+        """
+        write_changed_ui_settings_to_node(
+            self.node,
+            self._job_settings_when_built,
+            _job_settings_shown_in(self.deadline_cloud_widget),
+        )
+
+        edited_queue_parameters = [
+            parameter
+            for parameter in self.deadline_cloud_widget.shared_job_settings.get_parameters()
+            if parameter["name"] in self._edited_queue_parameter_names
+        ]
+        set_queue_parameter_values_from_openjd(self.node, edited_queue_parameters)
+
+    def _on_queue_parameter_edited(self, parameter: dict) -> None:
+        # Sent only for the artist's edits, not when the dialog fills in the queue's values.
+        self._edited_queue_parameter_names.add(parameter["name"])
 
     def _build_ui(self):
         parent_layout = QVBoxLayout(self)
@@ -151,6 +188,14 @@ class SubmitterPanel(QWidget):
         self.node.parm("take").set(self.take_combo.itemData(index))
 
 
+def _job_settings_shown_in(dialog: SubmitJobToDeadlineDialog) -> HoudiniSubmitterUISettings:
+    """The job settings the dialog shows now, collected the way its Submit button collects them."""
+    settings = HoudiniSubmitterUISettings()
+    dialog.shared_job_settings.update_settings(settings)
+    dialog.job_settings.update_settings(settings)
+    return settings
+
+
 def _pump_qt_events() -> None:
     """Persistent event-loop callback: delivers Qt cross-thread signals on each Houdini tick."""
     QCoreApplication.sendPostedEvents(None, 0)
@@ -223,13 +268,15 @@ def _install_login_event_pump(dialog) -> None:
     login_signal.connect(_login_with_loop_callback)
 
 
-def onCreateInterface():
+def _build_panel_for(
+    n: hou.Node, confirm_hooks: Callable[[List[HookManager]], bool]
+) -> SubmitterPanel:
+    """Build the Deadline Cloud panel for one ROP.
 
-    # Convention for how Houdini references nodes in its Python panels; we can't include **kwargs in the function signature.
-    # See https://www.sidefx.com/docs/houdini/ref/windows/pythonpaneleditor.html#interfaces-tab for more information.
-    # Ignore this as to not set off the linter.
-    n = kwargs["paneTab"].currentNode()  # type: ignore # noqa:F821
-
+    Every part of the panel reads and writes this ROP: the job settings, the attachments list,
+    Submit, Save bundle and the frame range and take controls. The studio's pre-GUI hooks run
+    first if confirm_hooks returns True for them.
+    """
     ui_settings = read_ui_settings_from_node(n)
     # Seed the shared queue-parameter values with Conda/Rez packages pinned to the running
     # Houdini + adaptor version. The shared dialog applies these as overrides on top of the
@@ -241,8 +288,7 @@ def onCreateInterface():
 
     # Run pre-GUI hooks so studios can pre-populate dialog fields before it opens. Houdini has no
     # on-disk job bundle at this point, so hooks are sourced from DEADLINE_HOOKS_DIR only
-    # (bundle_dir=None), gated by settings.allow_environment_hooks. The confirmation prompt is
-    # skipped when auto_accept is set; otherwise the standard dialog is shown.
+    # (bundle_dir=None), gated by settings.allow_environment_hooks.
     try:
         pre_gui_output = run_pre_gui_hooks(
             PreGuiHookContext(
@@ -251,14 +297,14 @@ def onCreateInterface():
                 submitter_name="houdini",
                 parameters=dict(shared_parameter_values),
             ),
-            confirm_callback=_pre_gui_hook_confirm_callback(hou.qt.mainWindow()),
+            confirm_callback=confirm_hooks,
         )
     except DeadlineOperationCanceled:
         # The user declined the hook confirmation prompt. That is a deliberate cancellation, not
-        # an error: skip the hooks and open the submitter with its default settings. onCreateInterface
-        # must still return a panel (Houdini calls it to build the Python panel), and there is no
-        # outer gui_error_handler here, so without this the exception would propagate as a raw
-        # traceback and the panel would fail to open.
+        # an error: skip the hooks and open the submitter with its default settings. This function
+        # must still return a panel (the pane shows it), and there is no outer gui_error_handler
+        # here, so without this the exception would propagate as a raw traceback and the panel
+        # would fail to open.
         pre_gui_output = {}
     # run_pre_gui_hooks returns {} when no hooks run; `or {}` is defensive against any future
     # contract change so the common no-hooks path can never pass a falsy value into
@@ -305,3 +351,122 @@ def onCreateInterface():
     panel = SubmitterPanel(parent=None, deadline_cloud_widget=widget, node=n)
 
     return panel
+
+
+class _PanelHost(QWidget):
+    """The container Houdini displays in one Parameters pane.
+
+    It contains the Deadline Cloud panel for the Deadline Cloud ROP the pane shows, and replaces
+    that panel when the pane shows a different one. When the scene closes, it shows a message
+    instead. Houdini keeps the widget onCreateInterface returns for the life of the pane, so the
+    panel inside it is what changes.
+    """
+
+    _NO_ROP_MESSAGE = "Select a Deadline Cloud ROP to see its settings."
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._no_rop_label = QLabel(self._NO_ROP_MESSAGE)
+        self._layout.addWidget(self._no_rop_label)
+        self._panel: Optional[SubmitterPanel] = None
+        self._hook_answer: Optional[_HookAnswer] = None
+
+    def show_rop(self, node: Optional[hou.Node]) -> None:
+        """Show the panel for node, building it unless the current panel was built for node."""
+        if not _is_deadline_cloud_rop_node(node) or self._has_panel_built_for(node):
+            return
+
+        # Save before replacing: replacing deletes the panel and any edits not yet on its ROP.
+        if self._panel is not None and _node_exists(self._panel.node):
+            self._panel.save_edits_to_node()
+        self._set_panel(_build_panel_for(node, self._confirm_hooks))
+
+    def clear(self) -> None:
+        """Let go of the shown ROP, for when its scene closes and the ROP is deleted."""
+        self._set_panel(None)
+
+    def _confirm_hooks(self, sources: List[HookManager]) -> bool:
+        """Whether to run these pre-GUI hooks. The artist is asked once per pane for the same hooks.
+
+        Each switch to another ROP runs the hooks again, so the prompt would otherwise appear on
+        every switch.
+        """
+        ask_artist = _pre_gui_hook_confirm_callback(hou.qt.mainWindow())
+        if ask_artist is None:  # settings.auto_accept is on
+            return True
+
+        # The hooks folder and its whole hooks file, which is what the prompt lists.
+        hooks = [(source.job_bundle_dir, source.hooks) for source in sources]
+        if self._hook_answer is None or self._hook_answer.hooks != hooks:
+            self._hook_answer = _HookAnswer(hooks, ask_artist(sources))
+        return self._hook_answer.run
+
+    def _has_panel_built_for(self, node: hou.Node) -> bool:
+        """Whether the current panel was built for node. A deleted ROP never counts."""
+        # sessionId, not the path: ROPs in two scenes can have the same path.
+        return (
+            self._panel is not None
+            and _node_exists(self._panel.node)
+            and self._panel.node.sessionId() == node.sessionId()
+        )
+
+    def _set_panel(self, panel: Optional[SubmitterPanel]) -> None:
+        """Show panel, or the no-ROP message if panel is None. Delete the panel shown before."""
+        if self._panel is not None:
+            self._layout.removeWidget(self._panel)
+            self._panel.deleteLater()
+        self._panel = panel
+        self._no_rop_label.setVisible(panel is None)
+        if panel is not None:
+            self._layout.addWidget(panel)
+
+
+class _HookAnswer(NamedTuple):
+    """The artist's answer to the pre-GUI hooks prompt, and the hooks it was about."""
+
+    hooks: list
+    run: bool
+
+
+def _is_deadline_cloud_rop_node(node: Optional[hou.Node]) -> bool:
+    # The panel can also be opened from the pane tab menu, where the pane can show any node.
+    return node is not None and node.type().nameWithCategory() == "Driver/deadline_cloud"
+
+
+def _node_exists(node: hou.Node) -> bool:
+    """Whether node still exists. Houdini deletes every node in a scene when the scene closes."""
+    try:
+        node.sessionId()
+    except hou.ObjectWasDeleted:
+        return False
+    return True
+
+
+# Houdini runs this script once per pane, so each pane has its own host. onCreateInterface sets
+# it, and Houdini calls onCreateInterface before any other hook.
+_host: _PanelHost
+
+
+# The functions below are the hooks Houdini calls on a Python panel. Houdini gives them a global
+# kwargs, which can't be in their signatures. See
+# https://www.sidefx.com/docs/houdini/ref/windows/pythonpaneleditor.html
+def onCreateInterface():
+    global _host  # noqa: PLW0603
+    _host = _PanelHost()
+    _host.show_rop(kwargs["paneTab"].currentNode())  # type: ignore # noqa:F821
+    return _host
+
+
+def onNodePathChanged(node):
+    _host.show_rop(node)
+
+
+def onActivateInterface():
+    # Houdini may not call onNodePathChanged when a new scene's ROP has the old ROP's path.
+    _host.show_rop(kwargs["paneTab"].currentNode())  # type: ignore # noqa:F821
+
+
+def onHipFileAfterClear():
+    _host.clear()

@@ -159,63 +159,87 @@ def test_unsaved_scene_cancel_then_retry(gui_session):
     (work / "accessibility-unsaved-warning.txt").write_text(
         app.dump(max_depth=15), encoding="utf-8"
     )
-    # UIA exposes only the window title for these Houdini-native controls.
-    # The live 22.0.368 screenshot verified Cancel as the rightmost button in
-    # the bottom row. Click relative to this owned dialog, then require the
-    # real displayMessage return value to prove Cancel was chosen.
-    from PIL import ImageGrab
+    import sys
 
-    ImageGrab.grab(all_screens=True).save(work / "unsaved-warning.png")
-    import win32api
-    import win32con
-    import win32gui
-    import win32process
+    if sys.platform == "win32":
+        # UIA exposes only the window title for these Houdini-native controls.
+        # The live 22.0.368 screenshot verified Cancel as the rightmost button in
+        # the bottom row. Click relative to this owned dialog, then require the
+        # real displayMessage return value to prove Cancel was chosen.
+        from PIL import ImageGrab
 
-    windows = []
+        ImageGrab.grab(all_screens=True).save(work / "unsaved-warning.png")
+        import win32api
+        import win32con
+        import win32gui
+        import win32process
 
-    def owned_warning(hwnd, _):
-        if (
-            win32gui.IsWindowVisible(hwnd)
-            and win32gui.GetWindowText(hwnd) == "Warning"
-            and win32process.GetWindowThreadProcessId(hwnd)[1] == app.pid
-        ):
-            windows.append(hwnd)
+        windows = []
 
-    win32gui.EnumWindows(owned_warning, None)
-    assert len(windows) == 1, windows
-    hwnd = windows[0]
-    win32gui.SetForegroundWindow(hwnd)
-    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-    point = (int(left + (right - left) * 0.85), int(top + (bottom - top) * 0.84))
-    # Use native virtual-desktop coordinates for the NVIDIA/Hyper-V display
-    # arrangement; the accessibility input bridge missed this native window.
-    win32api.SetCursorPos(point)
-    time.sleep(0.25)
-    cursor = win32gui.GetCursorPos()
-    target = win32gui.GetAncestor(win32gui.WindowFromPoint(cursor), win32con.GA_ROOT)
-    (work / "native-warning-click.json").write_text(
-        json.dumps(
-            {
-                "bounds": [left, top, right, bottom],
-                "point": point,
-                "cursor": cursor,
-                "target_is_owned_warning": target == hwnd,
-                "foreground_is_owned_warning": win32gui.GetForegroundWindow() == hwnd,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    assert cursor == point, (cursor, point)
-    assert target == hwnd, "Cursor did not reach the owned warning window"
-    assert win32gui.GetForegroundWindow() == hwnd, "Qt stole focus from the native warning"
-    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
-    try:
-        # Allow the native event loop to observe the held button. Back-to-back
-        # down/up did not select the visible button in the live runner trial.
-        time.sleep(0.5)
-    finally:
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+        def owned_warning(hwnd, _):
+            if (
+                win32gui.IsWindowVisible(hwnd)
+                and win32gui.GetWindowText(hwnd) == "Warning"
+                and win32process.GetWindowThreadProcessId(hwnd)[1] == app.pid
+            ):
+                windows.append(hwnd)
+
+        win32gui.EnumWindows(owned_warning, None)
+        assert len(windows) == 1, windows
+        hwnd = windows[0]
+        win32gui.SetForegroundWindow(hwnd)
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        point = (int(left + (right - left) * 0.85), int(top + (bottom - top) * 0.84))
+        # Use native virtual-desktop coordinates for the NVIDIA/Hyper-V display
+        # arrangement; the accessibility input bridge missed this native window.
+        win32api.SetCursorPos(point)
+        time.sleep(0.25)
+        cursor = win32gui.GetCursorPos()
+        target = win32gui.GetAncestor(win32gui.WindowFromPoint(cursor), win32con.GA_ROOT)
+        (work / "native-warning-click.json").write_text(
+            json.dumps(
+                {
+                    "bounds": [left, top, right, bottom],
+                    "point": point,
+                    "cursor": cursor,
+                    "target_is_owned_warning": target == hwnd,
+                    "foreground_is_owned_warning": win32gui.GetForegroundWindow() == hwnd,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        assert cursor == point, (cursor, point)
+        assert target == hwnd, "Cursor did not reach the owned warning window"
+        assert win32gui.GetForegroundWindow() == hwnd, "Qt stole focus from the native warning"
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
+        try:
+            # Allow the native event loop to observe the held button. Back-to-back
+            # down/up did not select the visible button in the live runner trial.
+            time.sleep(0.5)
+        finally:
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+    else:
+        # Send Escape to this process's native warning through X11. The real
+        # displayMessage return value below must prove that Cancel was selected.
+        import subprocess
+        from PIL import ImageGrab
+
+        ImageGrab.grab().save(work / "unsaved-warning.png")
+        lookup = subprocess.run(
+            ["xdotool", "search", "--onlyvisible", "--pid", str(app.pid), "--name", "^Warning$"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        windows = lookup.stdout.splitlines()
+        assert len(windows) == 1, windows
+        subprocess.run(
+            ["xdotool", "windowactivate", "--sync", windows[0], "key", "Escape"],
+            check=True,
+            timeout=10,
+        )
     warning.wait_hidden(timeout=30)
     deadline = time.monotonic() + 10
     while "choice" not in (prompts := json.loads((work / "native-prompts.json").read_text()))[-1]:

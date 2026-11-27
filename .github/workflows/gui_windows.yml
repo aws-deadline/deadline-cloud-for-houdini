@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - mainline
-      - fix-publish-python-version
     paths:
       - .github/workflows/gui_windows.yml
       - pipeline/**

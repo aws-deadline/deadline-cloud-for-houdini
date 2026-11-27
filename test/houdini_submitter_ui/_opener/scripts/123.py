@@ -41,28 +41,41 @@ def open_submitter():
         }
         # Record graphics from the actual licensed GUI, not a separate probe.
         startup["graphics_mode"] = os.environ.get("HOUDINI_GUI_GRAPHICS_MODE", "native")
-        shell32 = getattr(ctypes, "WinDLL")("shell32", use_last_error=True)
-        shell32.IsUserAnAdmin.argtypes = []
-        shell32.IsUserAnAdmin.restype = ctypes.c_int
-        startup["administrator_token"] = bool(shell32.IsUserAnAdmin())
-        kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
-        kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
-        kernel32.GetModuleHandleW.restype = ctypes.c_void_p
-        kernel32.GetModuleFileNameW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint]
-        kernel32.GetModuleFileNameW.restype = ctypes.c_uint
-        graphics_modules = {}
-        for name in (
-            "opengl32.dll",
-            "vulkan-1.dll",
-            "nvoglv64.dll",
-        ):
-            module = kernel32.GetModuleHandleW(name)
-            if module:
-                filename = ctypes.create_unicode_buffer(32768)
-                if not kernel32.GetModuleFileNameW(module, filename, len(filename)):
-                    raise getattr(ctypes, "WinError")(getattr(ctypes, "get_last_error")())
-                graphics_modules[name] = filename.value
-        startup["graphics_modules"] = graphics_modules
+        if sys.platform == "win32":
+            shell32 = getattr(ctypes, "WinDLL")("shell32", use_last_error=True)
+            shell32.IsUserAnAdmin.argtypes = []
+            shell32.IsUserAnAdmin.restype = ctypes.c_int
+            startup["administrator_token"] = bool(shell32.IsUserAnAdmin())
+            kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
+            kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+            kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+            kernel32.GetModuleFileNameW.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_wchar_p,
+                ctypes.c_uint,
+            ]
+            kernel32.GetModuleFileNameW.restype = ctypes.c_uint
+            graphics_modules = {}
+            for name in (
+                "opengl32.dll",
+                "vulkan-1.dll",
+                "nvoglv64.dll",
+            ):
+                module = kernel32.GetModuleHandleW(name)
+                if module:
+                    filename = ctypes.create_unicode_buffer(32768)
+                    if not kernel32.GetModuleFileNameW(module, filename, len(filename)):
+                        raise getattr(ctypes, "WinError")(getattr(ctypes, "get_last_error")())
+                    graphics_modules[name] = filename.value
+            startup["graphics_modules"] = graphics_modules
+        else:
+            startup["graphics_modules"] = sorted(
+                {
+                    line.split()[-1]
+                    for line in Path("/proc/self/maps").read_text().splitlines()
+                    if any(name in line for name in ("libGL", "libnvidia", "libvulkan"))
+                }
+            )
         # The mock uses root-level operation paths. Match the existing Nuke
         # test-local endpoint adaptation; do not alter installed client code.
         import botocore.awsrequest
@@ -254,5 +267,5 @@ def open_submitter():
 
 
 if not hou.isUIAvailable():
-    raise RuntimeError("GUI integration tests must launch houdini.exe, not hython.")
+    raise RuntimeError("GUI integration tests must launch the Houdini GUI, not hython.")
 QTimer.singleShot(15000, open_submitter)

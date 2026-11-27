@@ -1,5 +1,5 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-"""Fixtures for real Windows Houdini GUI tests against a loopback Deadline mock."""
+"""Fixtures for real Houdini GUI tests against a loopback Deadline mock."""
 
 import json
 import os
@@ -17,8 +17,11 @@ from deadline_test_fixtures.deadline_mock import (
 from deadline_test_fixtures.xa11y import find_accessibility_app
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _windows_process import WindowsProcessJob  # noqa: E402
-from _unelevated_process import UnelevatedWindowsProcess, allow_test_directory  # noqa: E402
+if sys.platform == "win32":
+    from _windows_process import WindowsProcessJob
+    from _unelevated_process import UnelevatedWindowsProcess, allow_test_directory
+else:
+    from _linux_process import LinuxProcessGroup, launch
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -44,9 +47,10 @@ def gui_session(request, tmp_path):
     mock_server = request.getfixturevalue(
         "mock_server" if scenario == "export" else "submission_mock_server"
     )
-    if sys.platform != "win32":
-        pytest.fail("This GUI baseline requires Windows.")
-    allow_test_directory(tmp_path)
+    if sys.platform not in ("win32", "linux"):
+        pytest.fail("This GUI baseline requires Windows or Linux.")
+    if sys.platform == "win32":
+        allow_test_directory(tmp_path)
     exe = Path(os.environ["HOUDINI_EXECUTABLE"])
     dependencies = Path(os.environ["HOUDINI_GUI_DEPENDENCIES"])
     assert exe.is_file(), exe
@@ -84,7 +88,8 @@ def gui_session(request, tmp_path):
             + env.get("PATH", "")
         ),
         HOUDINI_PATH=(
-            f"{Path(__file__).parent / '_opener'};" f"{REPO / 'src/deadline/houdini_submitter'};&"
+            f"{Path(__file__).parent / '_opener'}{os.pathsep}"
+            f"{REPO / 'src/deadline/houdini_submitter'}{os.pathsep}&"
         ),
         HOUDINI_USER_PREF_DIR=str(tmp_path / "prefs-__HVER__"),
         HOUDINI_NO_ENV_FILE="1",
@@ -96,22 +101,30 @@ def gui_session(request, tmp_path):
         HOUDINI_GUI_STATUS=str(tmp_path / "startup.json"),
         HOUDINI_GUI_MOCK_ENDPOINT=mock_server.base_url,
         HOUDINI_GUI_SCENARIO=scenario,
-        HYTHON_EXECUTABLE=str(exe.parent / "hython.exe"),
+        HYTHON_EXECUTABLE=str(exe.parent / ("hython.exe" if sys.platform == "win32" else "hython")),
         HOUDINI_GUI_PYTHON_VERSION="3.13",
         QT_ACCESSIBILITY="1",
     )
+    if sys.platform == "linux":
+        env.update(QT_LINUX_ACCESSIBILITY_ALWAYS_ON="1", QT_QPA_PLATFORM="xcb")
     env.pop("PYTHONHOME", None)
     env.pop("PYTHONPATH", None)
     stdout = (tmp_path / "native.stdout.log").open("w", encoding="utf-8")
     stderr = (tmp_path / "native.stderr.log").open("w", encoding="utf-8")
-    process = UnelevatedWindowsProcess(
-        [str(exe)], cwd=tmp_path, env=env, stdout=stdout, stderr=stderr
-    )
+    if sys.platform == "win32":
+        process = UnelevatedWindowsProcess(
+            [str(exe)], cwd=tmp_path, env=env, stdout=stdout, stderr=stderr
+        )
+    else:
+        process = launch([str(exe)], cwd=tmp_path, env=env, stdout=stdout, stderr=stderr)
     job = None
     app = None
     try:
-        job = WindowsProcessJob(process)
-        process.resume()
+        if sys.platform == "win32":
+            job = WindowsProcessJob(process)
+            process.resume()
+        else:
+            job = LinuxProcessGroup(process)
         deadline = time.monotonic() + 180
         status = tmp_path / "startup.json"
         while not status.is_file():
@@ -124,7 +137,8 @@ def gui_session(request, tmp_path):
         assert startup["houdini_version"] == "22.0.368", startup
         assert startup["ui_available"] and startup["main_window_visible"], startup
         assert startup["scene_viewer"] and startup["viewport"], startup
-        assert not startup["administrator_token"], startup
+        if sys.platform == "win32":
+            assert not startup["administrator_token"], startup
         from PIL import Image
 
         with Image.open(startup["viewport_capture"]) as viewport:

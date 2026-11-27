@@ -3,6 +3,7 @@
 
 import argparse
 import subprocess
+import sys
 from pathlib import Path
 
 from uv import find_uv_bin
@@ -21,14 +22,14 @@ def main() -> None:
             "--target",
             str(args.directory),
             "--python-platform",
-            "x86_64-pc-windows-msvc",
+            "x86_64-pc-windows-msvc" if sys.platform == "win32" else "x86_64-manylinux_2_28",
             "--python-version",
             "3.13",
             "--only-binary",
             ":all:",
             "deadline>=0.60.12,<0.61",
             "qtpy>=2.4,<3",
-            "pywin32>=307,<311",
+            *(["pywin32>=307,<311"] if sys.platform == "win32" else []),
         ],
         check=True,
     )

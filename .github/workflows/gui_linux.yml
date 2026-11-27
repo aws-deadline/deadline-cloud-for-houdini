@@ -2,14 +2,35 @@ name: Houdini GUI Integration Tests - Linux
 
 on:
   push:
-    branches: [mainline, fix-publish-python-version]
+    branches: [mainline]
     paths:
       - .github/workflows/gui_linux.yml
-      - pipeline/*houdini*linux*
-      - pipeline/run-houdini-gui-linux-baseline.py
-      - test/houdini_submitter_ui/**
+      - pipeline/**
+      - src/**
+      - test/**
+      - requirements*.txt
+      - pyproject.toml
+      - hatch.toml
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact trusted source commit to test; empty uses this branch
+        required: false
+        type: string
+      graphics:
+        description: Graphics mode; software is for compatibility diagnostics
+        default: gpu
+        type: choice
+        options: [gpu, software]
   workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+      graphics:
+        required: false
+        default: gpu
+        type: string
     secrets:
       AWS_OIDC_ROLE_ARN:
         required: true
@@ -23,45 +44,20 @@ on:
         required: true
       BASTION_INSTANCE_TAG:
         required: true
+      LICENSE_PORT:
+        required: true
+      LICENSE_SESSION_DOCUMENT:
+        required: true
 
 permissions:
   contents: read
 
 jobs:
-  Graphics:
-    if: github.repository == 'aws-deadline/deadline-cloud-for-houdini'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-24.04
-            mode: software
-          # Repository access confirmed in GitHub Admin ticket P567422594.
-          - runner: aws-deadline_ubuntu-24.04_gpu-t4-4-core
-            mode: gpu
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Inspect installed graphics stack
-        env:
-          MODE: ${{ matrix.mode }}
-        run: bash pipeline/check-houdini-linux-graphics.sh "$RUNNER_TEMP/graphics" "$MODE"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always()
-        with:
-          name: houdini-linux-graphics-${{ matrix.mode }}-${{ github.run_id }}
-          path: ${{ runner.temp }}/graphics/
-
   GUI:
-    # The isolated trial branch currently lacks OIDC trust. Keep private
-    # execution disabled there until the infrastructure owner authorizes it.
     if: >-
       github.repository == 'aws-deadline/deadline-cloud-for-houdini' &&
-      github.ref == 'refs/heads/mainline'
-    runs-on: aws-deadline_ubuntu-24.04_gpu-t4-4-core
+      (github.ref == 'refs/heads/mainline' || github.ref == 'refs/heads/fix-publish-python-version')
+    runs-on: ${{ inputs.graphics == 'software' && 'ubuntu-24.04' || 'aws-deadline_ubuntu-24.04_gpu-t4-4-core' }}
     timeout-minutes: 60
     concurrency:
       group: houdini-integration-tests
@@ -75,16 +71,47 @@ jobs:
           fetch-depth: 0
           lfs: true
           persist-credentials: false
+      - name: Validate exact trusted source
+        env:
+          REQUESTED_SHA: ${{ inputs.source_sha }}
+          GRAPHICS: ${{ inputs.graphics || 'gpu' }}
+        run: |
+          set -euo pipefail
+          case "$GRAPHICS" in gpu|software) ;; *) exit 2 ;; esac
+          sha="${REQUESTED_SHA:-$GITHUB_SHA}"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'Provide a full source commit SHA.'; exit 2; }
+          git merge-base --is-ancestor "$sha" "$GITHUB_SHA"
+          harness="$RUNNER_TEMP/houdini-gui-harness"
+          mkdir -p "$harness/pipeline" "$harness/test"
+          cp -R test/houdini_submitter_ui "$harness/test/"
+          for file in check-houdini-linux-graphics.sh install-houdini-gui-linux.py \
+            prepare-houdini-gui-dependencies.py run-houdini-gui-linux.py run-houdini-gui-baseline.py; do
+            cp "pipeline/$file" "$harness/pipeline/"
+          done
+          cp requirements-gui-testing.txt "$harness/"
+          git checkout --detach "$sha"
+          cp "$harness/pipeline/"* pipeline/
+          rm -rf test/houdini_submitter_ui
+          cp -R "$harness/test/houdini_submitter_ui" test/
+          cp "$harness/requirements-gui-testing.txt" .
+          echo "HOUDINI_GUI_TESTED_SHA=$sha" >> "$GITHUB_ENV"
+          echo "Tested source: $sha" >> "$GITHUB_STEP_SUMMARY"
+          echo "Test harness: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
       - name: Prepare ephemeral runtime and test dependencies
+        env:
+          GRAPHICS: ${{ inputs.graphics || 'gpu' }}
         run: |
-          bash pipeline/check-houdini-linux-graphics.sh "$RUNNER_TEMP/houdini-gui-artifacts" gpu
+          bash pipeline/check-houdini-linux-graphics.sh "$RUNNER_TEMP/houdini-gui-artifacts" "$GRAPHICS"
           python -m venv --system-site-packages "$RUNNER_TEMP/houdini-gui-env"
           "$RUNNER_TEMP/houdini-gui-env/bin/python" -m pip install \
             -e . -r requirements-testing.txt -r requirements-integ-testing.txt -r requirements-gui-testing.txt
-          "$RUNNER_TEMP/houdini-gui-env/bin/python" pipeline/prepare-houdini-gui-linux-dependencies.py \
+          "$RUNNER_TEMP/houdini-gui-env/bin/python" -c \
+            "import site; site.addsitedir('/usr/lib/python3/dist-packages'); import pyatspi"
+          echo /usr/lib/python3/dist-packages > "$RUNNER_TEMP/houdini-gui-env/lib/python3.12/site-packages/linux-accessibility.pth"
+          "$RUNNER_TEMP/houdini-gui-env/bin/python" pipeline/prepare-houdini-gui-dependencies.py \
             --directory "$RUNNER_TEMP/houdini-gui-dcc-deps"
           echo "HOUDINI_GUI_DEPENDENCIES=$RUNNER_TEMP/houdini-gui-dcc-deps" >> "$GITHUB_ENV"
           git lfs pull --include='test/integ/**'
@@ -105,9 +132,12 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           LICENSE_ROLE_ARN: ${{ secrets.LICENSE_ROLE_ARN }}
           BASTION_INSTANCE_TAG: ${{ secrets.BASTION_INSTANCE_TAG }}
+          LICENSE_PORT: ${{ secrets.LICENSE_PORT }}
+          LICENSE_SESSION_DOCUMENT: ${{ secrets.LICENSE_SESSION_DOCUMENT }}
+          GRAPHICS: ${{ inputs.graphics || 'gpu' }}
         run: |
           dbus-run-session -- "$RUNNER_TEMP/houdini-gui-env/bin/python" \
-            pipeline/run-houdini-gui-linux.py --artifacts "$RUNNER_TEMP/houdini-gui-artifacts"
+            pipeline/run-houdini-gui-linux.py --artifacts "$RUNNER_TEMP/houdini-gui-artifacts" --graphics "$GRAPHICS"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

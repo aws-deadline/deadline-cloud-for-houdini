@@ -1,5 +1,5 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-"""Run the complete local baseline in a mock-only, owned Windows process tree."""
+"""Run the complete local baseline in a mock-only, owned process tree."""
 
 import argparse
 import json
@@ -20,10 +20,18 @@ from deadline_test_fixtures.deadline_mock import (
 
 def verify_license_endpoint(artifacts: Path, process_job_type) -> None:
     """Test the SideFX protocol through the tunnel, not just its local socket."""
-    executable = Path(os.environ["HYTHON_EXECUTABLE"]).with_name("sesictrl.exe")
+    executable = Path(os.environ["HYTHON_EXECUTABLE"]).with_name(
+        "sesictrl.exe" if sys.platform == "win32" else "sesictrl"
+    )
     command = [str(executable), "ping", "--host", os.environ["HOUDINI_GUI_LICENSE_SERVER"]]
-    result = {"protocol_verified": False}
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result: dict = {"protocol_verified": False}
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=sys.platform == "linux",
+    )
     job = None
     try:
         job = process_job_type(process)
@@ -71,8 +79,14 @@ def verify_license(artifacts: Path, process_job_type) -> None:
             "version=hou.applicationVersionString(), category=hou.licenseCategory().name())))"
         ),
     ]
-    result = {"checkout_verified": False}
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result: dict = {"checkout_verified": False}
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=sys.platform == "linux",
+    )
     job = None
     try:
         job = process_job_type(process)
@@ -110,12 +124,15 @@ def main() -> int:
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo / "test/houdini_submitter_ui"))
-    from _windows_process import WindowsProcessJob
+    if sys.platform == "win32":
+        from _windows_process import WindowsProcessJob as ProcessGroup
+    else:
+        from _linux_process import LinuxProcessGroup as ProcessGroup
 
     artifacts = args.artifacts.resolve()
     artifacts.mkdir(parents=True, exist_ok=True)
-    verify_license_endpoint(artifacts, WindowsProcessJob)
-    verify_license(artifacts, WindowsProcessJob)
+    verify_license_endpoint(artifacts, ProcessGroup)
+    verify_license(artifacts, ProcessGroup)
     (artifacts / "openjd-state").mkdir(exist_ok=False)
     server = MockDeadlineServerProcess(MockDeadlineScenario()).start()
     try:
@@ -145,7 +162,11 @@ def main() -> int:
             AWS_SHARED_CREDENTIALS_FILE=str(artifacts / "empty-aws-credentials"),
             # OpenJD uses PROGRAMDATA for Windows session storage. Keep all
             # session files inside this test's exclusively owned directory.
-            PROGRAMDATA=str(artifacts / "openjd-state"),
+            **{
+                ("PROGRAMDATA" if sys.platform == "win32" else "TMPDIR"): str(
+                    artifacts / "openjd-state"
+                )
+            },
         )
         suites = ["test/houdini_submitter_ui"]
         if not args.gui_only:
@@ -167,10 +188,12 @@ def main() -> int:
             "--junitxml",
             str(artifacts / "junit.xml"),
         ]
-        process = subprocess.Popen(command, cwd=repo, env=env)
+        process = subprocess.Popen(
+            command, cwd=repo, env=env, start_new_session=sys.platform == "linux"
+        )
         job = None
         try:
-            job = WindowsProcessJob(process)
+            job = ProcessGroup(process)
             returncode = process.wait(timeout=2100)
         finally:
             if job is not None:
