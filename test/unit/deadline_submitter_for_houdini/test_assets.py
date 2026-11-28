@@ -56,14 +56,16 @@ def test_get_scene_asset_references():
     mock_os.path.isfile = lambda path: not path.endswith("/")
     mock_os.path.splitext = os.path.splitext
     mock_os.path.realpath = os.path.realpath
+    mock_os.environ = {}
+    mock_os.pathsep = os.pathsep
 
     with mock.patch(
         "deadline.houdini_submitter.python.deadline_cloud_for_houdini._assets.os", mock_os
     ):
         asset_refs = _get_scene_asset_references(node)
 
-    assert asset_refs.input_filenames == {"$HIP/image.png", "/some/path/test.hip"}
-    assert asset_refs.input_directories == {"$HIP/assets/"}
+    assert asset_refs.input_filenames == {"/some_expanded_path/image.png", "/some/path/test.hip"}
+    assert asset_refs.input_directories == {"/some_expanded_path/assets/"}
     assert asset_refs.output_directories == set()
 
 
@@ -657,6 +659,8 @@ class TestSceneAssetReferencesUsdTraversal:
         mock_os.path.isfile = lambda p: True
         mock_os.path.splitext = os.path.splitext
         mock_os.path.realpath = os.path.realpath
+        mock_os.environ = {}
+        mock_os.pathsep = os.pathsep
         mock_os.path.dirname = os.path.dirname
 
         with (
@@ -697,6 +701,8 @@ class TestSceneAssetReferencesUsdTraversal:
         mock_os.path.isfile = lambda p: True
         mock_os.path.splitext = os.path.splitext
         mock_os.path.realpath = os.path.realpath
+        mock_os.environ = {}
+        mock_os.pathsep = os.pathsep
 
         with (
             mock.patch(

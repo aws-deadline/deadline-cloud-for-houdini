@@ -987,7 +987,7 @@ def _scan_scene_assets(node: Any) -> Dict[str, Set[str]]:
             _houdini_time_vars_to_glob,
         )
 
-        refs: Any = _get_scene_asset_references(node)
+        refs: Any = _get_scene_asset_references(node, keep_refs=True)
         candidates: Set[str] = set(refs.input_filenames) | set(refs.input_directories)
         # The parms that hold each reference. An installed asset library is a
         # reference that no parm holds, and the shared scan skips those.

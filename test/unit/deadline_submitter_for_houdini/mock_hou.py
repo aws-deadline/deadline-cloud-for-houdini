@@ -37,4 +37,7 @@ setattr(this_module, "qt", Mock(name=module_name + ".qt"))
 setattr(this_module, "renderMethod", Mock(name=module_name + ".renderMethod"))
 setattr(this_module, "severityType", Mock(name=module_name + ".severityType"))
 setattr(this_module, "stringParmType", Mock(name=module_name + ".stringParmType"))
+setattr(this_module, "text", Mock(name=module_name + ".text"))
 setattr(this_module, "ui", Mock(name=module_name + ".ui"))
+# hou.undos.group() is a context manager.
+setattr(this_module, "undos", MagicMock(name=module_name + ".undos"))

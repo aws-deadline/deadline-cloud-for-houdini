@@ -832,8 +832,11 @@ def parse_files_callback(kwargs):
 def save_bundle_callback(kwargs):
     node = kwargs["node"]
     name = node.parm("name").evalAsString()
-    asset_references = _get_evaluated_asset_references(node)
     try:
+        # Re-scan the scene first, the way an automatic parse before submission does, so the
+        # bundle honors excluded input paths and outputs changed since the last parse.
+        _parse_files(node)
+        asset_references = _get_evaluated_asset_references(node)
         job_bundle_dir = create_job_history_bundle_dir("houdini", name)
         _create_job_bundle(node, job_bundle_dir, asset_references)
         print("Saved the submission as a job bundle:")
@@ -1171,6 +1174,9 @@ def submit_callback(kwargs):
         # Run the pre-submission checks when Submit is clicked, before the dialog opens its modal
         # progress dialog (which would otherwise hide the hou.ui.displayMessage prompts).
         _install_pre_submission_gate(dialog, node)
+        from .excluded_input_paths_box import add_auto_input_controls, add_to_dialog_top
+
+        add_auto_input_controls(dialog, node, add_to_dialog_top(dialog))
         dialog.exec_()
     except Exception as exc:
         api.get_deadline_cloud_library_telemetry_client().record_error(
